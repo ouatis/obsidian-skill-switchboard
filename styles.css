@@ -1,8 +1,138 @@
-/*
+.skill-switchboard-view {
+	padding: 12px;
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+.skill-switchboard-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 12px;
+}
 
-If your plugin does not need CSS, delete this file.
+.skill-switchboard-title {
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-semibold);
+}
 
-*/
+.skill-switchboard-actions {
+	display: flex;
+	gap: 6px;
+}
+
+.skill-switchboard-summary {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 6px;
+	margin-bottom: 12px;
+}
+
+.skill-switchboard-stat,
+.skill-switchboard-card {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	background: var(--background-secondary);
+}
+
+.skill-switchboard-stat {
+	padding: 8px;
+	text-align: center;
+}
+
+.skill-switchboard-stat-value {
+	font-size: var(--font-ui-large);
+	font-weight: var(--font-semibold);
+}
+
+.skill-switchboard-stat-label,
+.skill-switchboard-muted,
+.skill-switchboard-footer,
+.skill-switchboard-path,
+.skill-switchboard-hash {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.skill-switchboard-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.skill-switchboard-card {
+	padding: 10px;
+}
+
+.skill-switchboard-card-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.skill-switchboard-badge {
+	padding: 2px 6px;
+	border-radius: 999px;
+	background: var(--background-modifier-hover);
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.skill-switchboard-description {
+	margin-top: 6px;
+	line-height: 1.4;
+}
+
+.skill-switchboard-path,
+.skill-switchboard-hash {
+	margin-top: 5px;
+	word-break: break-all;
+}
+
+.skill-switchboard-errors {
+	margin-bottom: 12px;
+	padding: 8px;
+	border: 1px solid var(--color-orange);
+	border-radius: 8px;
+	color: var(--text-warning);
+}
+
+.skill-switchboard-empty {
+	padding: 18px 4px;
+	color: var(--text-muted);
+}
+
+.skill-switchboard-footer {
+	margin-top: 12px;
+}
+
+.skill-switchboard-check {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	margin: 12px 0;
+	padding: 10px;
+}
+
+.skill-switchboard-check-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	margin-top: 8px;
+}
+
+.skill-switchboard-check-output {
+	background: var(--background-secondary);
+	border-radius: 6px;
+	font-size: var(--font-ui-smaller);
+	margin-top: 6px;
+	max-height: 320px;
+	overflow: auto;
+	padding: 10px;
+	white-space: pre-wrap;
+}
+
+.skill-switchboard-repair {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	margin: 12px 0;
+	padding: 10px;
+}

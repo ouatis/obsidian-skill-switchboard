@@ -1,0 +1,259 @@
+import { promises as fs } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import type { AdapterCheckResult } from './result';
+import type { RuntimeName } from '../types';
+import {
+	adapterFor,
+	isInside,
+	type ManifestSkill,
+	type SyncManifestSnapshot,
+} from './manifest';
+
+export { inspectManifest } from './manifest';
+import {
+	agentMetadataFor,
+	commandFor,
+	loadRuntimeSkills,
+	wrapperFor,
+	yamlQuoted,
+} from './templates';
+import {
+	EXCLUDED_SKILL_DIRS,
+	groupedSkillProblems,
+	pathExists,
+	readBytes,
+	readText,
+	relativeDisplay,
+	staleProblems,
+	walkFiles,
+} from './filesystem';
+
+export type NativeCheckKind = 'clean' | 'drift' | 'error';
+
+export interface NativeCheckResult extends AdapterCheckResult {
+	kind: NativeCheckKind;
+	problems: string[];
+	checkedSkillCount: number;
+}
+
+export interface NativeCheckOptions {
+	/** Test-only override; production follows OPENCODE_CONFIG like the Python adapter. */
+	opencodeCommandsDir?: string;
+}
+
+const LONG_RETIRED = new Set([
+	'article-review-by-questioning', 'c2d-jiafa', 'c2d-mifa', 'mifa',
+	'jardin-card-draw-enrichment', 'jardin-card-enrichment-triage', 'jardin-card-naming',
+	'jardin-card-out-enrichment', 'jardin-draft-backfill-enrichment', 'jardin-draft-card-enrichment',
+	'jardin-writing-pipeline', 'jardin-vault-workflow', 'lixianji-protagonist-objective-irony',
+	'near-final-essay-polish', 'natural-science-fact-mining', 'peipingfa',
+	'rouen-flaubert-source-mining', 'fun-facts-source-mining', 'insertion-only-restructure',
+	'next-step-suggest', 'tvtropes-source-mining',
+]);
+const SHORT_RETIRED = new Set([
+	'jardin-draft-card-enrichment', 'near-final-essay-polish', 'insertion-only-restructure',
+]);
+
+export async function checkRuntimeNative(
+	vaultPath: string,
+	runtime: RuntimeName,
+	targetPath: string,
+	snapshot: SyncManifestSnapshot,
+	options: NativeCheckOptions = {},
+): Promise<NativeCheckResult> {
+	try {
+		const resolvedVault = path.resolve(vaultPath);
+		const resolvedTarget = await existingTargetPath(targetPath);
+		if (isInside(resolvedVault, resolvedTarget)) {
+			return errorResult(`Native check refused a target inside the vault: ${resolvedTarget}`);
+		}
+
+		const skills = loadRuntimeSkills(snapshot, runtime);
+		const problems: string[] = [];
+		if (['codex', 'workbuddy', 'antigravity', 'dsh'].includes(runtime)) {
+			problems.push(...await manifestCoverage(snapshot, runtime));
+		}
+
+		for (const skill of skills) {
+			problems.push(...await checkSkill(snapshot, runtime, resolvedTarget, skill, options));
+		}
+
+		if (runtime === 'hermes') {
+			problems.push(...await staleProblems(resolvedTarget, false, EXCLUDED_SKILL_DIRS));
+		} else if (runtime === 'opencode') {
+			problems.push(...await groupedSkillProblems(resolvedTarget, LONG_RETIRED));
+		} else if (runtime === 'dsh') {
+			problems.push(...await staleProblems(resolvedTarget, false, EXCLUDED_SKILL_DIRS));
+			problems.push(...await groupedSkillProblems(resolvedTarget, SHORT_RETIRED));
+		} else {
+			problems.push(...await staleProblems(resolvedTarget, true, new Set<string>()));
+			problems.push(...await groupedSkillProblems(resolvedTarget, LONG_RETIRED));
+		}
+
+		const unique = [...new Set(problems)].sort((left, right) => left.localeCompare(right));
+		if (unique.length === 0) {
+			return {
+				status: 'passed', kind: 'clean', checkedSkillCount: skills.length, problems: [], exitCode: 0,
+				output: `[native] PASS\nChecked ${skills.length} skill(s) without writing runtime files.`,
+			};
+		}
+		return {
+			status: 'failed', kind: 'drift', checkedSkillCount: skills.length, problems: unique, exitCode: 1,
+			output: `[native] DRIFT\n${unique.join('\n')}`,
+		};
+	} catch (error) {
+		return errorResult(error instanceof Error ? error.message : String(error));
+	}
+}
+
+async function checkSkill(
+	snapshot: SyncManifestSnapshot,
+	runtime: RuntimeName,
+	targetRoot: string,
+	skill: ReturnType<typeof loadRuntimeSkills>[number],
+	options: NativeCheckOptions,
+): Promise<string[]> {
+	const result: string[] = [];
+	const adapter = adapterFor(snapshot.skills.find((item) => item.name === skill.name) as ManifestSkill, runtime);
+	if (adapter === null) return result;
+	const categoryRoot = runtime === 'hermes' ? path.join(targetRoot, skill.category) : targetRoot;
+	const skillDir = await resolveSkillDir(path.join(categoryRoot, skill.name));
+	const wrapperPath = runtime === 'dsh' ? path.join(targetRoot, `${skill.name}.md`) : path.join(skillDir, 'SKILL.md');
+
+	if (runtime === 'hermes') {
+		const references = await referencedSharedFiles(skill.sharedPath, snapshot.sharedRoot);
+		if (!(await pathExists(wrapperPath))) {
+			result.push(`Missing wrapper: ${wrapperPath}`);
+			return result;
+		}
+		if (await readText(wrapperPath) !== wrapperFor(skill, runtime, snapshot)) {
+			result.push(`Wrapper content drift: ${skill.name}`);
+		}
+		const expected = new Set<string>();
+		for (const reference of references) {
+			const targetReference = path.join(skillDir, path.relative(snapshot.sharedRoot, reference));
+			expected.add(path.resolve(targetReference));
+			if (!(await pathExists(targetReference))) {
+				result.push(`Missing Hermes reference for ${skill.name}: ${targetReference}`);
+			} else if (!(await readBytes(targetReference)).equals(await readBytes(reference))) {
+				result.push(`Hermes reference drift for ${skill.name}: ${targetReference}`);
+			}
+		}
+		const referencesDir = path.join(skillDir, 'references');
+		for (const installed of await walkFiles(referencesDir, { include: (file) => path.extname(file).toLowerCase() === '.md' })) {
+			if (!expected.has(path.resolve(installed))) result.push(`Stale Hermes reference for ${skill.name}: ${installed}`);
+		}
+		return result;
+	}
+
+	if (runtime === 'opencode') {
+		if (!(await pathExists(wrapperPath))) result.push(`Missing wrapper: ${wrapperPath}`);
+		else if (await readText(wrapperPath) !== wrapperFor(skill, runtime, snapshot)) result.push(`Skill wrapper content drift: ${skill.name}`);
+		const commandRoot = options.opencodeCommandsDir
+			? path.resolve(options.opencodeCommandsDir)
+			: path.join(process.env.OPENCODE_CONFIG ? expandHome(process.env.OPENCODE_CONFIG) : path.join(os.homedir(), '.config', 'opencode'), 'commands');
+		const commandPath = path.join(commandRoot, `${skill.name}.md`);
+		if (!(await pathExists(commandPath))) result.push(`Missing command: ${commandPath}`);
+		else if (await readText(commandPath) !== commandFor(skill)) result.push(`Command content drift: ${skill.name}`);
+		return result;
+	}
+
+	if (!(await pathExists(wrapperPath))) {
+		result.push(`Missing wrapper: ${wrapperPath}`);
+		return result;
+	}
+	const current = await readText(wrapperPath);
+
+	const expectedDescription = `description: "${yamlQuoted(skill.description)}"`;
+	if (!current.includes(expectedDescription)) result.push(`Description drift: ${skill.name}`);
+	if (!current.includes(`00-MEMORTE/shared/skills/${skill.sharedFile}`)) result.push(`Shared path missing: ${skill.name}`);
+	if (runtime === 'codex') {
+		const agentPath = path.join(skillDir, 'agents', 'openai.yaml');
+		if (await pathExists(agentPath) && await readText(agentPath) !== agentMetadataFor(skill)) {
+			result.push(`Agent metadata drift: ${skill.name}`);
+		}
+	}
+	return result;
+}
+
+async function manifestCoverage(snapshot: SyncManifestSnapshot, runtime: RuntimeName): Promise<string[]> {
+	const entries = await fs.readdir(snapshot.sharedRoot, { withFileTypes: true });
+	const topLevel = new Set(entries.filter((entry) => entry.isFile() && entry.name.endsWith('.md')).map((entry) => entry.name));
+	const problems: string[] = [];
+	for (const skill of snapshot.skills.filter((item) => adapterFor(item, runtime) !== null)) {
+		if (!skill.sharedFile.includes('/') && !topLevel.has(skill.sharedFile)) {
+			problems.push(`Top-level shared skill missing from manifest: ${skill.sharedFile}`);
+		}
+		if (!(await pathExists(skill.sharedPath))) problems.push(`Manifest shared file does not exist: ${skill.sharedFile}`);
+	}
+	return problems;
+}
+
+export async function referencedSharedFiles(sharedPath: string, sharedRoot: string): Promise<string[]> {
+	const referencesRoot = path.resolve(sharedRoot, 'references');
+	const pending = [path.resolve(sharedPath)];
+	const found = new Set<string>();
+	while (pending.length > 0) {
+		const source = pending.pop();
+		if (!source) continue;
+		const text = await readText(source);
+		const candidates = [
+			...text.matchAll(/references\/[A-Za-z0-9._/-]+\.md/g),
+			...text.matchAll(/\]\(([^)#]+\.md)(?:#[^)]*)?\)/g),
+		].map((match) => match[1] ?? match[0]);
+		for (const candidate of candidates) {
+			if (/^[A-Za-z]:[\\/]/.test(candidate) || /^[a-z]+:\/\//i.test(candidate)) continue;
+			const filePath = candidate.startsWith('references/')
+				? path.resolve(sharedRoot, candidate)
+				: path.resolve(path.dirname(source), candidate);
+			if (!isInside(referencesRoot, filePath)) continue;
+			if (!(await pathExists(filePath))) throw new Error(`Missing shared reference from ${source}: ${filePath}`);
+			if (found.has(filePath)) continue;
+			found.add(filePath);
+			pending.push(filePath);
+		}
+	}
+	return [...found].sort((left, right) => relativeDisplay(sharedRoot, left).localeCompare(relativeDisplay(sharedRoot, right)));
+}
+
+async function resolveSkillDir(candidate: string): Promise<string> {
+	try {
+		const stats = await fs.lstat(candidate);
+		return stats.isSymbolicLink() ? fs.realpath(candidate) : candidate;
+	} catch {
+		return candidate;
+	}
+}
+
+async function existingTargetPath(targetPath: string): Promise<string> {
+	const candidate = path.resolve(targetPath);
+	try {
+		return await fs.realpath(candidate);
+	} catch {
+		let current = candidate;
+		const suffix: string[] = [];
+		while (true) {
+			try {
+				const real = await fs.realpath(current);
+				return path.resolve(real, ...suffix.reverse());
+			} catch {
+				const parent = path.dirname(current);
+				if (parent === current) return candidate;
+				suffix.push(path.basename(current));
+				current = parent;
+			}
+		}
+	}
+}
+
+function expandHome(value: string): string {
+	return value === '~' ? os.homedir() : /^~[\\/]/.test(value) ? path.join(os.homedir(), value.slice(2)) : path.resolve(value);
+}
+
+function errorResult(message: string): NativeCheckResult {
+	return {
+		status: 'failed', kind: 'error', checkedSkillCount: 0, problems: [message], exitCode: 2,
+		output: `[native] UNAVAILABLE\n${message}`,
+	};
+}
