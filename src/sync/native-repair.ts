@@ -18,6 +18,7 @@ import {
 	walkFiles,
 } from './filesystem';
 import { referencedSharedFiles } from './native-check';
+import { resolveConfiguredPath } from '../utils/paths';
 
 export interface NativeRepairResult extends AdapterCheckResult {
 	writtenFiles: number;
@@ -39,12 +40,14 @@ export async function repairRuntimeNative(
 	snapshot: SyncManifestSnapshot,
 	options: NativeRepairOptions = {},
 ): Promise<NativeRepairResult> {
-	const state = new RepairState(snapshot.vaultPath, snapshot.sharedRoot, targetPath, runtime, options.backupRoot);
+	let state: RepairState | undefined;
 	try {
-		const resolvedTarget = await state.assertOutsideVault(targetPath);
+		const configuredTarget = resolveConfiguredPath(targetPath, snapshot.vaultPath);
+		state = new RepairState(snapshot.vaultPath, snapshot.sharedRoot, configuredTarget, runtime, options.backupRoot);
+		const resolvedTarget = await state.assertOutsideVault(configuredTarget);
 		const skills = loadRuntimeSkills(snapshot, runtime);
 		const commandRoot = runtime === 'opencode'
-			? path.resolve(options.opencodeCommandsDir ?? defaultOpenCodeCommandsDir())
+			? resolveConfiguredPath(options.opencodeCommandsDir ?? defaultOpenCodeCommandsDir(), snapshot.vaultPath)
 			: undefined;
 		if (commandRoot) await state.assertOutsideVault(commandRoot);
 
@@ -68,7 +71,10 @@ export async function repairRuntimeNative(
 
 		return await state.successResult();
 	} catch (error) {
-		return await state.failureResult(error instanceof Error ? error.message : String(error));
+		const message = error instanceof Error ? error.message : String(error);
+		return state
+			? await state.failureResult(message)
+			: { status: 'failed', output: `[native repair] FAIL\n${message}`, exitCode: 1, writtenFiles: 0, replacedDirectories: 0 };
 	}
 }
 
@@ -195,10 +201,6 @@ class RepairState {
 
 function defaultOpenCodeCommandsDir(): string {
 	const configured = process.env.OPENCODE_CONFIG;
-	const root = configured ? expandHome(configured) : path.join(os.homedir(), '.config', 'opencode');
+	const root = configured ? resolveConfiguredPath(configured) : path.join(os.homedir(), '.config', 'opencode');
 	return path.join(root, 'commands');
-}
-
-function expandHome(value: string): string {
-	return value === '~' ? os.homedir() : /^~[\\/]/.test(value) ? path.join(os.homedir(), value.slice(2)) : path.resolve(value);
 }

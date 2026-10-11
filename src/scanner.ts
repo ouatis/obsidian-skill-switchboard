@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { IndexedSkill, SkillRoot } from './types';
+import { resolveConfiguredPath } from './utils/paths';
 
 export interface SkillIndex {
 	skills: IndexedSkill[];
@@ -28,7 +29,7 @@ export async function scanConfiguredRoots(
 			if (root.kind === 'vault') {
 				await scanVaultRoot(app, root, skills);
 			} else {
-				await scanExternalRoot(root, skills);
+				await scanExternalRoot(root, skills, getVaultBasePath(app));
 			}
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -66,8 +67,8 @@ async function scanVaultRoot(
 	}
 }
 
-async function scanExternalRoot(root: SkillRoot, output: IndexedSkill[]): Promise<void> {
-	const rootPath = path.resolve(root.path);
+async function scanExternalRoot(root: SkillRoot, output: IndexedSkill[], basePath: string): Promise<void> {
+	const rootPath = resolveConfiguredPath(root.path, basePath);
 	const skillFiles = await findSkillFiles(rootPath);
 	for (const filePath of skillFiles) {
 		const content = await fs.readFile(filePath, 'utf8');
@@ -75,6 +76,11 @@ async function scanExternalRoot(root: SkillRoot, output: IndexedSkill[]): Promis
 			toIndexedSkill(root, filePath, path.relative(rootPath, filePath), content),
 		);
 	}
+}
+
+function getVaultBasePath(app: App): string {
+	const adapter = app.vault.adapter as { getBasePath?: () => string };
+	return adapter.getBasePath?.() ?? process.cwd();
 }
 
 async function findSkillFiles(directory: string, depth = 0): Promise<string[]> {

@@ -11,6 +11,11 @@ export interface Strings {
 	adapterCheckPassed: string;
 	adapterCheckFailed: (code: number) => string;
 	adapterCheckOutput: string;
+	copyOutput: string;
+	outputCopied: string;
+	copyFailed: string;
+	noOutputToCopy: string;
+	copyCheckOutput: string;
 	repairAllAdapters: string;
 	repairAllDescription: string;
 	repairAllRunning: string;
@@ -79,6 +84,11 @@ const EN: Strings = {
 	adapterCheckPassed: 'Adapter check passed',
 	adapterCheckFailed: (code) => `Adapter check failed (exit ${code})`,
 	adapterCheckOutput: 'Adapter check output',
+	copyOutput: 'Copy output',
+	outputCopied: 'Output copied to clipboard',
+	copyFailed: 'Copying the output failed',
+	noOutputToCopy: 'There is no check output to copy yet',
+	copyCheckOutput: 'Copy adapter check output',
 	repairAllAdapters: 'Repair all',
 	repairAllDescription: 'Recheck every enabled wrapper target and repair all drift automatically.',
 	repairAllRunning: 'Repairing all adapters…',
@@ -110,7 +120,7 @@ const EN: Strings = {
 	scanInterval: 'Scan interval (minutes)',
 	scanIntervalDescription: 'Used only when automatic scanning is enabled.',
 	skillRoots: 'Skill roots',
-	skillRootsDescription: 'A root may be a vault-relative folder or an explicitly selected desktop folder. Only configured roots are scanned.',
+	skillRootsDescription: 'A root may be a vault-relative folder or an external folder. For portable external paths, use ~ for the current user home (for example ~/.codex/skills). Only configured roots are scanned.',
 	unnamedRoot: 'Unnamed root',
 	label: 'Label',
 	path: 'Path',
@@ -121,7 +131,7 @@ const EN: Strings = {
 	addSkillRoot: 'Add skill root',
 	newRoot: 'New root',
 	runtimeTargets: 'Runtime targets',
-	runtimeTargetsDescription: 'Targets describe sync destinations. One-click repair is limited to enabled wrapper targets.',
+	runtimeTargetsDescription: 'Targets describe sync destinations. Use ~ for the current user home (for example ~/.codex/skills) so the vault can move between machines. One-click repair is limited to enabled wrapper targets.',
 	unnamedTarget: 'Unnamed target',
 	targetPath: 'Target path',
 	copy: 'Copy',
@@ -147,6 +157,11 @@ const ZH_CN: Strings = {
 	adapterCheckPassed: '适配器检查通过',
 	adapterCheckFailed: (code) => `适配器检查失败（退出码 ${code}）`,
 	adapterCheckOutput: '适配器检查输出',
+	copyOutput: '复制输出',
+	outputCopied: '输出已复制到剪贴板',
+	copyFailed: '复制输出失败',
+	noOutputToCopy: '还没有可复制的检查输出',
+	copyCheckOutput: '复制适配器检查输出',
 	repairAllAdapters: '一键修复',
 	repairAllDescription: '复查所有启用的 Wrapper 目标，并自动修复全部漂移。',
 	repairAllRunning: '正在一键修复……',
@@ -178,7 +193,7 @@ const ZH_CN: Strings = {
 	scanInterval: '扫描间隔（分钟）',
 	scanIntervalDescription: '仅在启用自动扫描时生效。',
 	skillRoots: '技能来源目录',
-	skillRootsDescription: '来源可以是 vault 内相对目录，也可以是明确选择的桌面目录。插件只扫描已配置的来源。',
+	skillRootsDescription: '来源可以是 vault 内相对目录，也可以是外部目录。为便于跨机器使用，外部路径请用 ~ 表示当前用户主目录，例如 ~/.codex/skills。插件只扫描已配置的来源。',
 	unnamedRoot: '未命名来源',
 	label: '名称',
 	path: '路径',
@@ -189,7 +204,7 @@ const ZH_CN: Strings = {
 	addSkillRoot: '添加技能来源',
 	newRoot: '新来源',
 	runtimeTargets: '运行时目标',
-	runtimeTargetsDescription: '目标用于描述同步目的地。一键修复仅限启用的 Wrapper 目标。',
+	runtimeTargetsDescription: '目标用于描述同步目的地。为便于跨机器使用，请用 ~ 表示当前用户主目录，例如 ~/.codex/skills。一键修复仅限启用的 Wrapper 目标。',
 	unnamedTarget: '未命名目标',
 	targetPath: '目标路径',
 	copy: '复制',

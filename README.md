@@ -14,11 +14,14 @@ The first MVP keeps indexing read-only. Adapter repair is explicit through one b
 - validate the shared manifest before checking targets;
 - run a native, read-only comparison for every configured runtime target;
 - recheck every enabled wrapper target, repair all drift automatically, and run follow-up checks;
+- copy the adapter check or repair output to the clipboard, either from the **Copy output** button above the output block or from the command palette (`Copy adapter check output`);
 - use English by default, with an in-plugin switch to Simplified Chinese.
+
+Paths are stored as configuration, so keep them portable when the vault will be used on more than one machine. Vault roots use paths relative to the vault. External roots and runtime targets should use `~` for the current user's home, such as `~/.codex/skills`, `~/.config/opencode/skills`, or `~/.gemini/config/skills`. Absolute paths remain supported for machine-specific setups. A Windows absolute path is not silently interpreted on macOS or Linux; replace it with a `~` path on the destination machine.
 
 Only configured roots and runtime targets are scanned. The native implementation checks wrapper, metadata, reference-package, command, stale-term, duplicate, and retired-alias consistency. One-click repair writes native wrappers, metadata, commands, and Hermes reference packages directly, after resolving every target outside the vault. Existing files that will be overwritten or removed are backed up under `.skill-switchboard-repair-backups/`. The plugin has no Python runtime dependency.
 
-For a JARDIN setup, configure `00-MEMORTE/shared/skills` as the single source root. Runtime folders are targets/adapters, not additional sources.
+For a JARDIN setup, configure `00-MEMORTE/shared/skills` as the single source root. Runtime folders are targets/adapters, not additional sources. Generated wrappers include the canonical vault-relative path and the resolved local path needed by the runtime on that machine.
 
 ## Development
 

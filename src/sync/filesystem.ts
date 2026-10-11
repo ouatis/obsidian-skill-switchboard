@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { isAbsolutePath } from '../utils/paths';
 
 export const EXCLUDED_SKILL_DIRS = new Set([
 	'.git',
@@ -48,7 +49,8 @@ export async function pathExists(filePath: string): Promise<boolean> {
 }
 
 export async function existingRealPath(filePath: string): Promise<string> {
-	let current = path.resolve(filePath);
+	const candidate = isAbsolutePath(filePath) ? filePath : path.resolve(filePath);
+	let current = candidate;
 	const suffix: string[] = [];
 	while (true) {
 		try {
@@ -56,7 +58,7 @@ export async function existingRealPath(filePath: string): Promise<string> {
 			return suffix.length === 0 ? real : path.resolve(real, ...suffix.reverse());
 		} catch {
 			const parent = path.dirname(current);
-			if (parent === current) return path.resolve(filePath);
+			if (parent === current) return candidate;
 			suffix.push(path.basename(current));
 			current = parent;
 		}
@@ -69,7 +71,7 @@ export async function walkFiles(root: string, options: {
 } = {}): Promise<string[]> {
 	if (!(await pathExists(root))) return [];
 	const files: string[] = [];
-	const pending = [path.resolve(root)];
+	const pending = [isAbsolutePath(root) ? root : path.resolve(root)];
 	while (pending.length > 0) {
 		const current = pending.pop();
 		if (!current) continue;

@@ -28,6 +28,7 @@ import {
 	staleProblems,
 	walkFiles,
 } from './filesystem';
+import { isAbsolutePath, resolveConfiguredPath } from '../utils/paths';
 
 export type NativeCheckKind = 'clean' | 'drift' | 'error';
 
@@ -64,7 +65,7 @@ export async function checkRuntimeNative(
 ): Promise<NativeCheckResult> {
 	try {
 		const resolvedVault = path.resolve(vaultPath);
-		const resolvedTarget = await existingTargetPath(targetPath);
+		const resolvedTarget = await existingTargetPath(resolveConfiguredPath(targetPath, resolvedVault));
 		if (isInside(resolvedVault, resolvedTarget)) {
 			return errorResult(`Native check refused a target inside the vault: ${resolvedTarget}`);
 		}
@@ -151,8 +152,13 @@ async function checkSkill(
 		if (!(await pathExists(wrapperPath))) result.push(`Missing wrapper: ${wrapperPath}`);
 		else if (await readText(wrapperPath) !== wrapperFor(skill, runtime, snapshot)) result.push(`Skill wrapper content drift: ${skill.name}`);
 		const commandRoot = options.opencodeCommandsDir
-			? path.resolve(options.opencodeCommandsDir)
-			: path.join(process.env.OPENCODE_CONFIG ? expandHome(process.env.OPENCODE_CONFIG) : path.join(os.homedir(), '.config', 'opencode'), 'commands');
+			? resolveConfiguredPath(options.opencodeCommandsDir)
+			: path.join(
+				process.env.OPENCODE_CONFIG
+					? resolveConfiguredPath(process.env.OPENCODE_CONFIG)
+					: path.join(os.homedir(), '.config', 'opencode'),
+				'commands',
+			);
 		const commandPath = path.join(commandRoot, `${skill.name}.md`);
 		if (!(await pathExists(commandPath))) result.push(`Missing command: ${commandPath}`);
 		else if (await readText(commandPath) !== commandFor(skill)) result.push(`Command content drift: ${skill.name}`);
@@ -227,7 +233,7 @@ async function resolveSkillDir(candidate: string): Promise<string> {
 }
 
 async function existingTargetPath(targetPath: string): Promise<string> {
-	const candidate = path.resolve(targetPath);
+	const candidate = isAbsolutePath(targetPath) ? targetPath : path.resolve(targetPath);
 	try {
 		return await fs.realpath(candidate);
 	} catch {
@@ -247,9 +253,6 @@ async function existingTargetPath(targetPath: string): Promise<string> {
 	}
 }
 
-function expandHome(value: string): string {
-	return value === '~' ? os.homedir() : /^~[\\/]/.test(value) ? path.join(os.homedir(), value.slice(2)) : path.resolve(value);
-}
 
 function errorResult(message: string): NativeCheckResult {
 	return {

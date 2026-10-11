@@ -6,14 +6,19 @@ import {
 } from './settings';
 import { SkillIndex, scanConfiguredRoots } from './scanner';
 import { SkillSwitchboardView, VIEW_TYPE_SKILL_SWITCHBOARD } from './ui/view';
+import { notifyWithCopy } from './ui/notice';
+import { runRecord, writePluginStatus } from './status';
 import { getStrings } from './i18n';
+import { registerCommands } from './commands';
 import type { AdapterCheckResult } from './sync/result';
 import { RuntimeName, RuntimeTarget } from './types';
 import { createSyncProvider, ManifestCheckResult, SyncProvider } from './sync-provider';
 import path from 'node:path';
+import { resolveConfiguredPath } from './utils/paths';
 
 interface TargetCheck {
 	target: RuntimeTarget & { runtime: RuntimeName };
+	targetPath: string | null;
 	result: AdapterCheckResult;
 	repairable: boolean;
 }
@@ -41,21 +46,12 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			void this.activateView();
 		});
 
-		this.addCommand({
-			id: 'open-switchboard',
-			name: strings.openSwitchboard,
-			callback: () => void this.activateView(),
-		});
-
-		this.addCommand({
-			id: 'refresh-skill-index',
-			name: strings.refreshSkillIndex,
-			callback: () => void this.refreshIndex(true),
-		});
+		registerCommands(this);
 
 		this.addSettingTab(new SkillSwitchboardSettingTab(this.app, this));
 
 		await this.refreshIndex(false);
+		void writePluginStatus(this);
 
 		if (this.settings.autoScan && this.settings.scanIntervalMinutes > 0) {
 			this.registerInterval(
@@ -105,11 +101,19 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		this.adapterCheckRunning = false;
 		this.renderViews();
 
-		new Notice(
+		notifyWithCopy(
+			strings,
 			result.status === 'passed'
 				? strings.adapterCheckPassed
 				: strings.adapterCheckFailed(result.exitCode),
+			result.output,
 		);
+		await writePluginStatus(this, { lastCheck: runRecord(result.status, result.exitCode, result.output) });
+	}
+
+	/** Most recent adapter output: repair output wins because it also contains the follow-up checks. */
+	latestCheckOutput(): string {
+		return (this.adapterRepair?.output ?? this.adapterCheck?.output ?? '').trim();
 	}
 
 	getRepairTargets(): Array<RuntimeTarget & { runtime: RuntimeName }> {
@@ -144,7 +148,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			this.adapterRepair = manifest;
 			this.adapterRepairRunning = false;
 			this.renderViews();
-			new Notice(strings.adapterCheckFailed(manifest.exitCode));
+			notifyWithCopy(strings, strings.adapterCheckFailed(manifest.exitCode), manifest.output);
 			return;
 		}
 
@@ -166,8 +170,10 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			};
 			this.adapterRepairRunning = false;
 			this.renderViews();
-			new Notice(
+			notifyWithCopy(
+				strings,
 				blocked.length === 0 ? strings.repairAllNoDrift : strings.repairAllFailed(blocked.length),
+				this.adapterRepair.output,
 			);
 			return;
 		}
@@ -179,9 +185,15 @@ export default class SkillSwitchboardPlugin extends Plugin {
 
 		for (const check of drifted) {
 			const runtime = check.target.runtime;
-			const targetPath = path.resolve(check.target.path);
+			const targetPath = check.targetPath;
+			if (!targetPath) {
+				failedCount += 1;
+				firstFailureCode ??= 1;
+				repairOutputs.push(`[${displayTargetName(check.target)}] REPAIR FAILED\n${check.result.output}`);
+				continue;
+			}
 			const label = displayTargetName(check.target);
-			const repair = await this.syncProvider.repairRuntime(vaultPath, runtime, targetPath);
+			const repair = await this.syncProvider.repairRuntime(vaultPath, runtime, check.target.path);
 			if (repair.status === 'failed') {
 				failedCount += 1;
 				firstFailureCode ??= repair.exitCode;
@@ -189,7 +201,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 				continue;
 			}
 
-			const followUp = await this.syncProvider.checkRuntime(vaultPath, runtime, targetPath);
+			const followUp = await this.syncProvider.checkRuntime(vaultPath, runtime, check.target.path);
 			if (followUp.status === 'passed') {
 				repairedCount += 1;
 				repairOutputs.push(
@@ -216,14 +228,19 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		};
 		this.adapterRepairRunning = false;
 		this.renderViews();
-		new Notice(
+		notifyWithCopy(
+			strings,
 			failedCount === 0
 				? strings.repairAllPassed(repairedCount)
 				: strings.repairAllFailed(failedCount),
+			this.adapterRepair.output,
 		);
+		await writePluginStatus(this, {
+			lastRepair: runRecord(this.adapterRepair.status, this.adapterRepair.exitCode, this.adapterRepair.output),
+		});
 	}
 
-	private getVaultBasePath(): string | null {
+	getVaultBasePath(): string | null {
 		const adapter = this.app.vault.adapter as { getBasePath?: () => string };
 		return adapter.getBasePath?.() ?? null;
 	}
@@ -238,10 +255,26 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	private async collectTargetChecks(vaultPath: string): Promise<TargetCheck[]> {
 		const checks: TargetCheck[] = [];
 		for (const target of this.getRepairTargets()) {
-			const resolvedTarget = path.resolve(target.path);
+			let resolvedTarget: string;
+			try {
+				resolvedTarget = resolveConfiguredPath(target.path, vaultPath);
+			} catch (error) {
+				checks.push({
+					target,
+					targetPath: null,
+					repairable: false,
+					result: {
+						status: 'failed',
+						output: error instanceof Error ? error.message : String(error),
+						exitCode: 1,
+					},
+				});
+				continue;
+			}
 			if (isTargetInsideVault(vaultPath, resolvedTarget)) {
 				checks.push({
 					target,
+					targetPath: resolvedTarget,
 					repairable: false,
 					result: {
 						status: 'failed',
@@ -253,8 +286,9 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			}
 			checks.push({
 				target,
+				targetPath: resolvedTarget,
 				repairable: true,
-				result: await this.syncProvider.checkRuntime(vaultPath, target.runtime, resolvedTarget),
+				result: await this.syncProvider.checkRuntime(vaultPath, target.runtime, target.path),
 			});
 		}
 		return checks;

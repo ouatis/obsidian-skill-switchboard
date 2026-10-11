@@ -13,6 +13,7 @@ const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'skill-switchboard-nati
 try {
 	const bundle = path.join(tempRoot, 'native-check.cjs');
 	const repairBundle = path.join(tempRoot, 'native-repair.cjs');
+	const pathsBundle = path.join(tempRoot, 'paths.cjs');
 	await esbuild.build({
 		entryPoints: [path.join(repo, 'src', 'sync', 'native-check.ts')],
 		bundle: true,
@@ -31,8 +32,32 @@ try {
 		external: ['node:*'],
 		logLevel: 'silent',
 	});
+	await esbuild.build({
+		entryPoints: [path.join(repo, 'src', 'utils', 'paths.ts')],
+		bundle: true,
+		platform: 'node',
+		format: 'cjs',
+		outfile: pathsBundle,
+		external: ['node:*'],
+		logLevel: 'silent',
+	});
 	const native = await import(pathToFileURL(bundle).href);
 	const repair = await import(pathToFileURL(repairBundle).href);
+	const paths = await import(pathToFileURL(pathsBundle).href);
+	assert.equal(paths.resolveConfiguredPath('~'), os.homedir());
+	assert.equal(paths.resolveConfiguredPath('~/.codex/skills'), path.join(os.homedir(), '.codex', 'skills'));
+	assert.equal(
+		paths.resolveConfiguredPath(path.join(os.homedir(), '.codex', 'skills'), vault),
+		path.join(os.homedir(), '.codex', 'skills'),
+	);
+	assert.equal(paths.resolveConfiguredPath('/~/.codex/skills'), path.join(os.homedir(), '.codex', 'skills'));
+	assert.equal(paths.resolveConfiguredPath('${HOME}/.codex/skills'), path.join(os.homedir(), '.codex', 'skills'));
+	assert.equal(paths.resolveConfiguredPath('%USERPROFILE%\\.codex\\skills'), path.join(os.homedir(), '.codex', 'skills'));
+	assert.equal(paths.resolveConfiguredPath('runtime/skills', vault), path.join(vault, 'runtime', 'skills'));
+	if (path.sep === '/') {
+		assert.throws(() => paths.resolveConfiguredPath('C:\\Users\\louxi\\.codex\\skills'), /Use a portable path/);
+		assert.throws(() => paths.resolveConfiguredPath('/C:\\Users\\louxi\\.codex\\skills'), /Use a portable path/);
+	}
 	const targets = Object.fromEntries([
 		'codex', 'hermes', 'workbuddy', 'opencode', 'antigravity', 'dsh',
 	].map((runtime) => [runtime, path.join(tempRoot, runtime)]));

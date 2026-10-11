@@ -119,6 +119,24 @@
 	margin-top: 8px;
 }
 
+.skill-switchboard-output-header {
+	align-items: center;
+	display: flex;
+	gap: 8px;
+	justify-content: space-between;
+	margin-top: 8px;
+}
+
+.skill-switchboard-output-header .skill-switchboard-check-label {
+	margin-top: 0;
+}
+
+.skill-switchboard-copy-button {
+	cursor: pointer;
+	flex-shrink: 0;
+	font-size: var(--font-ui-smaller);
+}
+
 .skill-switchboard-check-output {
 	background: var(--background-secondary);
 	border-radius: 6px;
@@ -127,7 +145,21 @@
 	max-height: 320px;
 	overflow: auto;
 	padding: 10px;
+	user-select: text;
 	white-space: pre-wrap;
+}
+
+.skill-switchboard-notice-copy {
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+	margin-left: 8px;
+}
+
+.skill-switchboard-clipboard-textarea {
+	left: -10000px;
+	opacity: 0;
+	position: fixed;
+	top: 0;
 }
 
 .skill-switchboard-repair {

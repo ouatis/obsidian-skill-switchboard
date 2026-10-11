@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { isAbsolutePath } from '../utils/paths';
 import { RuntimeName } from '../types';
 import type { AdapterCheckResult } from './result';
 
@@ -91,7 +92,10 @@ export function adapterFor(skill: ManifestSkill, runtime: RuntimeName): AdapterM
 }
 
 export function isInside(root: string, target: string): boolean {
-	const relative = path.relative(path.resolve(root), path.resolve(target));
+	const relative = path.relative(
+		isAbsolutePath(root) ? root : path.resolve(root),
+		isAbsolutePath(target) ? target : path.resolve(target),
+	);
 	return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
 }
 

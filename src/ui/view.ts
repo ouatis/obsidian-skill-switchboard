@@ -2,6 +2,7 @@ import { ItemView, Notice, WorkspaceLeaf } from 'obsidian';
 import type SkillSwitchboardPlugin from '../main';
 import { IndexedSkill } from '../types';
 import { getStrings } from '../i18n';
+import { copyTextToClipboard } from '../utils/clipboard';
 
 export const VIEW_TYPE_SKILL_SWITCHBOARD = 'skill-switchboard-view';
 
@@ -55,6 +56,8 @@ export class SkillSwitchboardView extends ItemView {
 		const repairAll = actions.createEl('button', { text: strings.repairAllAdapters });
 		repairAll.disabled = this.plugin.adapterCheckRunning || this.plugin.adapterRepairRunning;
 		repairAll.addEventListener('click', () => void this.plugin.repairAllAdapters());
+		const copyLatest = actions.createEl('button', { text: strings.copyOutput });
+		copyLatest.addEventListener('click', () => void this.copyOutput(this.plugin.latestCheckOutput()));
 		const settings = actions.createEl('button', { text: strings.settings });
 		settings.addEventListener('click', () => {
 			new Notice(strings.settingsNotice);
@@ -85,14 +88,7 @@ export class SkillSwitchboardView extends ItemView {
 						: strings.adapterCheckFailed(this.plugin.adapterCheck?.exitCode ?? 1),
 			});
 			if (this.plugin.adapterCheck?.output) {
-				checkBox.createDiv({
-					text: strings.adapterCheckOutput,
-					cls: 'skill-switchboard-check-label',
-				});
-				checkBox.createEl('pre', {
-					text: this.plugin.adapterCheck.output,
-					cls: 'skill-switchboard-check-output',
-				});
+				this.renderOutputBlock(checkBox, strings.adapterCheckOutput, this.plugin.adapterCheck.output);
 			}
 		}
 
@@ -110,14 +106,7 @@ export class SkillSwitchboardView extends ItemView {
 						: strings.adapterCheckFailed(this.plugin.adapterRepair?.exitCode ?? 1),
 			});
 			if (this.plugin.adapterRepair?.output) {
-				repairResult.createDiv({
-					text: strings.repairAllOutput,
-					cls: 'skill-switchboard-check-label',
-				});
-				repairResult.createEl('pre', {
-					text: this.plugin.adapterRepair.output,
-					cls: 'skill-switchboard-check-output',
-				});
+				this.renderOutputBlock(repairResult, strings.repairAllOutput, this.plugin.adapterRepair.output);
 			}
 		}
 
@@ -135,6 +124,32 @@ export class SkillSwitchboardView extends ItemView {
 
 		const footer = contentEl.createDiv('skill-switchboard-footer');
 		footer.setText(`${strings.readOnlyScan} · ${new Date(this.plugin.index.scannedAt).toLocaleString()}`);
+	}
+
+	private renderOutputBlock(container: HTMLElement, label: string, output: string): void {
+		const strings = getStrings(this.plugin.settings.language);
+		const header = container.createDiv('skill-switchboard-output-header');
+		header.createDiv({ text: label, cls: 'skill-switchboard-check-label' });
+		const copyButton = header.createEl('button', {
+			text: strings.copyOutput,
+			cls: 'skill-switchboard-copy-button',
+		});
+		copyButton.setAttribute('aria-label', strings.copyOutput);
+		copyButton.addEventListener('click', () => void this.copyOutput(output));
+		container.createEl('pre', {
+			text: output,
+			cls: 'skill-switchboard-check-output',
+		});
+	}
+
+	private async copyOutput(output: string): Promise<void> {
+		const strings = getStrings(this.plugin.settings.language);
+		if (!output.trim()) {
+			new Notice(strings.noOutputToCopy);
+			return;
+		}
+		const copied = await copyTextToClipboard(output);
+		new Notice(copied ? strings.outputCopied : strings.copyFailed);
 	}
 
 	private renderSkill(container: HTMLElement, skill: IndexedSkill): void {
