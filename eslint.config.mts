@@ -30,4 +30,14 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		// The clipboard fallback deliberately keeps the deprecated document.execCommand
+		// as the only path that works when navigator.clipboard is unavailable inside
+		// Obsidian's renderer. A single suppression with that explanation is clearer
+		// than dropping a working code path.
+		files: ['src/utils/clipboard.ts'],
+		rules: {
+			'@typescript-eslint/no-deprecated': 'off',
+		},
+	},
 );

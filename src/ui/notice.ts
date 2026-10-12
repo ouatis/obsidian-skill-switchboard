@@ -15,8 +15,7 @@ export function notifyWithCopy(strings: Strings, message: string, output: string
 
 	// Surface the first few problems inline: without them a failure notice only shows the exit code.
 	const notice = new Notice(`${message}\n${summarize(trimmed)}`, 20000);
-	// `noticeEl` is deprecated in favor of `messageEl`, which needs Obsidian 1.8.7 (above minAppVersion).
-	const button = notice.noticeEl.createEl('button', {
+	const button = resolveMessageEl(notice).createEl('button', {
 		text: strings.copyOutput,
 		cls: 'skill-switchboard-notice-copy',
 	});
@@ -26,6 +25,23 @@ export function notifyWithCopy(strings: Strings, message: string, output: string
 			new Notice(copied ? strings.outputCopied : strings.copyFailed);
 		})();
 	});
+}
+
+/**
+ * `messageEl` is the current element, but it only exists in Obsidian 1.8.7+ while
+ * this plugin still supports 1.7.2. The legacy element is read through a local type
+ * because it is deprecated in the API but still required for 1.7.2–1.8.6.
+ */
+type NoticeElements = {
+	messageEl?: HTMLElement;
+	noticeEl?: HTMLElement;
+};
+
+function resolveMessageEl(notice: Notice): HTMLElement {
+	const elements = notice as unknown as NoticeElements;
+	const el = elements.messageEl ?? elements.noticeEl;
+	if (!el) throw new Error('Notice has no message element on this Obsidian version.');
+	return el;
 }
 
 function summarize(output: string, maxLines = 6): string {

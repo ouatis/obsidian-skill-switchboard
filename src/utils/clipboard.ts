@@ -30,10 +30,20 @@ function writeWithTextarea(text: string): boolean {
 	textarea.select();
 	let copied = false;
 	try {
-		copied = document.execCommand('copy');
+		copied = runCopyCommand();
 	} catch {
 		copied = false;
 	}
 	document.body.removeChild(textarea);
 	return copied;
 }
+
+/**
+ * `document.execCommand` is deprecated on the web platform, but it is the only copy
+ * path that still works when `navigator.clipboard` is unavailable inside Obsidian's
+ * renderer. `eslint.config.mts` exempts this file for that reason.
+ */
+const runCopyCommand: () => boolean =
+	typeof document.execCommand === 'function'
+		? () => document.execCommand('copy')
+		: () => false;
