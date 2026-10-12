@@ -1,158 +1,381 @@
 .skill-switchboard-view {
-	padding: 12px;
+	padding: 0 var(--size-4-4) var(--size-4-6);
 }
 
+/* Header ------------------------------------------------------------------ */
+
 .skill-switchboard-header {
-	display: flex;
 	align-items: center;
+	display: flex;
+	gap: var(--size-4-2);
 	justify-content: space-between;
-	gap: 8px;
-	margin-bottom: 12px;
+	padding: var(--size-4-3) 0;
+	position: sticky;
+	top: 0;
+	background: var(--background-primary);
+	z-index: 1;
 }
 
 .skill-switchboard-title {
+	color: var(--text-normal);
 	font-size: var(--font-ui-large);
 	font-weight: var(--font-semibold);
+	letter-spacing: -0.01em;
 }
 
 .skill-switchboard-actions {
+	align-items: center;
 	display: flex;
-	gap: 6px;
+	gap: var(--size-2-2);
 }
+
+.skill-switchboard-actions button {
+	font-size: var(--font-ui-small);
+}
+
+.skill-switchboard-icon-button {
+	align-items: center;
+	display: flex;
+	justify-content: center;
+	padding: var(--size-2-2) var(--size-2-3);
+}
+
+.skill-switchboard-icon-button svg {
+	height: var(--icon-s);
+	width: var(--icon-s);
+}
+
+/* Summary ----------------------------------------------------------------- */
 
 .skill-switchboard-summary {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: 6px;
-	margin-bottom: 12px;
-}
-
-.skill-switchboard-stat,
-.skill-switchboard-card {
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
-	background: var(--background-secondary);
+	grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+	gap: var(--size-4-2);
+	margin-bottom: var(--size-4-4);
 }
 
 .skill-switchboard-stat {
-	padding: 8px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: var(--size-4-2) var(--size-4-3);
 	text-align: center;
+	transition: background 120ms ease, border-color 120ms ease;
+}
+
+.skill-switchboard-stat.is-clickable {
+	cursor: pointer;
+}
+
+.skill-switchboard-stat.is-clickable:hover,
+.skill-switchboard-stat.is-clickable:focus-visible {
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover);
+	outline: none;
 }
 
 .skill-switchboard-stat-value {
+	color: var(--text-normal);
 	font-size: var(--font-ui-large);
+	font-variant-numeric: tabular-nums;
 	font-weight: var(--font-semibold);
+	line-height: 1.2;
 }
 
-.skill-switchboard-stat-label,
-.skill-switchboard-muted,
-.skill-switchboard-footer,
-.skill-switchboard-path,
-.skill-switchboard-hash {
+.skill-switchboard-stat-label {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
 }
+
+.skill-switchboard-stat-hint {
+	color: var(--text-faint);
+	font-size: var(--font-ui-smaller);
+	margin-top: 2px;
+}
+
+.skill-switchboard-stat.is-clickable .skill-switchboard-stat-hint {
+	color: var(--text-accent);
+}
+
+/* Adapter status ---------------------------------------------------------- */
+
+.skill-switchboard-check {
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	margin-bottom: var(--size-4-3);
+	padding: var(--size-4-2) var(--size-4-3);
+}
+
+.skill-switchboard-status {
+	align-items: center;
+	display: flex;
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-medium);
+	gap: var(--size-2-2);
+}
+
+.skill-switchboard-status.is-passed {
+	color: var(--text-success);
+}
+
+.skill-switchboard-status-icon {
+	display: flex;
+}
+
+.skill-switchboard-status-icon svg {
+	height: var(--icon-s);
+	width: var(--icon-s);
+}
+
+.skill-switchboard-errors {
+	background: var(--background-modifier-error);
+	border-radius: var(--radius-m);
+	color: var(--text-error);
+	margin-bottom: var(--size-4-3);
+	padding: var(--size-4-2) var(--size-4-3);
+}
+
+/* Search ------------------------------------------------------------------ */
+
+.skill-switchboard-search {
+	align-items: center;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	display: flex;
+	gap: var(--size-2-2);
+	margin-bottom: var(--size-4-3);
+	padding: 0 var(--size-4-2);
+	transition: border-color 120ms ease;
+}
+
+.skill-switchboard-search:focus-within {
+	border-color: var(--interactive-accent);
+}
+
+.skill-switchboard-search-icon {
+	color: var(--text-faint);
+	display: flex;
+	flex-shrink: 0;
+}
+
+.skill-switchboard-search-icon svg {
+	height: var(--icon-s);
+	width: var(--icon-s);
+}
+
+.skill-switchboard-search-input {
+	background: transparent;
+	border: none;
+	color: var(--text-normal);
+	flex: 1;
+	font-size: var(--font-ui-small);
+	min-width: 0;
+	outline: none;
+	padding: var(--size-4-2) 0;
+}
+
+.skill-switchboard-no-results {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	padding: var(--size-4-5) var(--size-4-3);
+	text-align: center;
+}
+
+/* Skill list -------------------------------------------------------------- */
 
 .skill-switchboard-list {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: var(--size-2-3);
+}
+
+.skill-switchboard-group-heading {
+	align-items: baseline;
+	color: var(--text-muted);
+	display: flex;
+	font-size: var(--font-ui-small);
+	gap: var(--size-2-2);
+	margin-top: var(--size-4-3);
+	padding-bottom: var(--size-2-1);
 }
 
 .skill-switchboard-card {
-	padding: 10px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	padding: var(--size-4-2) var(--size-4-3);
+	transition: border-color 120ms ease;
+}
+
+.skill-switchboard-card:hover {
+	border-color: var(--background-modifier-border-hover);
+}
+
+.skill-switchboard-card.is-openable {
+	cursor: pointer;
+}
+
+.skill-switchboard-card.is-openable:hover {
+	background: var(--background-secondary);
+	border-color: var(--background-modifier-border-hover);
+}
+
+.skill-switchboard-card.is-openable:focus-visible {
+	border-color: var(--interactive-accent);
+	outline: none;
 }
 
 .skill-switchboard-card-heading {
+	align-items: baseline;
 	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+}
+
+.skill-switchboard-card-heading strong {
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
 }
 
 .skill-switchboard-badge {
-	padding: 2px 6px;
-	border-radius: 999px;
-	background: var(--background-modifier-hover);
+	background: var(--background-modifier-border);
+	border-radius: var(--radius-s);
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+	padding: 0 var(--size-2-2);
 }
 
 .skill-switchboard-description {
-	margin-top: 6px;
-	line-height: 1.4;
-}
-
-.skill-switchboard-path,
-.skill-switchboard-hash {
-	margin-top: 5px;
-	word-break: break-all;
-}
-
-.skill-switchboard-errors {
-	margin-bottom: 12px;
-	padding: 8px;
-	border: 1px solid var(--color-orange);
-	border-radius: 8px;
-	color: var(--text-warning);
-}
-
-.skill-switchboard-empty {
-	padding: 18px 4px;
 	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+	margin-top: var(--size-2-1);
 }
 
-.skill-switchboard-footer {
-	margin-top: 12px;
+/* Collapsible details ----------------------------------------------------- */
+
+.skill-switchboard-details {
+	margin-top: var(--size-2-2);
 }
 
-.skill-switchboard-check {
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
-	margin: 12px 0;
-	padding: 10px;
+.skill-switchboard-details > summary {
+	align-items: center;
+	border-radius: var(--radius-s);
+	color: var(--text-muted);
+	cursor: pointer;
+	display: flex;
+	font-size: var(--font-ui-smaller);
+	gap: var(--size-2-2);
+	list-style: none;
+	padding: var(--size-2-1) 0;
+}
+
+.skill-switchboard-details > summary::-webkit-details-marker {
+	display: none;
+}
+
+.skill-switchboard-details > summary::before {
+	color: var(--text-faint);
+	content: '›';
+	display: inline-block;
+	transition: transform 120ms ease;
+	width: 1em;
+}
+
+.skill-switchboard-details[open] > summary::before {
+	transform: rotate(90deg);
+}
+
+.skill-switchboard-details > summary:hover {
+	color: var(--text-normal);
+}
+
+.skill-switchboard-card-meta {
+	padding-left: 1.5em;
 }
 
 .skill-switchboard-check-label {
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
-	margin-top: 8px;
 }
 
-.skill-switchboard-output-header {
-	align-items: center;
-	display: flex;
-	gap: 8px;
-	justify-content: space-between;
-	margin-top: 8px;
+.skill-switchboard-output-body {
+	padding-left: 1.5em;
 }
 
-.skill-switchboard-output-header .skill-switchboard-check-label {
-	margin-top: 0;
+.skill-switchboard-output-body .skill-switchboard-copy-button {
+	margin-bottom: var(--size-2-2);
+}
+
+.skill-switchboard-check-output {
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	margin: 0;
+	max-height: 320px;
+	overflow: auto;
+	padding: var(--size-4-2);
+	user-select: text;
+	white-space: pre-wrap;
+	word-break: break-word;
 }
 
 .skill-switchboard-copy-button {
-	cursor: pointer;
 	flex-shrink: 0;
 	font-size: var(--font-ui-smaller);
 }
 
-.skill-switchboard-check-output {
-	background: var(--background-secondary);
-	border-radius: 6px;
+/* Footer ------------------------------------------------------------------ */
+
+.skill-switchboard-footer,
+.skill-switchboard-muted,
+.skill-switchboard-path,
+.skill-switchboard-hash {
+	color: var(--text-faint);
 	font-size: var(--font-ui-smaller);
-	margin-top: 6px;
-	max-height: 320px;
-	overflow: auto;
-	padding: 10px;
-	user-select: text;
-	white-space: pre-wrap;
 }
+
+.skill-switchboard-footer {
+	border-top: 1px solid var(--background-modifier-border);
+	margin-top: var(--size-4-4);
+	padding-top: var(--size-4-2);
+	text-align: center;
+}
+
+.skill-switchboard-path,
+.skill-switchboard-hash {
+	line-height: 1.6;
+	word-break: break-all;
+}
+
+.skill-switchboard-path {
+	margin-top: var(--size-2-1);
+}
+
+.skill-switchboard-empty {
+	color: var(--text-muted);
+	padding: var(--size-4-6) var(--size-4-4);
+	text-align: center;
+}
+
+.skill-switchboard-empty h3 {
+	color: var(--text-normal);
+	margin-bottom: var(--size-2-2);
+}
+
+/* Notices ----------------------------------------------------------------- */
 
 .skill-switchboard-notice-copy {
 	cursor: pointer;
 	font-size: var(--font-ui-smaller);
-	margin-left: 8px;
+	margin-left: var(--size-4-2);
 }
 
 .skill-switchboard-clipboard-textarea {
@@ -160,11 +383,4 @@
 	opacity: 0;
 	position: fixed;
 	top: 0;
-}
-
-.skill-switchboard-repair {
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
-	margin: 12px 0;
-	padding: 10px;
 }

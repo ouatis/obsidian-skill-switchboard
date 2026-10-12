@@ -36,6 +36,15 @@ export interface Strings {
 	noSkillsDescription: string;
 	readOnlyScan: string;
 	noDescription: string;
+	technicalDetails: string;
+	sourcePath: string;
+	searchSkills: string;
+	noSearchResults: string;
+	openSource: string;
+	pathCopied: string;
+	sourceMissing: string;
+	jumpToList: string;
+	manageInSettings: string;
 	sha256: string;
 	overview: string;
 	overviewDescription: string;
@@ -110,6 +119,15 @@ const EN: Strings = {
 	noSkillsDescription: 'Add a vault-relative or desktop skill root in settings, then refresh. Canonical Markdown cards and SKILL.md adapters are supported.',
 	readOnlyScan: 'Read-only scan',
 	noDescription: 'No description in frontmatter.',
+	technicalDetails: 'Technical details',
+	sourcePath: 'Source',
+	searchSkills: 'Search skills',
+	noSearchResults: 'No skill matches this search.',
+	openSource: 'Open source',
+	pathCopied: 'Path copied to clipboard',
+	sourceMissing: 'The source file is no longer in the vault. Refresh the index.',
+	jumpToList: 'Go to list',
+	manageInSettings: 'Manage in settings',
 	sha256: 'SHA-256',
 	overview: 'Overview',
 	overviewDescription: 'Configure skill roots, runtime targets, and harnesses. The plugin indexes skills, checks every wrapper target, and provides one-click repair.',
@@ -184,6 +202,15 @@ const ZH_CN: Strings = {
 	noSkillsDescription: '请在设置中添加 vault 内相对目录或桌面目录，然后刷新。插件支持 canonical Markdown 卡片和 SKILL.md 适配器。',
 	readOnlyScan: '只读扫描',
 	noDescription: 'frontmatter 中没有描述。',
+	technicalDetails: '技术信息',
+	sourcePath: '来源',
+	searchSkills: '搜索技能',
+	noSearchResults: '没有匹配的结果。',
+	openSource: '打开源文件',
+	pathCopied: '路径已复制到剪贴板',
+	sourceMissing: '源文件已不在库中，请刷新索引。',
+	jumpToList: '跳到列表',
+	manageInSettings: '去设置中管理',
 	sha256: 'SHA-256',
 	overview: '概览',
 	overviewDescription: '配置技能来源目录、运行时目标和 Harness。插件会建立索引、检查所有 Wrapper 目标，并提供一键修复。',
