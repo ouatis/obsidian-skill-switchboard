@@ -14,6 +14,7 @@ export interface Strings {
 	copyOutput: string;
 	outputCopied: string;
 	copyFailed: string;
+	moreLines: (count: number) => string;
 	noOutputToCopy: string;
 	copyCheckOutput: string;
 	repairAllAdapters: string;
@@ -87,6 +88,7 @@ const EN: Strings = {
 	copyOutput: 'Copy output',
 	outputCopied: 'Output copied to clipboard',
 	copyFailed: 'Copying the output failed',
+	moreLines: (count) => `… ${count} more line(s), use copy to get the full output`,
 	noOutputToCopy: 'There is no check output to copy yet',
 	copyCheckOutput: 'Copy adapter check output',
 	repairAllAdapters: 'Repair all',
@@ -160,6 +162,7 @@ const ZH_CN: Strings = {
 	copyOutput: '复制输出',
 	outputCopied: '输出已复制到剪贴板',
 	copyFailed: '复制输出失败',
+	moreLines: (count) => `… 另有 ${count} 行，用「复制输出」查看完整内容`,
 	noOutputToCopy: '还没有可复制的检查输出',
 	copyCheckOutput: '复制适配器检查输出',
 	repairAllAdapters: '一键修复',

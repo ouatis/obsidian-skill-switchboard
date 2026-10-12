@@ -13,8 +13,16 @@ export function notifyWithCopy(strings: Strings, message: string, output: string
 		return;
 	}
 
-	// Surface the first few problems inline: without them a failure notice only shows the exit code.
-	const notice = new Notice(`${message}\n${summarize(trimmed)}`, 20000);
+	// A clean run can produce dozens of identical PASS lines. Showing them buries the
+	// one thing the user needs: whether anything needs attention.
+	const problems = findProblemLines(trimmed);
+	if (problems.length === 0) {
+		new Notice(message, 8000);
+		return;
+	}
+
+	// Surface the problems inline: without them a failure notice only shows the exit code.
+	const notice = new Notice(`${message}\n${summarize(problems, strings, trimmed)}`, 20000);
 	const button = resolveMessageEl(notice).createEl('button', {
 		text: strings.copyOutput,
 		cls: 'skill-switchboard-notice-copy',
@@ -25,6 +33,41 @@ export function notifyWithCopy(strings: Strings, message: string, output: string
 			new Notice(copied ? strings.outputCopied : strings.copyFailed);
 		})();
 	});
+}
+
+/**
+ * Lines that mark a real problem. Adapter output is written as `[target] STATE`
+ * headers, so the status word on its own line is what identifies a failure.
+ */
+const PROBLEM_STATES = new Set(['DRIFT', 'FAIL']);
+
+function findProblemLines(output: string): string[] {
+	const lines = output.split('\n').map((line) => line.trim()).filter(Boolean);
+	const problems: string[] = [];
+	for (let index = 0; index < lines.length; index += 1) {
+		const line = lines[index];
+		const header = /^\[.*\]\s*(\w+)$/.exec(line ?? '');
+		const state = header?.[1];
+		if (!state || !PROBLEM_STATES.has(state)) continue;
+		problems.push(line ?? '');
+		// Keep the detail line that follows the status header.
+		const detail = lines[index + 1];
+		if (detail !== undefined) problems.push(detail);
+	}
+	return problems;
+}
+
+function summarize(problems: string[], strings: Strings, output: string, maxLines = 6): string {
+	const shown = problems.slice(0, maxLines).map((line) => `· ${line}`);
+	const hidden = problems.length - shown.length;
+	if (hidden > 0) {
+		shown.push(`· ${strings.moreLines(hidden)}`);
+	} else {
+		const total = output.split('\n').filter((line) => line.trim()).length;
+		const unseen = total - problems.length;
+		if (unseen > 0) shown.push(`· ${strings.moreLines(unseen)}`);
+	}
+	return shown.join('\n');
 }
 
 /**
@@ -42,12 +85,4 @@ function resolveMessageEl(notice: Notice): HTMLElement {
 	const el = elements.messageEl ?? elements.noticeEl;
 	if (!el) throw new Error('Notice has no message element on this Obsidian version.');
 	return el;
-}
-
-function summarize(output: string, maxLines = 6): string {
-	const lines = output.split('\n').map((line) => line.trim()).filter(Boolean);
-	const shown = lines.slice(0, maxLines).map((line) => `· ${line}`);
-	const hidden = lines.length - shown.length;
-	if (hidden > 0) shown.push(`… ${hidden} more line(s), use copy to get the full output`);
-	return shown.join('\n');
 }
