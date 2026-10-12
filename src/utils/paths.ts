@@ -21,9 +21,11 @@ export function resolveConfiguredPath(value: string, basePath = process.cwd()): 
 	const normalized = path.sep === '/' ? expanded.replaceAll('\\', '/') : expanded;
 	if (normalized === '~') return os.homedir();
 	if (/^~[\\/]/.test(normalized)) {
-		return `${os.homedir().replace(/[\\/]$/, '')}${path.sep}${normalized.slice(2)}`;
+		// path.join, not string concatenation: the tail may use the other
+		// separator, and concatenating would leave a mixed-slash path behind.
+		return path.join(os.homedir(), normalized.slice(2));
 	}
-	if (isAbsolutePath(normalized)) return normalized;
+	if (isAbsolutePath(normalized)) return path.normalize(normalized);
 	return path.resolve(basePath, normalized);
 }
 

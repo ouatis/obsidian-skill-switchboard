@@ -7,7 +7,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import esbuild from 'esbuild';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const vault = path.resolve(repo, '..', 'JARDIN');
+// The vault lives at ~/Documents/JARDIN regardless of where this repo sits.
+const vault = process.env.JARDIN_VAULT
+	? path.resolve(process.env.JARDIN_VAULT)
+	: path.join(os.homedir(), 'Documents', 'JARDIN');
 const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'skill-switchboard-native-'));
 
 try {
@@ -66,6 +69,10 @@ try {
 	const manifest = await native.inspectManifest(vault);
 	assert.equal(manifest.status, 'passed', manifest.output);
 	assert.ok(manifest.snapshot, 'native manifest snapshot should exist');
+	// Derived from the canonical root so adding a skill doesn't fail the suite.
+	const canonicalSkillCount = (
+		await fs.readdir(path.join(vault, '00-MEMORTE', 'shared', 'skills'), { withFileTypes: true })
+	).filter((entry) => entry.isFile() && entry.name.endsWith('.md')).length;
 	for (const runtime of Object.keys(targets)) {
 		const initialRepair = await repair.repairRuntimeNative(vault, runtime, targets[runtime], manifest.snapshot, {
 			...(runtime === 'opencode' ? { opencodeCommandsDir: commands } : {}),
@@ -81,7 +88,11 @@ try {
 			{ opencodeCommandsDir: commands },
 		);
 		assert.equal(result.kind, 'clean', `${runtime}: ${result.output}`);
-		assert.equal(result.checkedSkillCount, 21, `${runtime} skill count`);
+		assert.equal(
+			result.checkedSkillCount,
+			canonicalSkillCount,
+			`${runtime} skill count`,
+		);
 		assert.equal(await hashTree(targets[runtime]), before, `${runtime} native check wrote files`);
 	}
 
@@ -118,7 +129,9 @@ try {
 	assert.equal(opencodeRepair.status, 'passed', opencodeRepair.output);
 	assert.equal((await native.checkRuntimeNative(vault, 'opencode', targets.opencode, manifest.snapshot, { opencodeCommandsDir: commands })).kind, 'clean');
 
-	console.log('Native checks passed: 6 runtimes, 21 skills, native-only fixture creation, read-only checks, and repair cases.');
+	console.log(
+		`Native checks passed: ${Object.keys(targets).length} runtimes, ${canonicalSkillCount} skills, native-only fixture creation, read-only checks, and repair cases.`,
+	);
 	if (process.argv.includes('--live')) await checkLive(native);
 } finally {
 	await fs.rm(tempRoot, { recursive: true, force: true });
