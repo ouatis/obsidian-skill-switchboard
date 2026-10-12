@@ -28,13 +28,14 @@ For a JARDIN setup, configure `00-MEMORTE/shared/skills` as the single source ro
 ```bash
 npm install
 npm run build
+npm run test:adapter
 npm run test:native
 ```
 
-The production build writes `main.js` to the project root. For local testing, copy `main.js`, `manifest.json`, and `styles.css` into:
+`test:adapter` uses a fake sync provider to cover the check/repair orchestration without a vault, so it also runs in CI. The production build writes `main.js` to the project root. For local testing, copy `main.js`, `manifest.json`, and `styles.css` into:
 
 ```text
 <vault>/.obsidian/plugins/skill-switchboard/
 ```
 
-The native test uses isolated temporary targets and also supports `npm run test:native -- --live` for live read-only checks. The plugin has no Python runtime dependency; the JARDIN Python sync layer was retired after an external, hash-verified backup. Then reload the plugin in Obsidian and inspect errors with the Obsidian CLI.
+The native test reads the canonical JARDIN manifest and uses isolated temporary runtime targets. It also supports `npm run test:native -- --live` for live read-only checks against configured targets. The plugin has no Python runtime dependency. After installing a build, reload the plugin in Obsidian and inspect errors with the Obsidian CLI.

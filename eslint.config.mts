@@ -13,6 +13,7 @@ export default defineConfig(
 		'package.json',
 		'package-lock.json',
 		'scripts/test-native.mjs',
+		'scripts/test-adapter-run.mjs',
 		'tsconfig.json',
 	]),
 	{
