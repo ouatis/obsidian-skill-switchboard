@@ -89,10 +89,32 @@ export class SkillSwitchboardView extends ItemView {
 		input.value = this.query;
 		input.setAttribute('placeholder', strings.searchSkills);
 		input.setAttribute('aria-label', strings.searchSkills);
-		input.addEventListener('input', () => {
-			this.query = input.value;
+
+		const count = row.createSpan('skill-switchboard-search-count');
+		const clear = row.createEl('button', {
+			text: strings.clearSearch,
+			cls: 'skill-switchboard-search-clear',
+		});
+		clear.setAttribute('aria-label', strings.clearSearch);
+		clear.addEventListener('click', () => {
+			this.query = '';
+			input.value = '';
+			input.focus();
 			this.renderListOnly(strings);
 		});
+
+		const refresh = () => {
+			const matched = this.filteredSkills().length;
+			const filtering = this.query.trim().length > 0;
+			count.setText(filtering ? strings.matchCount(matched) : '');
+			row.toggleClass('is-filtering', filtering);
+		};
+		input.addEventListener('input', () => {
+			this.query = input.value;
+			refresh();
+			this.renderListOnly(strings);
+		});
+		refresh();
 	}
 
 	/** Re-renders only the list so the search box keeps focus and caret position. */
@@ -110,7 +132,17 @@ export class SkillSwitchboardView extends ItemView {
 	private renderFilteredList(contentEl: HTMLElement, strings: Strings, anchor: Element): void {
 		const matched = this.filteredSkills();
 		if (matched.length === 0) {
-			anchor.createDiv({ text: strings.noSearchResults, cls: 'skill-switchboard-no-results' });
+			const empty = anchor.createDiv('skill-switchboard-no-results');
+			empty.createDiv({ text: strings.noSearchResults });
+			empty.createDiv({
+				text: `“${this.query.trim()}”`,
+				cls: 'skill-switchboard-no-results-query',
+			});
+			const reset = empty.createEl('button', { text: strings.clearSearch });
+			reset.addEventListener('click', () => {
+				this.query = '';
+				this.renderIndex();
+			});
 			return;
 		}
 		this.renderSkillGroups(contentEl, strings, matched, anchor);

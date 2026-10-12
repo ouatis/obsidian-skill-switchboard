@@ -176,11 +176,41 @@
 	padding: var(--size-4-2) 0;
 }
 
+.skill-switchboard-search-count {
+	color: var(--text-faint);
+	flex-shrink: 0;
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+/* The clear button only earns space once something is typed. */
+.skill-switchboard-search-clear {
+	display: none;
+	flex-shrink: 0;
+	font-size: var(--font-ui-smaller);
+	padding: 0 var(--size-2-2);
+}
+
+.skill-switchboard-search.is-filtering .skill-switchboard-search-clear {
+	display: block;
+}
+
 .skill-switchboard-no-results {
 	color: var(--text-muted);
 	font-size: var(--font-ui-small);
 	padding: var(--size-4-5) var(--size-4-3);
 	text-align: center;
+}
+
+.skill-switchboard-no-results-query {
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+	margin: var(--size-2-2) 0 var(--size-4-2);
+	word-break: break-all;
+}
+
+.skill-switchboard-no-results button {
+	font-size: var(--font-ui-smaller);
 }
 
 /* Skill list -------------------------------------------------------------- */

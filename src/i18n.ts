@@ -39,6 +39,8 @@ export interface Strings {
 	technicalDetails: string;
 	sourcePath: string;
 	searchSkills: string;
+	clearSearch: string;
+	matchCount: (count: number) => string;
 	noSearchResults: string;
 	openSource: string;
 	pathCopied: string;
@@ -122,6 +124,8 @@ const EN: Strings = {
 	technicalDetails: 'Technical details',
 	sourcePath: 'Source',
 	searchSkills: 'Search skills',
+	clearSearch: 'Clear search',
+	matchCount: (count) => `${count}`,
 	noSearchResults: 'No skill matches this search.',
 	openSource: 'Open source',
 	pathCopied: 'Path copied to clipboard',
@@ -205,6 +209,8 @@ const ZH_CN: Strings = {
 	technicalDetails: '技术信息',
 	sourcePath: '来源',
 	searchSkills: '搜索技能',
+	clearSearch: '清除搜索',
+	matchCount: (count) => `${count} 条`,
 	noSearchResults: '没有匹配的结果。',
 	openSource: '打开源文件',
 	pathCopied: '路径已复制到剪贴板',
