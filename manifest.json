@@ -4,6 +4,7 @@
 	"version": "0.1.1",
 	"minAppVersion": "1.7.2",
 	"description": "Index and inspect Agent Skills across configurable roots, runtime targets, and harness definitions.",
-	"author": "Skill Switchboard contributors",
+	"author": "ouatis",
+	"authorUrl": "https://github.com/ouatis",
 	"isDesktopOnly": true
 }
