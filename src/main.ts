@@ -92,8 +92,8 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		if (!relevant) return;
 		if (this.scanQueued) return;
 		this.scanQueued = true;
-		// The declarative text control persists whatever was typed, so the stored
-		// value is coerced here instead of trusted to be a number already.
+		// The `number` control keeps this a number, but data saved by an earlier
+		// build used a text control, so the value is still coerced on read.
 		const stored = Number(this.settings.scanDelayMs);
 		const delay = Number.isFinite(stored) && stored >= 0 ? stored : INDEX_DEBOUNCE_MS;
 		window.setTimeout(() => {

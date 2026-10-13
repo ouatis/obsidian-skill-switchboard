@@ -87,17 +87,12 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 			{
 				name: strings.scanDelay,
 				desc: strings.scanDelayDescription,
+				// `number` persists a number and falls back to defaultValue when the
+				// input cannot be parsed, so the stored value stays usable by setTimeout.
 				control: {
-					type: 'text',
+					type: 'number',
 					key: 'scanDelayMs',
-					placeholder: String(DEFAULT_SETTINGS.scanDelayMs),
-					// The setting is stored as a number and read back into a setTimeout,
-					// so a text control must reject anything that is not one.
-					validate: (value: unknown): string | void => {
-						if (typeof value !== 'string' || !value.trim()) return;
-						const ms = Number(value);
-						if (!Number.isFinite(ms) || ms < 0) return strings.scanDelayInvalid;
-					},
+					defaultValue: DEFAULT_SETTINGS.scanDelayMs,
 				},
 			},
 		];
