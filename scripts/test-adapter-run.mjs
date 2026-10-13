@@ -171,7 +171,42 @@ try {
 		assert.ok(outcome.checkResult.output.includes('no repair targets'));
 	}
 
-	console.log('Adapter run checks passed: target filtering, manifest abort, blocked counting, repair and follow-up.');
+	// The deck observes real results, including the follow-up, without changing decisions.
+	{
+		let checks = 0;
+		const activities = [];
+		const observed = [];
+		const provider = {
+			inspectManifest: async () => ({ status: 'passed', output: '', exitCode: 0, snapshot: {} }),
+			checkRuntime: async () => ++checks === 1 ? failed('drift', 1) : passed('verified'),
+			repairRuntime: async () => passed('written'),
+		};
+		const outcome = await run.runRepairAll({
+			provider,
+			settings: { targets: [target()] },
+			onTargetActivity: (activity) => activities.push(activity.phase),
+			onTargetCheck: (check) => observed.push(check.result.output),
+		}, '/vault', strings);
+		assert.deepEqual(activities, ['checking', 'repairing', 'checking']);
+		assert.deepEqual(observed, ['drift', 'verified'], 'write success alone must not mark a target clean');
+		assert.equal(outcome.repairedCount, 1);
+	}
+	{
+		const observed = [];
+		const provider = {
+			inspectManifest: async () => ({ status: 'passed', output: '', exitCode: 0, snapshot: {} }),
+			checkRuntime: async () => failed('drift', 1),
+			repairRuntime: async () => failed('write refused', 1),
+		};
+		await run.runRepairAll({
+			provider,
+			settings: { targets: [target()] },
+			onTargetCheck: (check) => observed.push(check),
+		}, '/vault', strings);
+		assert.equal(observed.at(-1).repairFailed, true);
+		assert.equal(observed.at(-1).result.status, 'failed');
+	}
+	console.log('Adapter run checks passed: target filtering, manifest abort, blocked counting, repair, follow-up, and truthful UI events.');
 } finally {
 	await fs.rm(tempRoot, { recursive: true, force: true });
 }

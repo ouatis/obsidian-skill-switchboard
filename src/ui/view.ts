@@ -3,6 +3,10 @@ import type SkillSwitchboardPlugin from '../main';
 import { IndexedSkill, RootKind } from '../types';
 import { getStrings, Strings } from '../i18n';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { DistributionBoard } from './distribution-board';
+import { distributionNodes } from './distribution-state';
+import { SHARED_PREFIX } from '../sync/manifest';
+import { openPluginSettings } from './open-settings';
 
 export const VIEW_TYPE_SKILL_SWITCHBOARD = 'skill-switchboard-view';
 
@@ -10,6 +14,7 @@ export class SkillSwitchboardView extends ItemView {
 	plugin: SkillSwitchboardPlugin;
 	/** Live filter over the current index; not persisted because it is UI state, not configuration. */
 	private query = '';
+	private distributionBoard: DistributionBoard | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: SkillSwitchboardPlugin) {
 		super(leaf);
@@ -34,26 +39,43 @@ export class SkillSwitchboardView extends ItemView {
 	}
 
 	onClose(): Promise<void> {
+		this.distributionBoard?.destroy();
+		this.distributionBoard = null;
 		this.contentEl.empty();
 		return Promise.resolve();
 	}
 
 	renderIndex(): void {
-		const { contentEl } = this;
 		const strings = getStrings(this.plugin.settings.language);
-		contentEl.empty();
-		contentEl.addClass('skill-switchboard-view');
+		this.contentEl.empty();
+		this.contentEl.addClass('skill-switchboard-view');
+		const contentEl = this.contentEl.createDiv('skill-switchboard-page');
 
 		this.renderHeader(contentEl, strings);
+		if (this.plugin.settings.showDistributionBoard) {
+			if (this.distributionBoard) contentEl.appendChild(this.distributionBoard.element);
+			else this.distributionBoard = new DistributionBoard(contentEl, this.distributionModel(), () => {
+				void this.plugin.setDistributionBoardVisible(false);
+			});
+			this.updateDistributionBoard();
+		} else {
+			this.distributionBoard?.destroy();
+			this.distributionBoard = null;
+		}
 
 		const summary = contentEl.createDiv('skill-switchboard-summary');
 		const activeRoots = this.plugin.settings.roots.filter((root) => root.enabled && root.path).length;
 		const enabledTargets = this.plugin.settings.targets.filter((target) => target.enabled).length;
 		const enabledHarnesses = this.plugin.settings.harnesses.filter((harness) => harness.enabled).length;
-		addStat(summary, strings, strings.skills, String(this.plugin.index.skills.length), 'list');
-		addStat(summary, strings, strings.roots, String(activeRoots), 'settings');
-		addStat(summary, strings, strings.targets, String(enabledTargets), 'settings');
-		addStat(summary, strings, strings.harnesses, String(enabledHarnesses), 'settings');
+		const goToList = () => {
+			contentEl.querySelector('.skill-switchboard-search')?.scrollIntoView({
+				behavior: contentEl.win.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start',
+			});
+		};
+		addStat(summary, strings, strings.skills, String(this.plugin.index.skills.length), 'list', goToList);
+		addStat(summary, strings, strings.roots, String(activeRoots), 'settings', () => this.openSettings());
+		addStat(summary, strings, strings.targets, String(enabledTargets), 'settings', () => this.openSettings());
+		addStat(summary, strings, strings.harnesses, String(enabledHarnesses), 'settings', () => this.openSettings());
 
 		if (this.plugin.index.errors.length > 0) {
 			const errorBox = contentEl.createDiv('skill-switchboard-errors');
@@ -70,11 +92,32 @@ export class SkillSwitchboardView extends ItemView {
 			return;
 		}
 
+		const library = contentEl.createDiv('skill-switchboard-library-header');
+		library.createEl('h2', { text: strings.skillLibrary });
+		library.createSpan({ text: strings.readOnlyScan, cls: 'skill-switchboard-library-note' });
 		this.renderSearchBox(contentEl, strings);
 		this.renderSkillGroups(contentEl, strings);
 
 		const footer = contentEl.createDiv('skill-switchboard-footer');
 		footer.setText(`${strings.readOnlyScan} · ${new Date(this.plugin.index.scannedAt).toLocaleString()}`);
+	}
+
+	updateDistributionBoard(): void {
+		this.distributionBoard?.update(this.distributionModel());
+	}
+
+	private distributionModel() {
+		const plugin = this.plugin;
+		const blocked = plugin.manifestCheck?.status === 'failed'
+			|| (plugin.adapterCheck?.status === 'failed' && plugin.targetChecks.length === 0);
+		return {
+			nodes: distributionNodes({ targets: plugin.settings.targets, checks: plugin.targetChecks, activity: plugin.targetActivity, blocked }),
+			// Use the active sync provider's canonical path, not an unrelated indexing root.
+			sourcePath: SHARED_PREFIX.replace(/\/$/, ''),
+			sourceUnavailable: blocked,
+			checkedAt: plugin.targetCheckedAt,
+			strings: getStrings(plugin.settings.language),
+		};
 	}
 
 	/** Filtering runs against the existing index, so typing never hits the disk. */
@@ -100,6 +143,7 @@ export class SkillSwitchboardView extends ItemView {
 			this.query = '';
 			input.value = '';
 			input.focus();
+			refresh();
 			this.renderListOnly(strings);
 		});
 
@@ -132,7 +176,8 @@ export class SkillSwitchboardView extends ItemView {
 	private renderFilteredList(contentEl: HTMLElement, strings: Strings, anchor: Element): void {
 		const matched = this.filteredSkills();
 		if (matched.length === 0) {
-			const empty = anchor.createDiv('skill-switchboard-no-results');
+			const empty = contentEl.createDiv('skill-switchboard-no-results');
+			anchor.insertAdjacentElement('afterend', empty);
 			empty.createDiv({ text: strings.noSearchResults });
 			empty.createDiv({
 				text: `“${this.query.trim()}”`,
@@ -159,42 +204,50 @@ export class SkillSwitchboardView extends ItemView {
 		);
 	}
 
-	/** Primary action first, diagnostics folded away, destructive styling kept for repair. */
+	private openSettings(): void {
+		if (!openPluginSettings(this.app, this.plugin.manifest.id)) {
+			new Notice(getStrings(this.plugin.settings.language).settingsNotice);
+		}
+	}
+
+	/** One primary action, restrained utility controls; repair still requires confirmation. */
 	private renderHeader(contentEl: HTMLElement, strings: Strings): void {
 		const header = contentEl.createDiv('skill-switchboard-header');
-		header.createDiv({ cls: 'skill-switchboard-title', text: strings.viewTitle });
+		const heading = header.createDiv('skill-switchboard-heading');
+		heading.createEl('h1', { cls: 'skill-switchboard-title', text: strings.viewTitle });
+		heading.createDiv({ cls: 'skill-switchboard-subtitle', text: strings.viewDescription });
 
 		const actions = header.createDiv('skill-switchboard-actions');
-		const check = actions.createEl('button', { text: strings.checkAdapters });
-		check.addClass('mod-cta');
+		const primary = actions.createDiv('skill-switchboard-main-actions');
+		const check = actionButton(primary, strings.checkAdapters, 'scan-line', 'mod-cta');
 		const busy = this.plugin.adapterCheckRunning || this.plugin.adapterRepairRunning;
 		check.disabled = busy;
 		check.addEventListener('click', () => void this.plugin.checkAdapters());
 
-		const repair = actions.createEl('button', {
-			text: strings.repairAllAdapters,
-			cls: 'mod-warning',
-		});
+		const repair = actionButton(primary, strings.repairAllAdapters, 'wrench');
+		repair.setAttribute('title', strings.repairAllDescription);
 		repair.disabled = busy;
 		repair.addEventListener('click', () => void this.plugin.repairAllAdapters());
 
-		const refresh = actions.createEl('button', {
-			text: strings.refresh,
+		const utilities = actions.createDiv('skill-switchboard-utility-actions');
+		const refresh = utilities.createEl('button', {
 			cls: 'skill-switchboard-icon-button',
 		});
 		refresh.setAttribute('aria-label', strings.refresh);
+		refresh.setAttribute('title', strings.refresh);
 		setIcon(refresh, 'refresh-cw');
 		refresh.addEventListener('click', () => void this.plugin.refreshIndex(true));
 
-		const settings = actions.createEl('button', {
-			text: strings.settings,
-			cls: 'skill-switchboard-icon-button',
-		});
-		settings.setAttribute('aria-label', strings.settings);
-		setIcon(settings, 'settings');
-		settings.addEventListener('click', () => {
-			new Notice(strings.settingsNotice);
-		});
+		if (!this.plugin.settings.showDistributionBoard) {
+			const showBoard = utilities.createEl('button', { cls: 'skill-switchboard-icon-button' });
+			showBoard.setAttribute('aria-label', strings.distributionShow);
+			showBoard.setAttribute('title', strings.distributionShow);
+			setIcon(showBoard, 'waypoints');
+			showBoard.addEventListener('click', () => void this.plugin.setDistributionBoardVisible(true));
+		}
+
+		const settings = actionButton(utilities, strings.settings, 'settings');
+		settings.addEventListener('click', () => this.openSettings());
 	}
 
 	/**
@@ -216,7 +269,7 @@ export class SkillSwitchboardView extends ItemView {
 				: passed
 					? strings.adapterCheckPassed
 					: strings.adapterCheckFailed(check?.exitCode ?? 1);
-			this.renderStatusRow(section, text, passed, passed ? 'check-circle' : 'alert-triangle');
+			this.renderStatusRow(section, text, checkRunning ? 'running' : passed ? 'passed' : 'failed', checkRunning ? 'scan-line' : passed ? 'check-circle' : 'alert-triangle');
 			if (check?.output && !passed) {
 				this.renderOutputBlock(section, strings, strings.adapterCheckOutput, check.output);
 			}
@@ -229,16 +282,16 @@ export class SkillSwitchboardView extends ItemView {
 				: passed
 					? strings.repairAllNoDrift
 					: strings.adapterCheckFailed(repair?.exitCode ?? 1);
-			this.renderStatusRow(section, text, passed, passed ? 'wrench' : 'alert-triangle');
+			this.renderStatusRow(section, text, repairRunning ? 'running' : passed ? 'passed' : 'failed', repairRunning || passed ? 'wrench' : 'alert-triangle');
 			if (repair?.output && !passed) {
 				this.renderOutputBlock(section, strings, strings.repairAllOutput, repair.output);
 			}
 		}
 	}
 
-	private renderStatusRow(container: HTMLElement, text: string, passed: boolean, icon: string): void {
+	private renderStatusRow(container: HTMLElement, text: string, state: 'passed' | 'failed' | 'running', icon: string): void {
 		const row = container.createDiv('skill-switchboard-status');
-		row.toggleClass('is-passed', passed);
+		row.addClass(`is-${state}`);
 		const marker = row.createSpan('skill-switchboard-status-icon');
 		setIcon(marker, icon);
 		row.createSpan({ text });
@@ -272,9 +325,8 @@ export class SkillSwitchboardView extends ItemView {
 
 		// Without an anchor the list goes to the end of the view; with one it is
 		// placed directly after the search box so the filter UI never moves.
-		const container = anchor
-			? anchor.createDiv('skill-switchboard-list')
-			: contentEl.createDiv('skill-switchboard-list');
+		const container = contentEl.createDiv('skill-switchboard-list');
+		if (anchor) anchor.insertAdjacentElement('afterend', container);
 
 		for (const [rootLabel, items] of groups) {
 			if (groups.size > 1) {
@@ -361,6 +413,14 @@ function rootKindLabel(kind: RootKind): string {
 	return kind === 'external' ? 'external' : 'vault';
 }
 
+function actionButton(parent: HTMLElement, label: string, icon: string, extraClass = ''): HTMLButtonElement {
+	const button = parent.createEl('button', { cls: `skill-switchboard-button ${extraClass}`.trim() });
+	button.setAttribute('aria-label', label);
+	setIcon(button.createSpan('skill-switchboard-button-icon'), icon);
+	button.createSpan({ text: label });
+	return button;
+}
+
 /**
  * The counts double as navigation: the skill count points at the list, while
  * roots, targets and harnesses live in settings and say so.
@@ -371,32 +431,17 @@ function addStat(
 	label: string,
 	value: string,
 	target: 'list' | 'settings',
+	onClick: () => void,
 ): void {
-	const stat = container.createDiv('skill-switchboard-stat');
-	stat.createDiv({ text: value, cls: 'skill-switchboard-stat-value' });
-	stat.createDiv({ text: label, cls: 'skill-switchboard-stat-label' });
-	const hint = stat.createDiv({
+	const stat = container.createEl('button', { cls: 'skill-switchboard-stat is-clickable' });
+	stat.setAttribute('aria-label', `${label}: ${value} · ${target === 'list' ? strings.jumpToList : strings.manageInSettings}`);
+	stat.createSpan({ text: value, cls: 'skill-switchboard-stat-value' });
+	stat.createSpan({ text: label, cls: 'skill-switchboard-stat-label' });
+	const hint = stat.createSpan({
 		text: target === 'list' ? strings.jumpToList : strings.manageInSettings,
 		cls: 'skill-switchboard-stat-hint',
 	});
 
-	if (target === 'list') {
-		stat.addClass('is-clickable');
-		stat.setAttribute('role', 'button');
-		stat.setAttribute('tabindex', '0');
-		const goToList = () => {
-			const list = container.parentElement?.querySelector('.skill-switchboard-list');
-			list?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-		};
-		stat.addEventListener('click', goToList);
-		stat.addEventListener('keydown', (event) => {
-			if (event.key === 'Enter' || event.key === ' ') {
-				event.preventDefault();
-				goToList();
-			}
-		});
-	} else {
-		stat.addClass('is-hint');
-	}
+	stat.addEventListener('click', onClick);
 	hint.setAttribute('aria-hidden', 'true');
 }

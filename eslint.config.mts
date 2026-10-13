@@ -14,6 +14,10 @@ export default defineConfig(
 		'package-lock.json',
 		'scripts/test-native.mjs',
 		'scripts/test-adapter-run.mjs',
+		'scripts/test-distribution.mjs',
+		'scripts/test-ui.mjs',
+		'scripts/test-ui-live.mjs',
+		'scripts/capture-distribution.mjs',
 		'tsconfig.json',
 	]),
 	{

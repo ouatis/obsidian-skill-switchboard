@@ -5,6 +5,27 @@ export interface Strings {
 	refreshSkillIndex: string;
 	skillIndexRefreshed: (count: number) => string;
 	viewTitle: string;
+	viewDescription: string;
+	skillLibrary: string;
+	distributionBoard: string;
+	distributionBoardDescription: string;
+	distributionShow: string;
+	distributionHide: string;
+	distributionSource: string;
+	distributionSubtitle: (count: number) => string;
+	distributionHint: string;
+	distributionInspect: string;
+	distributionChecked: (passed: number, total: number) => string;
+	distributionEmpty: string;
+	distributionDisclaimer: string;
+	distributionLastCheck: string;
+	distributionUnknown: string;
+	distributionChecking: string;
+	distributionRepairing: string;
+	distributionClean: string;
+	distributionDrift: string;
+	distributionUnavailable: string;
+	distributionRepairFailed: string;
 	refresh: string;
 	checkAdapters: string;
 	adapterCheckRunning: string;
@@ -92,7 +113,28 @@ const EN: Strings = {
 	openSwitchboard: 'Open switchboard',
 	refreshSkillIndex: 'Refresh skill index',
 	skillIndexRefreshed: (count) => `Skill index refreshed: ${count} skill${count === 1 ? '' : 's'}`,
-	viewTitle: 'Skill switchboard',
+	viewTitle: 'Skill Switchboard',
+	viewDescription: 'One skill source. Connected agents. Clear status.',
+	skillLibrary: 'Skill library',
+	distributionBoard: 'Agent connections',
+	distributionBoardDescription: 'Show a quiet, interactive map of the source and enabled wrapper targets. Status comes from actual checks.',
+	distributionShow: 'Show agent connections',
+	distributionHide: 'Hide agent connections',
+	distributionSource: 'Canonical source',
+	distributionSubtitle: (count) => `One source · ${count} target${count === 1 ? '' : 's'}`,
+	distributionHint: 'Hover a node or focus an agent in the list. Check adapters to read their state.',
+	distributionInspect: 'Hover a node or keyboard-focus an agent in the list.',
+	distributionChecked: (passed, total) => `${passed}/${total} checks passed`,
+	distributionEmpty: 'Add an enabled wrapper target in settings to connect your agents.',
+	distributionDisclaimer: 'File checks only · not proof that an agent has loaded a skill',
+	distributionLastCheck: 'Last check',
+	distributionUnknown: 'Not checked',
+	distributionChecking: 'Checking',
+	distributionRepairing: 'Repairing',
+	distributionClean: 'Check passed',
+	distributionDrift: 'Drift detected',
+	distributionUnavailable: 'Cannot check',
+	distributionRepairFailed: 'Repair failed',
 	refresh: 'Refresh',
 	checkAdapters: 'Check adapters',
 	adapterCheckRunning: 'Checking adapters…',
@@ -177,10 +219,31 @@ const EN: Strings = {
 };
 
 const ZH_CN: Strings = {
-	openSwitchboard: '打开技能总控台',
+	openSwitchboard: '打开技能接线台',
 	refreshSkillIndex: '刷新技能索引',
 	skillIndexRefreshed: (count) => `技能索引已刷新：${count} 项`,
-	viewTitle: '技能总控台',
+	viewTitle: '技能接线台',
+	viewDescription: '统一分发技能，检查各个 Agent 的状态。',
+	skillLibrary: '技能库',
+	distributionBoard: 'Agent 接线图',
+	distributionBoardDescription: '显示权威源与已启用 Wrapper 目标的交互总览，状态来自实际检查。',
+	distributionShow: '显示接线图',
+	distributionHide: '隐藏接线图',
+	distributionSource: '权威源',
+	distributionSubtitle: (count) => `一份权威源 · ${count} 个目标`,
+	distributionHint: '悬停节点或聚焦列表中的 Agent；点击“检查适配器”读取状态。',
+	distributionInspect: '悬停节点或键盘聚焦列表中的 Agent，可查看详情。',
+	distributionChecked: (passed, total) => `${passed}/${total} 检查通过`,
+	distributionEmpty: '请在设置中添加已启用的 Wrapper 目标，接入你的 Agent。',
+	distributionDisclaimer: '仅检查文件 · 不代表 Agent 已实际加载技能',
+	distributionLastCheck: '上次检查',
+	distributionUnknown: '未检查',
+	distributionChecking: '检查中',
+	distributionRepairing: '修复中',
+	distributionClean: '检查通过',
+	distributionDrift: '存在漂移',
+	distributionUnavailable: '无法检查',
+	distributionRepairFailed: '修复失败',
 	refresh: '刷新',
 	checkAdapters: '检查适配器',
 	adapterCheckRunning: '正在检查适配器……',

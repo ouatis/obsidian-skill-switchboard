@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { Strings } from '../i18n';
 import type { RuntimeName, RuntimeTarget } from '../types';
 import type { AdapterCheckResult } from './result';
-import type { ManifestCheckResult, SyncProvider } from '../sync-provider';
+import type { ManifestCheckResult, SyncProvider, SyncRuntimeCheckResult } from '../sync-provider';
 import { resolveConfiguredPath } from '../utils/paths';
 
 /** A runtime target that is eligible for drift repair. */
@@ -11,14 +11,23 @@ export type RepairTarget = RuntimeTarget & { runtime: RuntimeName };
 export interface TargetCheck {
 	target: RepairTarget;
 	targetPath: string | null;
-	result: AdapterCheckResult;
+	result: SyncRuntimeCheckResult;
 	repairable: boolean;
+	repairFailed?: boolean;
+}
+
+export interface TargetActivity {
+	targetId: string;
+	phase: 'checking' | 'repairing';
 }
 
 /** Everything the check/repair orchestration needs, without importing the plugin class. */
 export interface AdapterRunContext {
 	provider: SyncProvider;
 	settings: { targets: RuntimeTarget[] };
+	/** Observers only: they do not select targets or change the repair policy. */
+	onTargetActivity?: (activity: TargetActivity) => void;
+	onTargetCheck?: (check: TargetCheck) => void;
 }
 
 export interface AdapterRun {
@@ -55,12 +64,17 @@ export async function collectTargetChecks(
 	vaultPath: string,
 ): Promise<TargetCheck[]> {
 	const checks: TargetCheck[] = [];
+	const record = (check: TargetCheck) => {
+		checks.push(check);
+		context.onTargetCheck?.(check);
+	};
 	for (const target of getRepairTargets(context.settings.targets)) {
+		context.onTargetActivity?.({ targetId: target.id, phase: 'checking' });
 		let resolvedTarget: string;
 		try {
 			resolvedTarget = resolveConfiguredPath(target.path, vaultPath);
 		} catch (error) {
-			checks.push({
+			record({
 				target,
 				targetPath: null,
 				repairable: false,
@@ -73,7 +87,7 @@ export async function collectTargetChecks(
 			continue;
 		}
 		if (isTargetInsideVault(vaultPath, resolvedTarget)) {
-			checks.push({
+			record({
 				target,
 				targetPath: resolvedTarget,
 				repairable: false,
@@ -85,7 +99,7 @@ export async function collectTargetChecks(
 			});
 			continue;
 		}
-		checks.push({
+		record({
 			target,
 			targetPath: resolvedTarget,
 			repairable: true,
@@ -193,15 +207,19 @@ export async function repairDriftedTargets(
 			continue;
 		}
 		const label = displayTargetName(check.target);
+		context.onTargetActivity?.({ targetId: check.target.id, phase: 'repairing' });
 		const repair = await context.provider.repairRuntime(vaultPath, runtime, check.target.path);
 		if (repair.status === 'failed') {
+			context.onTargetCheck?.({ ...check, result: repair, repairFailed: true });
 			failedCount += 1;
 			firstFailureCode ??= repair.exitCode;
 			repairOutputs.push(`[${label}] REPAIR FAILED\n${repair.output}`);
 			continue;
 		}
 
+		context.onTargetActivity?.({ targetId: check.target.id, phase: 'checking' });
 		const followUp = await context.provider.checkRuntime(vaultPath, runtime, check.target.path);
+		context.onTargetCheck?.({ ...check, result: followUp, repairFailed: false });
 		if (followUp.status === 'passed') {
 			repairedCount += 1;
 			repairOutputs.push(

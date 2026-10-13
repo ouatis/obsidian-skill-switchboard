@@ -9,6 +9,9 @@
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"test:native": "node scripts/test-native.mjs",
 		"test:adapter": "node scripts/test-adapter-run.mjs",
+		"test:distribution": "node scripts/test-distribution.mjs",
+		"test:ui": "node scripts/test-ui.mjs",
+		"test:ui:live": "node scripts/test-ui-live.mjs",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
 		"lint": "eslint ."
 	},

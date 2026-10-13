@@ -10,6 +10,7 @@ export interface SkillSwitchboardSettings {
 	language: Language;
 	autoScan: boolean;
 	scanDelayMs: number;
+	showDistributionBoard: boolean;
 }
 
 export const DEFAULT_SETTINGS: SkillSwitchboardSettings = {
@@ -27,6 +28,7 @@ export const DEFAULT_SETTINGS: SkillSwitchboardSettings = {
 	language: 'en',
 	autoScan: false,
 	scanDelayMs: 500,
+	showDistributionBoard: true,
 };
 
 function newId(prefix: string): string {
@@ -66,6 +68,15 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 						this.display();
 						await this.plugin.refreshIndex(false);
 					}),
+			);
+
+		new Setting(containerEl)
+			.setName(strings.distributionBoard)
+			.setDesc(strings.distributionBoardDescription)
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.showDistributionBoard).onChange(async (value) => {
+					await this.plugin.setDistributionBoardVisible(value);
+				}),
 			);
 
 		new Setting(containerEl)

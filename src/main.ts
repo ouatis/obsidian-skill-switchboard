@@ -16,6 +16,8 @@ import { createSyncProvider, ManifestCheckResult, SyncProvider } from './sync-pr
 import {
 	AdapterRunContext,
 	RepairTarget,
+	TargetActivity,
+	TargetCheck,
 	checkAllTargets,
 	desktopPathFailure,
 	getRepairTargets,
@@ -36,6 +38,9 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	adapterRepair: AdapterCheckResult | null = null;
 	adapterRepairRunning = false;
 	manifestCheck: ManifestCheckResult | null = null;
+	targetChecks: TargetCheck[] = [];
+	targetActivity: TargetActivity | null = null;
+	targetCheckedAt = 0;
 	syncProvider: SyncProvider = createSyncProvider();
 
 	async onload(): Promise<void> {
@@ -123,6 +128,12 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
+	async setDistributionBoardVisible(visible: boolean): Promise<void> {
+		this.settings.showDistributionBoard = visible;
+		await this.saveSettings();
+		this.renderViews();
+	}
+
 	async refreshIndex(showNotice: boolean): Promise<void> {
 		this.index = await scanConfiguredRoots(this.app, this.settings.roots);
 		this.renderViews();
@@ -132,7 +143,19 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	}
 
 	private adapterContext(): AdapterRunContext {
-		return { provider: this.syncProvider, settings: this.settings };
+		return {
+			provider: this.syncProvider,
+			settings: this.settings,
+			onTargetActivity: (activity) => {
+				this.targetActivity = activity;
+				this.updateDistributionViews();
+			},
+			onTargetCheck: (check) => {
+				this.targetChecks = [...this.targetChecks.filter((item) => item.target.id !== check.target.id), check];
+				this.targetActivity = null;
+				this.updateDistributionViews();
+			},
+		};
 	}
 
 	async checkAdapters(): Promise<void> {
@@ -140,6 +163,9 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		this.adapterCheckRunning = true;
 		this.adapterCheck = null;
 		this.manifestCheck = null;
+		this.targetChecks = [];
+		this.targetActivity = null;
+		this.targetCheckedAt = 0;
 		this.renderViews();
 
 		const strings = getStrings(this.settings.language);
@@ -151,6 +177,8 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		if (run) this.manifestCheck = run.manifest;
 		this.adapterCheck = result;
 		this.adapterCheckRunning = false;
+		this.targetActivity = null;
+		this.targetCheckedAt = Date.now();
 		this.renderViews();
 
 		notifyWithCopy(
@@ -192,12 +220,17 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		this.adapterRepair = null;
 		this.adapterCheck = null;
 		this.manifestCheck = null;
+		this.targetChecks = [];
+		this.targetActivity = null;
+		this.targetCheckedAt = 0;
 		this.renderViews();
 
 		const summary = await runRepairAll(this.adapterContext(), vaultPath, strings);
 		this.manifestCheck = summary.manifest;
 		this.adapterCheck = summary.checkResult;
 		this.adapterRepair = summary.repair;
+		this.targetActivity = null;
+		this.targetCheckedAt = Date.now();
 
 		// A manifest failure aborts before any repair attempt, so it is reported as-is.
 		if (summary.aborted) {
@@ -233,6 +266,12 @@ export default class SkillSwitchboardPlugin extends Plugin {
 				const view = leaf.view;
 				if (view instanceof SkillSwitchboardView) view.renderIndex();
 			});
+	}
+
+	private updateDistributionViews(): void {
+		this.app.workspace.getLeavesOfType(VIEW_TYPE_SKILL_SWITCHBOARD).forEach((leaf) => {
+			if (leaf.view instanceof SkillSwitchboardView) leaf.view.updateDistributionBoard();
+		});
 	}
 
 	async activateView(): Promise<void> {
