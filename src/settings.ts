@@ -1,4 +1,5 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, PluginSettingTab, Setting, requireApiVersion } from 'obsidian';
+import type { SettingDefinitionItem } from 'obsidian';
 import type SkillSwitchboardPlugin from './main';
 import { getStrings, Language } from './i18n';
 import { HarnessDefinition, RuntimeTarget, SkillRoot, SyncMode } from './types';
@@ -43,6 +44,69 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	/**
+	 * Re-renders the tab after a root, target or harness entry is added or removed.
+	 * Obsidian 1.13.0+ rebuilds from getSettingDefinitions() through update(),
+	 * while older versions still go through the imperative display().
+	 */
+	private refreshTab(): void {
+		if (requireApiVersion('1.13.0')) {
+			this.update();
+			return;
+		}
+		renderImperatively(this);
+	}
+
+	/**
+	 * Declarative form for Obsidian 1.13.0+, which renders the top-level controls
+	 * from this array and makes them searchable. Controls bound by `key` read and
+	 * write `plugin.settings[key]`, so the three list sections stay imperative in
+	 * `display()`.
+	 *
+	 * Only `language`, `autoScan` and `scanDelayMs` are declared here: the root,
+	 * target and harness sections add and remove entries, which needs the
+	 * imperative controls.
+	 */
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		const strings = getStrings(this.plugin.settings.language);
+		return [
+			{ name: strings.overview, desc: strings.overviewDescription },
+			{
+				name: strings.language,
+				desc: strings.languageDescription,
+				control: {
+					type: 'dropdown',
+					key: 'language',
+					options: { en: strings.english, 'zh-CN': strings.chinese },
+					defaultValue: DEFAULT_SETTINGS.language,
+				},
+			},
+			{
+				name: strings.scanAutomatically,
+				desc: strings.scanAutomaticallyDescription,
+				control: { type: 'toggle', key: 'autoScan', defaultValue: DEFAULT_SETTINGS.autoScan },
+			},
+			{
+				name: strings.scanDelay,
+				desc: strings.scanDelayDescription,
+				// `number` persists a number and falls back to defaultValue when the
+				// input cannot be parsed, so the stored value stays usable by setTimeout.
+				// A typo falls back to 500 rather than 0, which keeps the debounce
+				// meaningful instead of rescanning on every keystroke of a burst.
+				control: {
+					type: 'number',
+					key: 'scanDelayMs',
+					defaultValue: DEFAULT_SETTINGS.scanDelayMs,
+					min: 0,
+				},
+			},
+		];
+	}
+
+	/**
+	 * Imperative fallback, still the only renderer on Obsidian older than 1.13.0
+	 * and the home of the root, target and harness list editors.
+	 */
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
@@ -65,7 +129,7 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.language = value as Language;
 						await this.plugin.saveSettings();
-						this.display();
+						this.refreshTab();
 						await this.plugin.refreshIndex(false);
 					}),
 			);
@@ -153,7 +217,7 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 						(candidate) => candidate.id !== root.id,
 					);
 					await this.plugin.saveSettings();
-					this.display();
+				this.refreshTab();
 				}),
 			);
 		});
@@ -168,7 +232,7 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 					enabled: true,
 				});
 				await this.plugin.saveSettings();
-				this.display();
+				this.refreshTab();
 			}),
 		);
 	}
@@ -217,7 +281,7 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 						(candidate) => candidate.id !== target.id,
 					);
 					await this.plugin.saveSettings();
-					this.display();
+				this.refreshTab();
 				}),
 			);
 		});
@@ -232,7 +296,7 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 					enabled: true,
 				});
 				await this.plugin.saveSettings();
-				this.display();
+				this.refreshTab();
 			}),
 		);
 	}
@@ -270,7 +334,7 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 						(candidate) => candidate.id !== harness.id,
 					);
 					await this.plugin.saveSettings();
-					this.display();
+				this.refreshTab();
 				}),
 			);
 		});
@@ -284,8 +348,18 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 					enabled: true,
 				});
 				await this.plugin.saveSettings();
-				this.display();
+				this.refreshTab();
 			}),
 		);
 	}
+}
+
+/**
+ * Calls display() on an Obsidian version that predates the declarative settings
+ * API. The method is deprecated from 1.13.0 on, but it is the only renderer below
+ * that version, so reaching it through a local type keeps this deliberate
+ * fallback from reading as accidental use of a deprecated member.
+ */
+function renderImperatively(tab: PluginSettingTab): void {
+	(tab as { display(): void }).display();
 }
