@@ -92,9 +92,10 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		if (!relevant) return;
 		if (this.scanQueued) return;
 		this.scanQueued = true;
-		const delay = Number.isFinite(this.settings.scanDelayMs) && this.settings.scanDelayMs >= 0
-			? this.settings.scanDelayMs
-			: INDEX_DEBOUNCE_MS;
+		// The declarative text control persists whatever was typed, so the stored
+		// value is coerced here instead of trusted to be a number already.
+		const stored = Number(this.settings.scanDelayMs);
+		const delay = Number.isFinite(stored) && stored >= 0 ? stored : INDEX_DEBOUNCE_MS;
 		window.setTimeout(() => {
 			this.scanQueued = false;
 			if (!this.settings.autoScan) return;

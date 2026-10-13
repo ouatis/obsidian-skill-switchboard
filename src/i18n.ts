@@ -61,6 +61,7 @@ export interface Strings {
 	scanAutomaticallyDescription: string;
 	scanDelay: string;
 	scanDelayDescription: string;
+	scanDelayInvalid: string;
 	skillRoots: string;
 	skillRootsDescription: string;
 	unnamedRoot: string;
@@ -149,6 +150,7 @@ const EN: Strings = {
 	scanAutomaticallyDescription: 'Refresh the read-only skill index while Obsidian is open.',
 	scanDelay: 'Scan delay (milliseconds)',
 	scanDelayDescription: 'How long to wait after a file change before rebuilding the index. Higher values absorb bursts of edits.',
+	scanDelayInvalid: 'Enter a number of milliseconds, or 0 to rescan immediately.',
 	skillRoots: 'Skill roots',
 	skillRootsDescription: 'A root may be a vault-relative folder or an external folder. For portable external paths, use ~ for the current user home (for example ~/.codex/skills). Only configured roots are scanned.',
 	unnamedRoot: 'Unnamed root',
@@ -237,6 +239,7 @@ const ZH_CN: Strings = {
 	scanAutomaticallyDescription: 'Obsidian 打开时刷新只读技能索引。',
 	scanDelay: '扫描延迟（毫秒）',
 	scanDelayDescription: '文件变动后等待多久再重建索引。调大可吸收连续编辑。',
+	scanDelayInvalid: '请输入毫秒数，或填 0 表示立即重扫。',
 	skillRoots: '技能来源目录',
 	skillRootsDescription: '来源可以是 vault 内相对目录，也可以是外部目录。为便于跨机器使用，外部路径请用 ~ 表示当前用户主目录，例如 ~/.codex/skills。插件只扫描已配置的来源。',
 	unnamedRoot: '未命名来源',
