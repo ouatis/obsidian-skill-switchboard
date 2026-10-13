@@ -19,6 +19,9 @@ export interface Strings {
 	copyCheckOutput: string;
 	repairAllAdapters: string;
 	repairAllDescription: string;
+	repairConfirmMessage: string;
+	confirmRepair: string;
+	cancelRepair: string;
 	repairAllRunning: string;
 	repairAllOutput: string;
 	repairAllNoDrift: string;
@@ -56,8 +59,8 @@ export interface Strings {
 	chinese: string;
 	scanAutomatically: string;
 	scanAutomaticallyDescription: string;
-	scanInterval: string;
-	scanIntervalDescription: string;
+	scanDelay: string;
+	scanDelayDescription: string;
 	skillRoots: string;
 	skillRootsDescription: string;
 	unnamedRoot: string;
@@ -104,6 +107,9 @@ const EN: Strings = {
 	copyCheckOutput: 'Copy adapter check output',
 	repairAllAdapters: 'Repair all',
 	repairAllDescription: 'Recheck every enabled wrapper target and repair all drift automatically.',
+	repairConfirmMessage: 'This rewrites files outside the vault, in every enabled wrapper target. Overwritten files are backed up first. Continue?',
+	confirmRepair: 'Continue repair',
+	cancelRepair: 'Cancel',
 	repairAllRunning: 'Repairing all adapters…',
 	repairAllOutput: 'Repair output',
 	repairAllNoDrift: 'All enabled adapters are already up to date.',
@@ -141,8 +147,8 @@ const EN: Strings = {
 	chinese: '简体中文',
 	scanAutomatically: 'Scan automatically',
 	scanAutomaticallyDescription: 'Refresh the read-only skill index while Obsidian is open.',
-	scanInterval: 'Scan interval (minutes)',
-	scanIntervalDescription: 'Used only when automatic scanning is enabled.',
+	scanDelay: 'Scan delay (milliseconds)',
+	scanDelayDescription: 'How long to wait after a file change before rebuilding the index. Higher values absorb bursts of edits.',
 	skillRoots: 'Skill roots',
 	skillRootsDescription: 'A root may be a vault-relative folder or an external folder. For portable external paths, use ~ for the current user home (for example ~/.codex/skills). Only configured roots are scanned.',
 	unnamedRoot: 'Unnamed root',
@@ -189,6 +195,9 @@ const ZH_CN: Strings = {
 	copyCheckOutput: '复制适配器检查输出',
 	repairAllAdapters: '一键修复',
 	repairAllDescription: '复查所有启用的 Wrapper 目标，并自动修复全部漂移。',
+	repairConfirmMessage: '这会重写库外每个已启用 Wrapper 目标中的文件。将被覆盖的文件会先备份。是否继续？',
+	confirmRepair: '继续修复',
+	cancelRepair: '取消',
 	repairAllRunning: '正在一键修复……',
 	repairAllOutput: '修复输出',
 	repairAllNoDrift: '所有启用的适配器都已是最新状态。',
@@ -226,8 +235,8 @@ const ZH_CN: Strings = {
 	chinese: '简体中文',
 	scanAutomatically: '自动扫描',
 	scanAutomaticallyDescription: 'Obsidian 打开时刷新只读技能索引。',
-	scanInterval: '扫描间隔（分钟）',
-	scanIntervalDescription: '仅在启用自动扫描时生效。',
+	scanDelay: '扫描延迟（毫秒）',
+	scanDelayDescription: '文件变动后等待多久再重建索引。调大可吸收连续编辑。',
 	skillRoots: '技能来源目录',
 	skillRootsDescription: '来源可以是 vault 内相对目录，也可以是外部目录。为便于跨机器使用，外部路径请用 ~ 表示当前用户主目录，例如 ~/.codex/skills。插件只扫描已配置的来源。',
 	unnamedRoot: '未命名来源',

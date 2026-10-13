@@ -9,7 +9,7 @@ export interface SkillSwitchboardSettings {
 	harnesses: HarnessDefinition[];
 	language: Language;
 	autoScan: boolean;
-	scanIntervalMinutes: number;
+	scanDelayMs: number;
 }
 
 export const DEFAULT_SETTINGS: SkillSwitchboardSettings = {
@@ -26,7 +26,7 @@ export const DEFAULT_SETTINGS: SkillSwitchboardSettings = {
 	harnesses: [],
 	language: 'en',
 	autoScan: false,
-	scanIntervalMinutes: 15,
+	scanDelayMs: 500,
 };
 
 function newId(prefix: string): string {
@@ -79,16 +79,16 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName(strings.scanInterval)
-			.setDesc(strings.scanIntervalDescription)
+			.setName(strings.scanDelay)
+			.setDesc(strings.scanDelayDescription)
 			.addText((text) =>
 				text
-					.setValue(String(this.plugin.settings.scanIntervalMinutes))
-					.setPlaceholder('15')
+					.setValue(String(this.plugin.settings.scanDelayMs))
+					.setPlaceholder('500')
 					.onChange(async (value) => {
-						const minutes = Number.parseInt(value, 10);
-						if (Number.isFinite(minutes) && minutes > 0) {
-							this.plugin.settings.scanIntervalMinutes = minutes;
+						const ms = Number.parseInt(value, 10);
+						if (Number.isFinite(ms) && ms >= 0) {
+							this.plugin.settings.scanDelayMs = ms;
 							await this.plugin.saveSettings();
 						}
 					}),

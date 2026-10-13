@@ -10,6 +10,7 @@ import { notifyWithCopy } from './ui/notice';
 import { runRecord, writePluginStatus } from './status';
 import { getStrings } from './i18n';
 import { registerCommands } from './commands';
+import { confirmRepair } from './ui/confirm-modal';
 import type { AdapterCheckResult } from './sync/result';
 import { createSyncProvider, ManifestCheckResult, SyncProvider } from './sync-provider';
 import {
@@ -20,10 +21,16 @@ import {
 	getRepairTargets,
 	runRepairAll,
 } from './sync/adapter-run';
+import { normalizeVaultPath } from './scanner';
+
+/** Fallback wait when the setting holds an unusable value. */
+const INDEX_DEBOUNCE_MS = 500;
 
 export default class SkillSwitchboardPlugin extends Plugin {
 	settings!: SkillSwitchboardSettings;
 	index: SkillIndex = { skills: [], errors: [], scannedAt: 0 };
+	/** True while a debounced rescan is pending, so a burst of events stays one scan. */
+	private scanQueued = false;
 	adapterCheck: AdapterCheckResult | null = null;
 	adapterCheckRunning = false;
 	adapterRepair: AdapterCheckResult | null = null;
@@ -51,14 +58,48 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		await this.refreshIndex(false);
 		void writePluginStatus(this);
 
-		if (this.settings.autoScan && this.settings.scanIntervalMinutes > 0) {
-			this.registerInterval(
-				window.setInterval(
-					() => void this.refreshIndex(false),
-					this.settings.scanIntervalMinutes * 60 * 1000,
-				),
+		if (this.settings.autoScan) {
+			// A vault event beats a fixed interval: the index only needs rebuilding
+			// when a file inside a configured root actually changed, and polling
+			// would re-scan the vault every interval for nothing.
+			this.registerEvent(
+				this.app.vault.on('create', (file) => this.onVaultChanged(file.path)),
+			);
+			this.registerEvent(
+				this.app.vault.on('modify', (file) => this.onVaultChanged(file.path)),
+			);
+			this.registerEvent(
+				this.app.vault.on('delete', (file) => this.onVaultChanged(file.path)),
+			);
+			this.registerEvent(
+				this.app.vault.on('rename', (file, oldPath) => this.onVaultChanged(file.path, oldPath)),
 			);
 		}
+	}
+
+	/**
+	 * Re-scans when a changed file falls inside a configured vault root. The index
+	 * is small, so the whole scan is repeated rather than patched in place.
+	 */
+	private onVaultChanged(...changedPaths: string[]): void {
+		const normalizedRoots = this.settings.roots
+			.filter((root) => root.enabled && root.kind === 'vault' && root.path.trim())
+			.map((root) => normalizeVaultPath(root.path));
+		if (normalizedRoots.length === 0) return;
+		const relevant = changedPaths.some((path) =>
+			normalizedRoots.some((root) => path === root || path.startsWith(`${root}/`)),
+		);
+		if (!relevant) return;
+		if (this.scanQueued) return;
+		this.scanQueued = true;
+		const delay = Number.isFinite(this.settings.scanDelayMs) && this.settings.scanDelayMs >= 0
+			? this.settings.scanDelayMs
+			: INDEX_DEBOUNCE_MS;
+		window.setTimeout(() => {
+			this.scanQueued = false;
+			if (!this.settings.autoScan) return;
+			void this.refreshIndex(false);
+		}, delay);
 	}
 
 	async loadSettings(): Promise<void> {
@@ -71,6 +112,11 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			harnesses: data?.harnesses ?? DEFAULT_SETTINGS.harnesses,
 			language: data?.language === 'zh-CN' ? 'zh-CN' : DEFAULT_SETTINGS.language,
 		};
+		// scanIntervalMinutes was the old polling interval; the debounce is in
+		// milliseconds now, so a legacy value cannot be carried over as-is.
+		if (this.settings.scanDelayMs === undefined) {
+			this.settings.scanDelayMs = DEFAULT_SETTINGS.scanDelayMs;
+		}
 	}
 
 	async saveSettings(): Promise<void> {
@@ -137,6 +183,10 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			this.renderViews();
 			return;
 		}
+
+		// Repair writes outside the vault, so it is gated behind an explicit confirm.
+		const confirmed = await confirmRepair(this.app, strings, strings.repairConfirmMessage);
+		if (!confirmed) return;
 
 		this.adapterRepairRunning = true;
 		this.adapterRepair = null;

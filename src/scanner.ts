@@ -175,6 +175,6 @@ function isDirectMarkdownFile(relativePath: string): boolean {
 	return !relativePath.includes('/') && relativePath.toLowerCase().endsWith('.md');
 }
 
-function normalizeVaultPath(value: string): string {
+export function normalizeVaultPath(value: string): string {
 	return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/$/, '');
 }
