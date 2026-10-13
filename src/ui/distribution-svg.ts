@@ -11,6 +11,16 @@ export function svgElement<K extends keyof SVGElementTagNameMap>(
 	return element;
 }
 
+let descriptionId = 0;
+
+/** Obsidian treats aria-label as an HTML tooltip hook; SVG uses a named title instead. */
+export function describeSvg(parent: SVGElement): SVGTitleElement {
+	const id = `ssb-deck-description-${++descriptionId}`;
+	const title = svgElement(parent, 'title', { id });
+	parent.setAttribute('aria-labelledby', id);
+	return title;
+}
+
 /** Original SVG geometry; no Hairline code, assets, or runtime dependency. */
 export function drawPlate(parent: Element, halfWidth: number, halfHeight: number, depth: number): void {
 	const w = halfWidth, h = halfHeight;

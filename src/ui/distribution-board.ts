@@ -1,7 +1,7 @@
 import { setIcon } from 'obsidian';
 import type { Strings } from '../i18n';
 import { DECK_CENTER, deckPositions, type DistributionNode, type DistributionState } from './distribution-state';
-import { drawPlate, drawRoute, drawStateMark, STATE_MARKS, svgElement } from './distribution-svg';
+import { describeSvg, drawPlate, drawRoute, drawStateMark, STATE_MARKS, svgElement } from './distribution-svg';
 
 export interface DistributionBoardModel {
 	nodes: DistributionNode[];
@@ -13,6 +13,7 @@ export interface DistributionBoardModel {
 
 interface NodeElements {
 	group: SVGGElement;
+	description: SVGTitleElement;
 	label: SVGTextElement;
 	mark: SVGPathElement;
 	route: SVGPathElement;
@@ -37,6 +38,8 @@ export class DistributionBoard {
 	private elements = new Map<string, NodeElements>();
 	private sourceGroup: SVGGElement | null = null;
 	private sourceLabel: SVGTextElement | null = null;
+	private sourceDescription: SVGTitleElement | null = null;
+	private figureDescription: SVGTitleElement | null = null;
 	private svg: SVGSVGElement | null = null;
 	private signature = '';
 	private hovered: string | null = null;
@@ -85,16 +88,16 @@ export class DistributionBoard {
 			this.signature = signature;
 			this.buildFigure();
 		}
-		this.svg?.setAttribute('aria-label', strings.distributionSubtitle(model.nodes.length));
+		if (this.figureDescription) this.figureDescription.textContent = strings.distributionSubtitle(model.nodes.length);
 		this.sourceGroup?.classList.toggle('is-unavailable', model.sourceUnavailable);
-		this.sourceGroup?.setAttribute('aria-label', `${strings.distributionSource}: ${model.sourcePath}${model.sourceUnavailable ? ` · ${strings.distributionUnavailable}` : ''}`);
+		if (this.sourceDescription) this.sourceDescription.textContent = `${strings.distributionSource}: ${model.sourcePath}${model.sourceUnavailable ? ` · ${strings.distributionUnavailable}` : ''}`;
 		if (this.sourceLabel) this.sourceLabel.textContent = strings.distributionSource;
 		for (const node of model.nodes) {
 			const elements = this.elements.get(node.id);
 			if (!elements) continue;
 			const state = this.stateLabel(node.state);
 			elements.group.setAttribute('class', `ssb-deck-node is-${node.state}`);
-			elements.group.setAttribute('aria-label', `${node.label}: ${state}`);
+			elements.description.textContent = `${node.label}: ${state}`;
 			elements.group.dataset.state = node.state;
 			elements.label.textContent = node.label.length > 16 ? `${node.label.slice(0, 15)}…` : node.label;
 			elements.mark.setAttribute('d', STATE_MARKS[node.state]);
@@ -117,6 +120,8 @@ export class DistributionBoard {
 		this.element.remove();
 		this.elements.clear();
 		this.svg = null;
+		this.figureDescription = null;
+		this.sourceDescription = null;
 	}
 
 	private buildFigure(): void {
@@ -127,6 +132,7 @@ export class DistributionBoard {
 		this.focused = null;
 		const svg = svgElement(this.stage, 'svg', { viewBox: '0 0 420 235', role: 'group', class: 'ssb-deck-svg' });
 		this.svg = svg;
+		this.figureDescription = describeSvg(svg);
 		svgElement(svg, 'path', { d: 'M 20 108 L 210 13 L 400 108 L 210 203 Z M 67 132 L 257 37 M 115 156 L 305 61 M 162 180 L 352 85 M 67 85 L 257 180 M 115 61 L 305 156 M 162 37 L 352 132', class: 'ssb-deck-grid' });
 		const routes = svgElement(svg, 'g', { 'aria-hidden': 'true' });
 		const positions = deckPositions(this.model.nodes.length);
@@ -136,6 +142,7 @@ export class DistributionBoard {
 			const route = drawRoute(routes, point);
 			// Native HTML controls below own keyboard focus; Obsidian's focus helpers do not support SVG elements.
 			const group = svgElement(svg, 'g', { transform: `translate(${point.x} ${point.y})`, role: 'img', 'data-target-id': node.id });
+			const description = describeSvg(group);
 			svgElement(group, 'path', { d: 'M 0 -10 L 23 1 L 0 13 L -23 1 Z', class: 'ssb-deck-footprint', 'aria-hidden': 'true' });
 			const tile = svgElement(group, 'g', { class: 'ssb-deck-tile', 'aria-hidden': 'true' });
 			drawPlate(tile, 23, 11, 7);
@@ -152,10 +159,11 @@ export class DistributionBoard {
 			button.addEventListener('blur', () => this.highlight(null, 'focus'));
 			item.addEventListener('pointerenter', () => this.highlight(node.id, 'hover'));
 			item.addEventListener('pointerleave', () => this.highlight(null, 'hover'));
-			this.elements.set(node.id, { group, label, mark, route, item, button, name, status });
+			this.elements.set(node.id, { group, description, label, mark, route, item, button, name, status });
 		}
 		const source = svgElement(svg, 'g', { transform: `translate(${DECK_CENTER.x} ${DECK_CENTER.y})`, class: 'ssb-deck-source', role: 'img' });
 		this.sourceGroup = source;
+		this.sourceDescription = describeSvg(source);
 		const stack = svgElement(source, 'g', { class: 'ssb-deck-tile', 'aria-hidden': 'true' });
 		for (const y of [9, 4, -1]) drawPlate(svgElement(stack, 'g', { transform: `translate(0 ${y})` }), 31, 15, 5);
 		svgElement(stack, 'path', { d: 'M -8 -3 L 4 -9 M -3 0 L 9 -6', class: 'ssb-deck-source-mark' });

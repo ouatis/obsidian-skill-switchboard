@@ -4,8 +4,8 @@ import { execFileSync } from 'node:child_process';
 const [cli, vault] = process.argv.slice(2);
 if (!cli || !vault) throw new Error('Usage: node scripts/test-ui-live.mjs <obsidian-cli> <vault>');
 const evaluate = (expression) => {
-	const stdout = execFileSync(cli, [`vault=${vault}`, 'eval', `code=JSON.stringify(${expression})`], {
-		encoding: 'utf8', windowsHide: true, maxBuffer: 2 * 1024 * 1024,
+	const stdout = execFileSync(cli, [`vault=${vault}`, 'eval', `code=(async()=>JSON.stringify(await (${expression})))()`], {
+		encoding: 'utf8', windowsHide: true, timeout: 20000, maxBuffer: 2 * 1024 * 1024,
 	});
 	return JSON.parse(stdout.trim().replace(/^=>\s*/, ''));
 };
@@ -17,6 +17,58 @@ const baseline = inView(`
 		themeDark:w.document.body.classList.contains('theme-dark'),scrollTop:v.contentEl.scrollTop};
 `);
 try {
+	const accessibleMap = inView(`
+		const labelled=Array.from(v.contentEl.querySelectorAll('.ssb-deck-svg,[data-target-id],.ssb-deck-source'));
+		return {htmlTooltipHooks:v.contentEl.querySelectorAll('svg[aria-label],svg [aria-label]').length,
+			ids:labelled.map(e=>e.getAttribute('aria-labelledby')),
+			names:labelled.map(e=>w.document.getElementById(e.getAttribute('aria-labelledby'))?.textContent)};
+	`);
+	assert.equal(accessibleMap.htmlTooltipHooks, 0, 'SVG must not enter Obsidian HTML-only tooltips');
+	assert.ok(accessibleMap.names.every(name => typeof name === 'string' && name.length > 0));
+	assert.equal(new Set(accessibleMap.ids).size, accessibleMap.ids.length);
+
+	// Real mouse moves exercise the delegated tooltip handler; synthetic PointerEvents are suppressed by Obsidian.
+	inView(`
+		v.tooltipRegressionErrors=[];v.tooltipRegressionMoves=0;
+		v.tooltipRegressionHandler=e=>v.tooltipRegressionErrors.push(e.message);
+		v.tooltipRegressionMoveHandler=()=>v.tooltipRegressionMoves++;
+		w.addEventListener('error',v.tooltipRegressionHandler);
+		v.contentEl.addEventListener('pointermove',v.tooltipRegressionMoveHandler);return true;
+	`);
+	try {
+		for (const selector of ['.ssb-deck-node', '.ssb-deck-source', '.ssb-deck-target-button']) {
+			const beforeMoves = inView('return v.tooltipRegressionMoves;');
+			const point = inView(`const r=v.contentEl.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};`);
+			for (const offset of [-2, 2]) {
+				execFileSync(cli, [`vault=${vault}`, 'dev:cdp', 'method=Input.dispatchMouseEvent',
+					`params=${JSON.stringify({ type: 'mouseMoved', x: point.x + offset, y: point.y })}`],
+				{ encoding: 'utf8', windowsHide: true, timeout: 20000, maxBuffer: 1024 * 1024 });
+			}
+			evaluate(`new Promise(resolve=>setTimeout(()=>resolve(true),800))`);
+			assert.ok(inView('return v.tooltipRegressionMoves;') > beforeMoves, `${selector}: hover must reach this view`);
+		}
+		assert.deepEqual(inView('return v.tooltipRegressionErrors;'), [], 'map hover and native button tooltips must not throw');
+	} finally {
+		inView(`
+			w.removeEventListener('error',v.tooltipRegressionHandler);
+			v.contentEl.removeEventListener('pointermove',v.tooltipRegressionMoveHandler);
+			delete v.tooltipRegressionHandler;delete v.tooltipRegressionErrors;
+			delete v.tooltipRegressionMoveHandler;delete v.tooltipRegressionMoves;return true;
+		`);
+	}
+
+	const family = inView(`
+		const root=w.getComputedStyle(v.contentEl),deck=w.getComputedStyle(v.contentEl.querySelector('.ssb-deck'));
+		const control=w.getComputedStyle(v.contentEl.querySelector('.skill-switchboard-actions button'));
+		return {panel:deck.borderTopLeftRadius,control:control.borderTopLeftRadius,
+			motion:root.getPropertyValue('--ssb-motion').trim(),font:root.fontFamily,
+			hostFont:root.getPropertyValue('--font-interface').trim()};
+	`);
+	assert.equal(family.panel, '12px');
+	assert.equal(family.control, '8px');
+	assert.ok(['160ms', '0ms'].includes(family.motion), 'motion follows the user preference');
+	assert.ok(family.hostFont && family.font, 'keep the host interface font');
+
 	// Test the actual button, including Obsidian's separate settings window.
 	inView(`v.contentEl.querySelector('.skill-switchboard-utility-actions button[aria-label="'+(p.settings.language==='zh-CN'?'设置':'Settings')+'"]').click();return true;`);
 	const navigation = evaluate(`({selected:app.setting.activeTab?.id,open:app.setting.isOpen,visible:app.setting.modalEl.isConnected&&app.setting.modalEl.getBoundingClientRect().width>0})`);
@@ -39,19 +91,20 @@ try {
 		assert.equal(focus.svgStops, 0, 'do not hand SVG focus to Obsidian HTMLElement-only helpers');
 		const title = inView(`p.settings.language=${JSON.stringify(language)};v.renderIndex();return v.contentEl.querySelector('h1').textContent;`);
 		assert.equal(title, language === 'en' ? 'Skill Switchboard' : '技能接线台');
-		for (const width of ['100%', '560px', '390px', '320px']) {
+		for (const width of ['100%', '960px', '560px', '390px', '320px']) {
 			inView(`v.contentEl.style.width=${JSON.stringify(width)};return true;`);
 			const layout = inView(`
 				const r=v.contentEl.getBoundingClientRect(),body=v.contentEl.querySelector('.ssb-deck-body'),svg=v.contentEl.querySelector('.ssb-deck-svg');
+				const style=w.getComputedStyle(v.contentEl);
 				return {overflow:v.contentEl.scrollWidth-v.contentEl.clientWidth,
+					containerWidth:v.contentEl.clientWidth-parseFloat(style.paddingLeft)-parseFloat(style.paddingRight),
 					outside:Array.from(v.contentEl.querySelectorAll('button,.ssb-deck-target,.skill-switchboard-search')).filter(e=>{const b=e.getBoundingClientRect();return b.width>0&&(b.left<r.left-1||b.right>r.right+1);}).map(e=>e.className),
 					columns:w.getComputedStyle(body).gridTemplateColumns.split(' ').length,svgWidth:svg.getBoundingClientRect().width};
 			`);
 			assert.ok(layout.overflow <= 1, `${language}/${width}: horizontal overflow ${layout.overflow}`);
 			assert.deepEqual(layout.outside, [], `${language}/${width}: controls outside the page`);
 			assert.ok(layout.svgWidth > 0);
-			if (width === '100%') assert.equal(layout.columns, 2);
-			else assert.equal(layout.columns, 1);
+			assert.equal(layout.columns, layout.containerWidth >= 680 ? 2 : 1);
 		}
 	}
 
@@ -89,7 +142,7 @@ try {
 		`);
 		for (const [state, ratio] of Object.entries(contrast)) assert.ok(ratio >= 4.5, `${theme}/${state}: contrast ${ratio}`);
 	}
-	console.log('Live UI checks passed: settings button and counters, English/Chinese, wide/narrow layouts, search/reset, and light/dark status contrast.');
+	console.log('Live UI checks passed: tooltip-safe accessible SVG, native hover, family styling, settings navigation, bilingual layouts, search/reset, and light/dark status contrast.');
 } finally {
 	inView(`
 		p.settings.language=${JSON.stringify(baseline.language)};v.query=${JSON.stringify(baseline.query)};v.contentEl.style.width=${JSON.stringify(baseline.width)};

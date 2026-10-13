@@ -25,6 +25,10 @@ Hide the deck using its eye button, or toggle it in settings; the choice survive
 
 The local preview uses one coordinated layout for the toolbar, connections, counters, diagnostics, search, and skill library. Wide panels place the map beside target status; narrow panels stack them. The Settings button and configuration counters open this plugin's settings directly. The Chinese page title is 技能接线台; the English title remains Skill Switchboard.
 
+The interface shares a quiet visual rhythm with Desk Lamp and Scriptorium: thin rules, 12px panels, 8px controls, and restrained 160ms transitions. Fonts, surfaces, accent colors, and state colors still come from the active Obsidian theme; neither sibling product is required. These presentation rules do not change checks, repair confirmation, target layout, or saved settings.
+
+SVG figures use linked native titles for accessible names, so hovering the map does not enter Obsidian's HTML-only tooltip handler. Native HTML buttons keep both their accessible labels and keyboard focus behavior.
+
 Paths are stored as configuration, so keep them portable when the vault will be used on more than one machine. Vault roots use paths relative to the vault. External roots and runtime targets should use `~` for the current user's home, such as `~/.codex/skills`, `~/.config/opencode/skills`, or `~/.gemini/config/skills`. Absolute paths remain supported for machine-specific setups. A Windows absolute path is not silently interpreted on macOS or Linux; replace it with a `~` path on the destination machine.
 
 Only configured roots and runtime targets are scanned. The native implementation checks wrapper, metadata, reference-package, command, stale-term, duplicate, and retired-alias consistency. One-click repair writes native wrappers, metadata, commands, and Hermes reference packages directly, after resolving every target outside the vault. Existing files that will be overwritten or removed are backed up under `.skill-switchboard-repair-backups/`. The plugin has no Python runtime dependency.
