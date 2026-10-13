@@ -89,10 +89,13 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 				desc: strings.scanDelayDescription,
 				// `number` persists a number and falls back to defaultValue when the
 				// input cannot be parsed, so the stored value stays usable by setTimeout.
+				// A typo falls back to 500 rather than 0, which keeps the debounce
+				// meaningful instead of rescanning on every keystroke of a burst.
 				control: {
 					type: 'number',
 					key: 'scanDelayMs',
 					defaultValue: DEFAULT_SETTINGS.scanDelayMs,
+					min: 0,
 				},
 			},
 		];
