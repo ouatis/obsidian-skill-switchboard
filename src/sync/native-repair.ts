@@ -24,7 +24,11 @@ export interface NativeRepairResult extends AdapterCheckResult {
 	writtenFiles: number;
 	replacedDirectories: number;
 	backupPath?: string;
+	changedSkills: string[];
+	changes: RepairChange[];
 }
+
+export interface RepairChange { skill: string; path: string; kind: 'wrapper' | 'metadata' | 'command' | 'references'; action: 'created' | 'updated' }
 
 export interface NativeRepairOptions {
 	/** Test-only override; production follows OPENCODE_CONFIG like the Python adapter. */
@@ -46,6 +50,7 @@ export async function repairRuntimeNative(
 		state = new RepairState(snapshot.vaultPath, snapshot.sharedRoot, configuredTarget, runtime, options.backupRoot);
 		const resolvedTarget = await state.assertOutsideVault(configuredTarget);
 		const skills = loadRuntimeSkills(snapshot, runtime);
+		if (skills.length === 0) return await state.failureResult(`No skills enable the ${runtime} adapter in the configured manifest.`);
 		const commandRoot = runtime === 'opencode'
 			? resolveConfiguredPath(options.opencodeCommandsDir ?? defaultOpenCodeCommandsDir(), snapshot.vaultPath)
 			: undefined;
@@ -58,14 +63,14 @@ export async function repairRuntimeNative(
 			const wrapperPath = runtime === 'dsh'
 				? path.join(resolvedTarget, `${skill.name}.md`)
 				: path.join(skillDir, 'SKILL.md');
-			await state.syncText(wrapperPath, wrapperFor(skill, runtime, snapshot));
+			await state.syncText(wrapperPath, wrapperFor(skill, runtime, snapshot), skill.name, 'wrapper');
 
 			if (runtime === 'hermes') {
-				await state.syncHermesReferences(skillDir, await referencedSharedFiles(skill.sharedPath, snapshot.sharedRoot));
+				await state.syncHermesReferences(skillDir, await referencedSharedFiles(skill.sharedPath, snapshot.sharedRoot), skill.name);
 			} else if (runtime === 'codex') {
-				await state.syncText(path.join(skillDir, 'agents', 'openai.yaml'), agentMetadataFor(skill));
+				await state.syncText(path.join(skillDir, 'agents', 'openai.yaml'), agentMetadataFor(skill), skill.name, 'metadata');
 			} else if (runtime === 'opencode' && commandRoot) {
-				await state.syncText(path.join(commandRoot, `${skill.name}.md`), commandFor(skill));
+				await state.syncText(path.join(commandRoot, `${skill.name}.md`), commandFor(skill), skill.name, 'command');
 			}
 		}
 
@@ -74,7 +79,7 @@ export async function repairRuntimeNative(
 		const message = error instanceof Error ? error.message : String(error);
 		return state
 			? await state.failureResult(message)
-			: { status: 'failed', output: `[native repair] FAIL\n${message}`, exitCode: 1, writtenFiles: 0, replacedDirectories: 0 };
+			: { status: 'failed', output: `[native repair] FAIL\n${message}`, exitCode: 1, writtenFiles: 0, replacedDirectories: 0, changedSkills: [], changes: [] };
 	}
 }
 
@@ -84,6 +89,7 @@ class RepairState {
 	private backupNumber = 0;
 	writtenFiles = 0;
 	replacedDirectories = 0;
+	changes: RepairChange[] = [];
 
 	constructor(
 		private readonly vaultPath: string,
@@ -103,16 +109,18 @@ class RepairState {
 		return resolved;
 	}
 
-	async syncText(filePath: string, expected: string): Promise<void> {
+	async syncText(filePath: string, expected: string, skill: string, kind: RepairChange['kind']): Promise<void> {
 		await this.assertOutsideVault(filePath);
-		if (await pathExists(filePath) && await readText(filePath) === expected) return;
+		const exists = await pathExists(filePath);
+		if (exists && await readText(filePath) === expected) return;
 		await this.backupExisting(filePath);
 		await fs.mkdir(path.dirname(filePath), { recursive: true });
 		await fs.writeFile(filePath, expected, 'utf8');
 		this.writtenFiles += 1;
+		this.changes.push({ skill, path: filePath, kind, action: exists ? 'updated' : 'created' });
 	}
 
-	async syncHermesReferences(skillDir: string, references: string[]): Promise<void> {
+	async syncHermesReferences(skillDir: string, references: string[], skill: string): Promise<void> {
 		const referencesDir = path.join(skillDir, 'references');
 		const expected = references.map((source) => ({
 			source,
@@ -134,6 +142,7 @@ class RepairState {
 		await this.backupExisting(referencesDir);
 		await fs.rm(referencesDir, { recursive: true, force: true });
 		this.replacedDirectories += 1;
+		this.changes.push({ skill, path: referencesDir, kind: 'references', action: 'updated' });
 		for (const item of expected) {
 			await this.assertOutsideVault(item.target);
 			await fs.mkdir(path.dirname(item.target), { recursive: true });
@@ -174,6 +183,8 @@ class RepairState {
 			writtenFiles: this.writtenFiles,
 			replacedDirectories: this.replacedDirectories,
 			backupPath: this.backupRoot,
+			changedSkills: [...new Set(this.changes.map((change) => change.skill))],
+			changes: this.changes,
 		};
 	}
 
@@ -186,6 +197,8 @@ class RepairState {
 			writtenFiles: this.writtenFiles,
 			replacedDirectories: this.replacedDirectories,
 			backupPath: this.backupRoot,
+			changedSkills: [...new Set(this.changes.map((change) => change.skill))],
+			changes: this.changes,
 		};
 	}
 

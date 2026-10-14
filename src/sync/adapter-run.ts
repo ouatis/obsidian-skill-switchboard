@@ -2,7 +2,7 @@ import path from 'node:path';
 import type { Strings } from '../i18n';
 import type { RuntimeName, RuntimeTarget } from '../types';
 import type { AdapterCheckResult } from './result';
-import type { ManifestCheckResult, SyncProvider, SyncRuntimeCheckResult } from '../sync-provider';
+import type { ManifestCheckResult, SyncProvider, SyncRuntimeCheckResult, SyncManifestSnapshot, SyncRepairResult } from '../sync-provider';
 import { resolveConfiguredPath } from '../utils/paths';
 
 /** A runtime target that is eligible for drift repair. */
@@ -28,6 +28,7 @@ export interface AdapterRunContext {
 	/** Observers only: they do not select targets or change the repair policy. */
 	onTargetActivity?: (activity: TargetActivity) => void;
 	onTargetCheck?: (check: TargetCheck) => void;
+	isCurrent?: () => boolean;
 }
 
 export interface AdapterRun {
@@ -51,9 +52,11 @@ export async function checkAllTargets(
 ): Promise<AdapterRun> {
 	const manifest = await context.provider.inspectManifest(vaultPath);
 	if (manifest.status === 'failed') return { result: manifest, manifest, checks: [] };
-	const checks = await collectTargetChecks(context, vaultPath);
+	const checks = await collectTargetChecks(context, vaultPath, manifest.snapshot ?? undefined);
+	const resourceFailure: AdapterCheckResult | null = manifest.resources?.status === 'failed'
+		? { status: 'failed', exitCode: 1, output: 'Source resources are missing, changed, or invalid.' } : null;
 	return {
-		result: combineResults(manifest, aggregateTargetChecks(checks, emptyMessage)),
+		result: combineResults(manifest, aggregateTargetChecks(checks, emptyMessage), ...(resourceFailure ? [resourceFailure] : [])),
 		manifest,
 		checks,
 	};
@@ -62,6 +65,7 @@ export async function checkAllTargets(
 export async function collectTargetChecks(
 	context: AdapterRunContext,
 	vaultPath: string,
+	snapshot?: SyncManifestSnapshot,
 ): Promise<TargetCheck[]> {
 	const checks: TargetCheck[] = [];
 	const record = (check: TargetCheck) => {
@@ -69,6 +73,7 @@ export async function collectTargetChecks(
 		context.onTargetCheck?.(check);
 	};
 	for (const target of getRepairTargets(context.settings.targets)) {
+		if (context.isCurrent?.() === false) break;
 		context.onTargetActivity?.({ targetId: target.id, phase: 'checking' });
 		let resolvedTarget: string;
 		try {
@@ -99,11 +104,12 @@ export async function collectTargetChecks(
 			});
 			continue;
 		}
+		const result = await context.provider.checkRuntime(vaultPath, target.runtime, target.path, snapshot);
 		record({
 			target,
 			targetPath: resolvedTarget,
-			repairable: true,
-			result: await context.provider.checkRuntime(vaultPath, target.runtime, target.path),
+			repairable: result.native?.kind !== 'error',
+			result,
 		});
 	}
 	return checks;
@@ -113,6 +119,15 @@ export interface RepairOutcome {
 	repair: AdapterCheckResult;
 	repairedCount: number;
 	failedCount: number;
+	details: TargetRepairDetail[];
+}
+
+export interface TargetRepairDetail {
+	targetId: string;
+	label: string;
+	runtime: RuntimeName;
+	repair: SyncRepairResult;
+	followUp?: SyncRuntimeCheckResult;
 }
 
 export interface RepairSummary {
@@ -123,6 +138,7 @@ export interface RepairSummary {
 	failedCount: number;
 	/** True when the manifest check failed and no repair was attempted. */
 	aborted: boolean;
+	details: TargetRepairDetail[];
 }
 
 /**
@@ -136,18 +152,21 @@ export async function runRepairAll(
 	strings: Strings,
 ): Promise<RepairSummary> {
 	const manifest = await context.provider.inspectManifest(vaultPath);
-	if (manifest.status === 'failed') {
+	if (manifest.status === 'failed' || manifest.resources?.status === 'failed') {
+		const failure = manifest.status === 'failed' ? manifest : { status: 'failed' as const, output: strings.sourceResourcesBlocked, exitCode: 1 };
 		return {
 			manifest,
-			checkResult: manifest,
-			repair: manifest,
+			checkResult: failure,
+			repair: failure,
 			repairedCount: 0,
 			failedCount: 1,
 			aborted: true,
+			details: [],
 		};
 	}
 
-	const { result: checkResult, checks } = await checkAllTargets(context, vaultPath, strings.noRepairTargets);
+	const checks = await collectTargetChecks(context, vaultPath, manifest.snapshot ?? undefined);
+	const checkResult = combineResults(manifest, aggregateTargetChecks(checks, strings.noRepairTargets));
 	const drifted = checks.filter((check) => check.result.status === 'failed' && check.repairable);
 	const blocked = checks.filter((check) => check.result.status === 'failed' && !check.repairable);
 
@@ -167,17 +186,23 @@ export async function runRepairAll(
 			repairedCount: 0,
 			failedCount: blocked.length,
 			aborted: false,
+			details: [],
 		};
 	}
 
-	const { repair, repairedCount, failedCount } = await repairDriftedTargets(
+	const { repair, repairedCount, failedCount, details } = await repairDriftedTargets(
 		context,
 		vaultPath,
 		drifted,
 		blocked.length,
 		strings,
+		manifest.snapshot ?? undefined,
 	);
-	return { manifest, checkResult, repair, repairedCount, failedCount, aborted: false };
+	const finalChecks = checks.map((check) => {
+		const detail = details.find((item) => item.targetId === check.target.id);
+		return detail ? { ...check, result: detail.followUp ?? checkResultFromRepair(detail.repair), repairFailed: detail.repair.status === 'failed' } : check;
+	});
+	return { manifest, checkResult: combineResults(manifest, aggregateTargetChecks(finalChecks, strings.noRepairTargets)), repair, repairedCount, failedCount, details, aborted: false };
 }
 
 /**
@@ -191,13 +216,21 @@ export async function repairDriftedTargets(
 	drifted: TargetCheck[],
 	blockedCount: number,
 	strings: Strings,
+	snapshot?: SyncManifestSnapshot,
 ): Promise<RepairOutcome> {
 	const repairOutputs: string[] = [];
 	let repairedCount = 0;
 	let failedCount = blockedCount;
 	let firstFailureCode: number | undefined;
+	const details: TargetRepairDetail[] = [];
 
 	for (const check of drifted) {
+		if (context.isCurrent?.() === false) {
+			failedCount += drifted.length - details.length;
+			firstFailureCode ??= 1;
+			repairOutputs.push(strings.checksStale);
+			break;
+		}
 		const runtime = check.target.runtime;
 		const targetPath = check.targetPath;
 		if (!targetPath) {
@@ -208,9 +241,11 @@ export async function repairDriftedTargets(
 		}
 		const label = displayTargetName(check.target);
 		context.onTargetActivity?.({ targetId: check.target.id, phase: 'repairing' });
-		const repair = await context.provider.repairRuntime(vaultPath, runtime, check.target.path);
+		const repair = await context.provider.repairRuntime(vaultPath, runtime, check.target.path, snapshot);
+		const detail: TargetRepairDetail = { targetId: check.target.id, label, runtime, repair };
+		details.push(detail);
 		if (repair.status === 'failed') {
-			context.onTargetCheck?.({ ...check, result: repair, repairFailed: true });
+			context.onTargetCheck?.({ ...check, result: checkResultFromRepair(repair), repairFailed: true });
 			failedCount += 1;
 			firstFailureCode ??= repair.exitCode;
 			repairOutputs.push(`[${label}] REPAIR FAILED\n${repair.output}`);
@@ -218,7 +253,8 @@ export async function repairDriftedTargets(
 		}
 
 		context.onTargetActivity?.({ targetId: check.target.id, phase: 'checking' });
-		const followUp = await context.provider.checkRuntime(vaultPath, runtime, check.target.path);
+		const followUp = await context.provider.checkRuntime(vaultPath, runtime, check.target.path, snapshot);
+		detail.followUp = followUp;
 		context.onTargetCheck?.({ ...check, result: followUp, repairFailed: false });
 		if (followUp.status === 'passed') {
 			repairedCount += 1;
@@ -248,6 +284,7 @@ export async function repairDriftedTargets(
 		},
 		repairedCount,
 		failedCount,
+		details,
 	};
 }
 
@@ -258,6 +295,10 @@ export function combineResults(...results: AdapterCheckResult[]): AdapterCheckRe
 		output: results.map((result) => result.output).filter(Boolean).join('\n\n'),
 		exitCode: failed?.exitCode ?? 0,
 	};
+}
+
+function checkResultFromRepair(result: SyncRepairResult): SyncRuntimeCheckResult {
+	return { status: result.status, output: result.output, exitCode: result.exitCode };
 }
 
 export function aggregateTargetChecks(checks: TargetCheck[], emptyMessage: string): AdapterCheckResult {

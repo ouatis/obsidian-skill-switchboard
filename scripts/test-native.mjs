@@ -7,13 +7,21 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import esbuild from 'esbuild';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-// The vault lives at ~/Documents/JARDIN regardless of where this repo sits.
-const vault = process.env.JARDIN_VAULT
-	? path.resolve(process.env.JARDIN_VAULT)
-	: path.join(os.homedir(), 'Documents', 'JARDIN');
 const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'skill-switchboard-native-'));
+const vault = path.join(tempRoot, 'fixture-vault');
+const sharedRoot = path.join(vault, 'methods', 'skills');
+const location = { sharedRoot, manifestPath: path.join(vault, 'configuration', 'adapters.json') };
 
 try {
+	await fs.mkdir(path.join(sharedRoot, 'references'), { recursive: true });
+	await fs.mkdir(path.dirname(location.manifestPath), { recursive: true });
+	const skills = ['drafting', 'review'].map((name) => ({ name, shared_file: `methods/skills/${name}.md`, adapters: {
+		codex: { display_name: name, short_description: 'Fixture skill', default_prompt: `Use $${name}` },
+		hermes: {}, workbuddy: true, opencode: {}, antigravity: true, dsh: {},
+	} }));
+	for (const skill of skills) await fs.writeFile(path.join(sharedRoot, `${skill.name}.md`), `---\nname: ${skill.name}\ndescription: Fixture skill.\n---\n\n# ${skill.name}\n\nFixture skill. Read [support](references/support.md).\n`);
+	await fs.writeFile(path.join(sharedRoot, 'references', 'support.md'), '# Support\n\nFixture reference.\n');
+	await fs.writeFile(location.manifestPath, JSON.stringify({ schema_version: 1, total_skills: 2, adapter_defaults: { hermes: { category: 'team' } }, skills }));
 	const bundle = path.join(tempRoot, 'native-check.cjs');
 	const repairBundle = path.join(tempRoot, 'native-repair.cjs');
 	const pathsBundle = path.join(tempRoot, 'paths.cjs');
@@ -66,12 +74,12 @@ try {
 	].map((runtime) => [runtime, path.join(tempRoot, runtime)]));
 	const commands = path.join(tempRoot, 'opencode-commands');
 
-	const manifest = await native.inspectManifest(vault);
+	const manifest = await native.inspectManifest(vault, location);
 	assert.equal(manifest.status, 'passed', manifest.output);
 	assert.ok(manifest.snapshot, 'native manifest snapshot should exist');
 	// Derived from the canonical root so adding a skill doesn't fail the suite.
 	const canonicalSkillCount = (
-		await fs.readdir(path.join(vault, '00-MEMORTE', 'shared', 'skills'), { withFileTypes: true })
+		await fs.readdir(sharedRoot, { withFileTypes: true })
 	).filter((entry) => entry.isFile() && entry.name.endsWith('.md')).length;
 	for (const runtime of Object.keys(targets)) {
 		const initialRepair = await repair.repairRuntimeNative(vault, runtime, targets[runtime], manifest.snapshot, {
@@ -96,19 +104,19 @@ try {
 		assert.equal(await hashTree(targets[runtime]), before, `${runtime} native check wrote files`);
 	}
 
-	const codexWrapper = path.join(targets.codex, 'chengfa', 'SKILL.md');
+	const codexWrapper = path.join(targets.codex, 'drafting', 'SKILL.md');
 	const codexText = await fs.readFile(codexWrapper, 'utf8');
 	await fs.writeFile(codexWrapper, codexText.replace('description: "', 'description: "DRIFT '), 'utf8');
 	const codexDrift = await native.checkRuntimeNative(vault, 'codex', targets.codex, manifest.snapshot);
 	assert.equal(codexDrift.kind, 'drift');
-	assert.ok(codexDrift.problems.includes('Description drift: chengfa'));
+	assert.ok(codexDrift.problems.includes('Description drift: drafting'));
 	const codexRepair = await repair.repairRuntimeNative(vault, 'codex', targets.codex, manifest.snapshot, { backupRoot: path.join(tempRoot, 'backups', 'codex') });
 	assert.equal(codexRepair.status, 'passed', codexRepair.output);
 	assert.ok(codexRepair.writtenFiles > 0);
 	assert.ok(codexRepair.backupPath && await fileExists(codexRepair.backupPath));
 	assert.equal((await native.checkRuntimeNative(vault, 'codex', targets.codex, manifest.snapshot)).kind, 'clean');
 
-	const hermesReference = path.join(targets.hermes, 'jardin-shared', 'chengfa', 'references', 'jardin-skill-sync-audit-and-repair.md');
+	const hermesReference = path.join(targets.hermes, 'team', 'drafting', 'references', 'support.md');
 	if (await fileExists(hermesReference)) {
 		const referenceText = await fs.readFile(hermesReference, 'utf8');
 		await fs.writeFile(hermesReference, `${referenceText}\nDRIFT`, 'utf8');
@@ -120,7 +128,7 @@ try {
 		assert.equal((await native.checkRuntimeNative(vault, 'hermes', targets.hermes, manifest.snapshot)).kind, 'clean');
 	}
 
-	const commandPath = path.join(commands, 'chengfa.md');
+	const commandPath = path.join(commands, 'drafting.md');
 	await fs.unlink(commandPath);
 	const opencodeDrift = await native.checkRuntimeNative(vault, 'opencode', targets.opencode, manifest.snapshot, { opencodeCommandsDir: commands });
 	assert.equal(opencodeDrift.kind, 'drift');
@@ -138,12 +146,18 @@ try {
 }
 
 async function checkLive(native) {
-	const dataPath = path.join(vault, '.obsidian', 'plugins', 'skill-switchboard', 'data.json');
+	const position = process.argv.indexOf('--live');
+	const liveVault = process.argv[position + 1];
+	if (!liveVault) throw new Error('Supply the intended vault after --live.');
+	const dataPath = path.join(liveVault, '.obsidian', 'plugins', 'skill-switchboard', 'data.json');
 	const data = JSON.parse(await fs.readFile(dataPath, 'utf8'));
-	const manifest = await native.inspectManifest(vault);
+	const sourceBundle = path.join(tempRoot, 'source.cjs');
+	await esbuild.build({ entryPoints: [path.join(repo, 'src/sync/source.ts')], bundle: true, platform: 'node', format: 'cjs', outfile: sourceBundle, logLevel: 'silent' });
+	const { resolveSyncSource } = await import(pathToFileURL(sourceBundle).href);
+	const manifest = await native.inspectManifest(liveVault, resolveSyncSource(liveVault, data));
 	assert.equal(manifest.status, 'passed', manifest.output);
 	for (const target of data.targets.filter((item) => item.enabled && item.mode === 'wrapper' && item.runtime && item.path)) {
-		const result = await native.checkRuntimeNative(vault, target.runtime, target.path, manifest.snapshot);
+		const result = await native.checkRuntimeNative(liveVault, target.runtime, target.path, manifest.snapshot);
 		assert.equal(result.kind, 'clean', `${target.runtime} live: ${result.output}`);
 	}
 	console.log('Live native-only read-only checks passed for the six configured wrapper targets.');

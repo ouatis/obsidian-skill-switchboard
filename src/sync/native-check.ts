@@ -13,6 +13,7 @@ import {
 export { inspectManifest } from './manifest';
 import {
 	agentMetadataFor,
+	canonicalFilePath,
 	commandFor,
 	loadRuntimeSkills,
 	wrapperFor,
@@ -43,19 +44,6 @@ export interface NativeCheckOptions {
 	opencodeCommandsDir?: string;
 }
 
-const LONG_RETIRED = new Set([
-	'article-review-by-questioning', 'c2d-jiafa', 'c2d-mifa', 'mifa',
-	'jardin-card-draw-enrichment', 'jardin-card-enrichment-triage', 'jardin-card-naming',
-	'jardin-card-out-enrichment', 'jardin-draft-backfill-enrichment', 'jardin-draft-card-enrichment',
-	'jardin-writing-pipeline', 'jardin-vault-workflow', 'lixianji-protagonist-objective-irony',
-	'near-final-essay-polish', 'natural-science-fact-mining', 'peipingfa',
-	'rouen-flaubert-source-mining', 'fun-facts-source-mining', 'insertion-only-restructure',
-	'next-step-suggest', 'tvtropes-source-mining',
-]);
-const SHORT_RETIRED = new Set([
-	'jardin-draft-card-enrichment', 'near-final-essay-polish', 'insertion-only-restructure',
-]);
-
 export async function checkRuntimeNative(
 	vaultPath: string,
 	runtime: RuntimeName,
@@ -71,6 +59,9 @@ export async function checkRuntimeNative(
 		}
 
 		const skills = loadRuntimeSkills(snapshot, runtime);
+		if (skills.length === 0) return errorResult(`No skills enable the ${runtime} adapter in the configured manifest.`);
+		const policy = snapshot.runtimePolicies[runtime];
+		const retired = new Set(policy.retiredNames);
 		const problems: string[] = [];
 		if (['codex', 'workbuddy', 'antigravity', 'dsh'].includes(runtime)) {
 			problems.push(...await manifestCoverage(snapshot, runtime));
@@ -81,15 +72,15 @@ export async function checkRuntimeNative(
 		}
 
 		if (runtime === 'hermes') {
-			problems.push(...await staleProblems(resolvedTarget, false, EXCLUDED_SKILL_DIRS));
+			problems.push(...await staleProblems(resolvedTarget, policy.rejectExampleAbsolutePath, EXCLUDED_SKILL_DIRS, policy.forbiddenLiterals));
 		} else if (runtime === 'opencode') {
-			problems.push(...await groupedSkillProblems(resolvedTarget, LONG_RETIRED));
+			problems.push(...await groupedSkillProblems(resolvedTarget, retired));
 		} else if (runtime === 'dsh') {
-			problems.push(...await staleProblems(resolvedTarget, false, EXCLUDED_SKILL_DIRS));
-			problems.push(...await groupedSkillProblems(resolvedTarget, SHORT_RETIRED));
+			problems.push(...await staleProblems(resolvedTarget, policy.rejectExampleAbsolutePath, EXCLUDED_SKILL_DIRS, policy.forbiddenLiterals));
+			problems.push(...await groupedSkillProblems(resolvedTarget, retired));
 		} else {
-			problems.push(...await staleProblems(resolvedTarget, true, new Set<string>()));
-			problems.push(...await groupedSkillProblems(resolvedTarget, LONG_RETIRED));
+			problems.push(...await staleProblems(resolvedTarget, policy.rejectExampleAbsolutePath, new Set<string>(), policy.forbiddenLiterals));
+			problems.push(...await groupedSkillProblems(resolvedTarget, retired));
 		}
 
 		const unique = [...new Set(problems)].sort((left, right) => left.localeCompare(right));
@@ -173,7 +164,7 @@ async function checkSkill(
 
 	const expectedDescription = `description: "${yamlQuoted(skill.description)}"`;
 	if (!current.includes(expectedDescription)) result.push(`Description drift: ${skill.name}`);
-	if (!current.includes(`00-MEMORTE/shared/skills/${skill.sharedFile}`)) result.push(`Shared path missing: ${skill.name}`);
+	if (!current.includes(canonicalFilePath(snapshot, skill.sharedFile))) result.push(`Shared path missing: ${skill.name}`);
 	if (runtime === 'codex') {
 		const agentPath = path.join(skillDir, 'agents', 'openai.yaml');
 		if (await pathExists(agentPath) && await readText(agentPath) !== agentMetadataFor(skill)) {

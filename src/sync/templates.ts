@@ -1,6 +1,6 @@
 import path from 'node:path';
 import os from 'node:os';
-import { adapterFor, ManifestSkill, SyncManifestSnapshot } from './manifest';
+import { adapterFor, isInside, ManifestSkill, SyncManifestSnapshot } from './manifest';
 import { RuntimeName } from '../types';
 
 export interface RuntimeSkill {
@@ -22,7 +22,7 @@ export function loadRuntimeSkills(snapshot: SyncManifestSnapshot, runtime: Runti
 		if (config === null) return [];
 		const description = runtime === 'hermes' || runtime === 'opencode'
 			? normalizeDescription(stringValue(config.description)) : stringValue(config.description);
-		const category = stringValue(config.category) || 'jardin-shared';
+		const category = stringValue(config.category) || 'shared';
 		if (category.includes('/') || category.includes('\\') || category === '..' || category === '.') {
 			throw new Error(`Invalid runtime category: ${category}`);
 		}
@@ -66,7 +66,7 @@ export function wrapperFor(skill: RuntimeSkill, runtime: RuntimeName, snapshot: 
 	const metadata = runtime === 'hermes'
 		? `version: 1.0.0\nplatforms: [linux, macos, windows]\nmetadata:\n  hermes:\n    tags: ${yamlArray(skill.tags)}\n    related_skills: ${yamlArray(skill.relatedSkills)}\n`
 		: runtime === 'dsh'
-			? `metadata:\n  jardin:\n    source: shared-canonical\n    canonical: 00-MEMORTE/shared/skills/${skill.sharedFile}\n` : '';
+			? `metadata:\n  skill_switchboard:\n    source: shared-canonical\n    canonical: ${canonicalFilePath(snapshot, skill.sharedFile)}\n` : '';
 	const liveReferences = runtime === 'workbuddy' || runtime === 'dsh'
 		? 'If the shared card references files under `references/`, read those from the same shared skills directory.\n' : '';
 	const qualifier = runtime === 'workbuddy' ? 'WorkBuddy ' : runtime === 'dsh' ? 'DSH ' : '';
@@ -74,7 +74,7 @@ export function wrapperFor(skill: RuntimeSkill, runtime: RuntimeName, snapshot: 
 		? `\n## Trigger\n\nUse skill_view(name='${skill.name}') to load the full shared skill when needed.\n`
 		: runtime === 'opencode'
 			? `\n## Trigger\n\nUse the skill name \`${skill.name}\` in your prompt or reference the shared file path directly.\n` : '';
-	return `---\nname: ${skill.name}\ndescription: "${yamlQuoted(skill.description)}"\n${metadata}---\n\n# ${titleFromName(skill.name)}\n\nCanonical shared rules live at:\n${canonicalPathLines(snapshot, skill.sharedFile)}\n\nOpen the first path that exists and follow it as the source of truth.\nPrefer the workspace-relative path when the current workspace is a JARDIN checkout.\n${liveReferences}\n## Wrapper Rule\n\n- Keep this installed ${qualifier}skill thin.\n- Do not duplicate or locally rewrite the shared rule card unless the install mechanism itself changes.\n- If this wrapper and the shared rule card ever diverge, the shared rule card wins.\n${trigger}`;
+	return `---\nname: ${skill.name}\ndescription: "${yamlQuoted(skill.description)}"\n${metadata}---\n\n# ${titleFromName(skill.name)}\n\nCanonical shared rules live at:\n${canonicalPathLines(snapshot, skill.sharedFile)}\n\nOpen the first path that exists and follow it as the source of truth.\nPrefer the workspace-relative path when working inside the configured vault.\n${liveReferences}\n## Wrapper Rule\n\n- Keep this installed ${qualifier}skill thin.\n- Do not duplicate or locally rewrite the shared rule card unless the install mechanism itself changes.\n- If this wrapper and the shared rule card ever diverge, the shared rule card wins.\n${trigger}`;
 }
 
 export function agentMetadataFor(skill: RuntimeSkill): string {
@@ -86,13 +86,15 @@ export function commandFor(skill: RuntimeSkill): string {
 }
 
 function canonicalPathLines(snapshot: SyncManifestSnapshot, sharedFile: string): string {
-	const override = process.env.JARDIN_HOME;
-	const root = override ? path.join(expandHome(override), '00-MEMORTE', 'shared', 'skills') : snapshot.sharedRoot;
-	const local = path.resolve(root, sharedFile).replace(/\\/g, '/');
+	const local = path.resolve(snapshot.sharedRoot, sharedFile).replace(/\\/g, '/');
 	const relative = path.relative(snapshot.vaultPath, path.join(snapshot.sharedRoot, sharedFile)).replace(/\\/g, '/');
-	const lines = [`- \`${relative}\` in the configured vault`];
-	lines.push(`- \`${local}\` on this machine (${override ? 'from JARDIN_HOME' : 'derived from the configured vault'})`);
+	const lines = isInside(snapshot.vaultPath, snapshot.sharedRoot) ? [`- \`${relative}\` in the configured vault`] : [];
+	lines.push(`- \`${local}\` on this machine (derived from the configured source)`);
 	return lines.join('\n');
+}
+
+export function canonicalFilePath(snapshot: SyncManifestSnapshot, sharedFile: string): string {
+	return snapshot.sharedPrefix ? snapshot.sharedPrefix + sharedFile : path.join(snapshot.sharedRoot, sharedFile).replaceAll(path.sep, '/');
 }
 
 export function expandHome(value: string): string {

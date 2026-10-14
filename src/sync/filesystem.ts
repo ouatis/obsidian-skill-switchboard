@@ -16,14 +16,6 @@ export const EXCLUDED_SKILL_DIRS = new Set([
 	'__pycache__',
 ]);
 
-export const STALE_PATTERNS = [
-	'author-pool',
-	'Split dense Chinese prose',
-	'split or reduce',
-	'make text colder',
-	'less confessional',
-];
-
 export const CODEX_STALE_PATTERN = '\\[file\\]\\(</abs/path/file\\.md:42>\\)';
 
 export interface InstalledSkillEntry {
@@ -109,8 +101,9 @@ export async function staleProblems(
 	root: string,
 	includeAbsolutePathPattern: boolean,
 	excludeDirectories?: Set<string>,
+	forbiddenLiterals: string[] = [],
 ): Promise<string[]> {
-	const patterns = includeAbsolutePathPattern ? [...STALE_PATTERNS, CODEX_STALE_PATTERN] : STALE_PATTERNS;
+	if (!includeAbsolutePathPattern && forbiddenLiterals.length === 0) return [];
 	const files = await walkFiles(root, {
 		// Codex/WorkBuddy/Antigravity intentionally scan every file; Hermes/DSH
 		// pass the shared exclusion set used by the Python core scanner.
@@ -120,9 +113,10 @@ export async function staleProblems(
 	const problems: string[] = [];
 	for (const filePath of files) {
 		const text = await readText(filePath);
-		for (const pattern of patterns) {
-			if (new RegExp(pattern).test(text)) problems.push(`Stale term '${pattern}' in ${filePath}`);
+		for (const literal of forbiddenLiterals) {
+			if (text.includes(literal)) problems.push(`Stale term '${literal}' in ${filePath}`);
 		}
+		if (includeAbsolutePathPattern && new RegExp(CODEX_STALE_PATTERN).test(text)) problems.push(`Example absolute path in ${filePath}`);
 	}
 	return problems;
 }

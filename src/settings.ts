@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, requireApiVersion } from 'obsidian';
+import { App, Notice, PluginSettingTab, Setting, requireApiVersion } from 'obsidian';
 import type { SettingDefinitionItem } from 'obsidian';
 import type SkillSwitchboardPlugin from './main';
 import { getStrings, Language } from './i18n';
@@ -12,6 +12,9 @@ export interface SkillSwitchboardSettings {
 	autoScan: boolean;
 	scanDelayMs: number;
 	showDistributionBoard: boolean;
+	syncRootId: string;
+	syncManifestPath: string;
+	autoCheck: boolean;
 }
 
 export const DEFAULT_SETTINGS: SkillSwitchboardSettings = {
@@ -30,6 +33,9 @@ export const DEFAULT_SETTINGS: SkillSwitchboardSettings = {
 	autoScan: false,
 	scanDelayMs: 500,
 	showDistributionBoard: true,
+	syncRootId: 'vault-skills',
+	syncManifestPath: '',
+	autoCheck: true,
 };
 
 function newId(prefix: string): string {
@@ -58,14 +64,9 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 	}
 
 	/**
-	 * Declarative form for Obsidian 1.13.0+, which renders the top-level controls
-	 * from this array and makes them searchable. Controls bound by `key` read and
-	 * write `plugin.settings[key]`, so the three list sections stay imperative in
-	 * `display()`.
-	 *
-	 * Only `language`, `autoScan` and `scanDelayMs` are declared here: the root,
-	 * target and harness sections add and remove entries, which needs the
-	 * imperative controls.
+	 * Obsidian 1.13.0+ does not call display() when definitions are present.
+	 * Register the dynamic editors as custom render rows as well as the simple
+	 * controls, so neither the source nor the local path settings disappear.
 	 */
 	getSettingDefinitions(): SettingDefinitionItem[] {
 		const strings = getStrings(this.plugin.settings.language);
@@ -80,6 +81,16 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 					options: { en: strings.english, 'zh-CN': strings.chinese },
 					defaultValue: DEFAULT_SETTINGS.language,
 				},
+			},
+			{
+				name: strings.autoCheck,
+				desc: strings.autoCheckDescription,
+				control: { type: 'toggle', key: 'autoCheck', defaultValue: DEFAULT_SETTINGS.autoCheck },
+			},
+			{
+				name: strings.distributionBoard,
+				desc: strings.distributionBoardDescription,
+				control: { type: 'toggle', key: 'showDistributionBoard', defaultValue: DEFAULT_SETTINGS.showDistributionBoard },
 			},
 			{
 				name: strings.scanAutomatically,
@@ -100,7 +111,33 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 					min: 0,
 				},
 			},
+			{ name: strings.skillRoots, render: (setting) => this.renderSection(setting, (el) => this.renderRoots(el, strings)) },
+			{ name: strings.syncSource, render: (setting) => this.renderSection(setting, (el) => this.renderSyncSource(el, strings)) },
+			{ name: strings.externalPackages, render: (setting) => this.renderSection(setting, (el) => this.renderExternalPackages(el, strings)) },
+			{ name: strings.runtimeTargets, render: (setting) => this.renderSection(setting, (el) => this.renderTargets(el, strings)) },
+			{ name: strings.harnesses, render: (setting) => this.renderSection(setting, (el) => this.renderHarnesses(el, strings)) },
 		];
+	}
+
+	/** Native controls must use the same persistence/invalidation path as old controls. */
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		if (key === 'language') this.plugin.settings.language = value === 'zh-CN' ? 'zh-CN' : 'en';
+		else if (key === 'autoCheck' || key === 'autoScan' || key === 'showDistributionBoard') {
+			if (typeof value !== 'boolean') throw new Error('Expected a toggle value.');
+			if (key === 'showDistributionBoard') { await this.plugin.setDistributionBoardVisible(value); return; }
+			this.plugin.settings[key] = value;
+		} else if (key === 'scanDelayMs') {
+			this.plugin.settings.scanDelayMs = typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : DEFAULT_SETTINGS.scanDelayMs;
+		} else throw new Error('Unsupported setting key.');
+		await this.plugin.saveSettings();
+		if (key === 'language') { this.refreshTab(); await this.plugin.refreshIndex(false); }
+	}
+
+	private renderSection(setting: Setting, render: (container: HTMLElement) => void): void {
+		setting.settingEl.empty();
+		setting.settingEl.removeClass('setting-item');
+		setting.settingEl.addClass('skill-switchboard-settings-section');
+		render(setting.settingEl);
 	}
 
 	/**
@@ -110,6 +147,7 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+		containerEl.addClass('skill-switchboard-settings');
 		const strings = getStrings(this.plugin.settings.language);
 
 		new Setting(containerEl).setName(strings.overview).setHeading();
@@ -144,6 +182,14 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName(strings.autoCheck)
+			.setDesc(strings.autoCheckDescription)
+			.addToggle((toggle) => toggle.setValue(this.plugin.settings.autoCheck).onChange(async (value) => {
+				this.plugin.settings.autoCheck = value;
+				await this.plugin.saveSettings();
+			}));
+
+		new Setting(containerEl)
 			.setName(strings.scanAutomatically)
 			.setDesc(strings.scanAutomaticallyDescription)
 			.addToggle((toggle) =>
@@ -170,6 +216,8 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 			);
 
 		this.renderRoots(containerEl, strings);
+		this.renderSyncSource(containerEl, strings);
+		this.renderExternalPackages(containerEl, strings);
 		this.renderTargets(containerEl, strings);
 		this.renderHarnesses(containerEl, strings);
 	}
@@ -237,6 +285,46 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 		);
 	}
 
+	private renderSyncSource(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
+		new Setting(containerEl).setName(strings.syncSource).setHeading();
+		new Setting(containerEl).setName(strings.canonicalRoot).setDesc(strings.canonicalRootDescription)
+			.addDropdown((dropdown) => {
+				dropdown.addOption('', strings.chooseSource);
+				for (const root of this.plugin.settings.roots.filter((item) => item.enabled)) dropdown.addOption(root.id, root.label || root.path);
+				dropdown.setValue(this.plugin.settings.syncRootId).onChange(async (value) => {
+					this.plugin.settings.syncRootId = value;
+					await this.plugin.saveSettings();
+				});
+			});
+		new Setting(containerEl).setName(strings.syncManifest).setDesc(strings.syncManifestDescription)
+			.addText((text) => text.setValue(this.plugin.settings.syncManifestPath).setPlaceholder(strings.syncManifestAuto)
+				.onChange(async (value) => { this.plugin.settings.syncManifestPath = value; await this.plugin.saveSettings(); }));
+	}
+
+	private renderExternalPackages(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
+		new Setting(containerEl).setName(strings.externalPackages).setHeading();
+		containerEl.createEl('p', { text: strings.externalPackagesDescription, cls: 'skill-switchboard-muted' });
+		containerEl.createDiv({ text: this.plugin.packageRegistryPath, cls: 'skill-switchboard-path' });
+		const panel = containerEl.createDiv();
+		void this.plugin.reloadLocalPackagePaths().then(() => {
+			if (!panel.isConnected) return;
+			if (this.plugin.localPackagePathsError) panel.createDiv({ text: this.plugin.localPackagePathsError, cls: 'skill-switchboard-muted' });
+			const ids = [...new Set(this.plugin.index.skills.map((skill) => skill.frontmatter.package_id).filter((id): id is string => Boolean(id)))];
+			if (!ids.length) panel.createDiv({ text: strings.externalPackagesEmpty, cls: 'skill-switchboard-muted' });
+			for (const id of ids) {
+				let directory = this.plugin.localPackagePaths[id] ?? '';
+				new Setting(panel).setName(id).setDesc(strings.externalPackagePath)
+					.addText((text) => text.setValue(directory).setPlaceholder('~/tools/toolkit').onChange((value) => { directory = value; }))
+					.addButton((button) => button.setButtonText(strings.saveLocalPath).onClick(async () => {
+						button.setDisabled(true);
+						try { await this.plugin.saveExternalPackagePath(id, directory); new Notice(strings.localPathSaved); }
+						catch (error) { new Notice(`${strings.localPathSaveFailed}: ${error instanceof Error ? error.message : String(error)}`); }
+						finally { button.setDisabled(false); }
+					}));
+			}
+		});
+	}
+
 	private renderTargets(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
 		new Setting(containerEl).setName(strings.runtimeTargets).setHeading();
 		containerEl.createEl('p', {
@@ -269,6 +357,14 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					}),
 			);
+			setting.addDropdown((dropdown) => {
+				dropdown.addOption('', strings.chooseAgent);
+				for (const runtime of ['codex', 'hermes', 'workbuddy', 'opencode', 'antigravity', 'dsh'] as const) dropdown.addOption(runtime, runtime);
+				dropdown.setValue(target.runtime ?? '').onChange(async (value) => {
+					target.runtime = value ? value as RuntimeTarget['runtime'] : undefined;
+					await this.plugin.saveSettings();
+				});
+			});
 			setting.addToggle((toggle) =>
 				toggle.setValue(target.enabled).setTooltip(strings.enabled).onChange(async (value) => {
 					target.enabled = value;

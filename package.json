@@ -1,12 +1,15 @@
 {
 	"name": "skill-switchboard",
-	"version": "0.2.1",
+	"version": "0.3.1",
 	"description": "An Obsidian control surface for Agent Skills, runtimes, adapters, and harnesses.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"test:scanner": "node scripts/test-scanner.mjs",
+		"test:readiness": "node scripts/test-readiness.mjs",
+		"test:lifecycle": "node scripts/test-lifecycle.mjs",
 		"test:native": "node scripts/test-native.mjs",
 		"test:adapter": "node scripts/test-adapter-run.mjs",
 		"test:distribution": "node scripts/test-distribution.mjs",

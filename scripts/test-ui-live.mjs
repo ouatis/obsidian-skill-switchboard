@@ -37,6 +37,7 @@ try {
 	`);
 	try {
 		for (const selector of ['.ssb-deck-node', '.ssb-deck-source', '.ssb-deck-target-button']) {
+			inView(`v.contentEl.querySelector(${JSON.stringify(selector)}).scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});return true;`);
 			const beforeMoves = inView('return v.tooltipRegressionMoves;');
 			const point = inView(`const r=v.contentEl.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};`);
 			for (const offset of [-2, 2]) {
@@ -75,6 +76,17 @@ try {
 	assert.equal(navigation.selected, 'skill-switchboard');
 	assert.equal(navigation.open, true);
 	assert.equal(navigation.visible, true);
+	const settingsEditors = evaluate(`new Promise(resolve=>setTimeout(()=>{
+		const p=app.plugins.plugins['skill-switchboard'],el=app.setting.activeTab.containerEl;
+		resolve({names:Array.from(el.querySelectorAll('.setting-item-name')).map(e=>e.textContent),
+			packages:p.index.skills.map(s=>s.frontmatter.package_id).filter(Boolean),
+			overflow:el.scrollWidth-el.clientWidth,
+			registryVisible:el.textContent.includes(p.packageRegistryPath)});
+	},300))`);
+	assert(settingsEditors.names.includes(baseline.language==='zh-CN'?'唯一来源':'Canonical source'),'distribution-source editor must be visible');
+	assert(settingsEditors.registryVisible,'machine-local registry location must be visible');
+	assert(settingsEditors.overflow<=1,'dynamic settings must fit the actual settings window');
+	for(const id of settingsEditors.packages)assert(settingsEditors.names.includes(id),`external package editor missing: ${id}`);
 	evaluate(`(app.setting.close(),true)`);
 	inView(`v.contentEl.querySelectorAll('.skill-switchboard-stat')[2].click();return true;`);
 	assert.equal(evaluate(`app.setting.activeTab?.id`), 'skill-switchboard');
