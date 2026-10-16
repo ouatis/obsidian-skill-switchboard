@@ -1,8 +1,15 @@
-import { App, Notice, PluginSettingTab, Setting, requireApiVersion } from 'obsidian';
+import { App, PluginSettingTab, Setting, requireApiVersion } from 'obsidian';
 import type { SettingDefinitionItem } from 'obsidian';
 import type SkillSwitchboardPlugin from './main';
 import { getStrings, Language } from './i18n';
-import { HarnessDefinition, RuntimeTarget, SkillRoot, SyncMode } from './types';
+import { HarnessDefinition, RuntimeTarget, SkillRoot } from './types';
+import {
+	renderExternalPackagesSection,
+	renderHarnessesSection,
+	renderRootsSection,
+	renderSyncSourceSection,
+	renderTargetsSection,
+} from './settings/sections';
 
 export interface SkillSwitchboardSettings {
 	roots: SkillRoot[];
@@ -37,10 +44,6 @@ export const DEFAULT_SETTINGS: SkillSwitchboardSettings = {
 	syncManifestPath: '',
 	autoCheck: true,
 };
-
-function newId(prefix: string): string {
-	return `${prefix}-${Date.now().toString(36)}`;
-}
 
 export class SkillSwitchboardSettingTab extends PluginSettingTab {
 	plugin: SkillSwitchboardPlugin;
@@ -223,230 +226,23 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 	}
 
 	private renderRoots(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
-		new Setting(containerEl).setName(strings.skillRoots).setHeading();
-		containerEl.createEl('p', {
-			text: strings.skillRootsDescription,
-			cls: 'skill-switchboard-muted',
-		});
-
-		this.plugin.settings.roots.forEach((root) => {
-			const setting = new Setting(containerEl).setName(root.label || strings.unnamedRoot);
-			setting.addText((text) =>
-				text.setValue(root.label).setPlaceholder(strings.label).onChange(async (value) => {
-					root.label = value;
-					await this.plugin.saveSettings();
-				}),
-			);
-			setting.addDropdown((dropdown) =>
-				dropdown
-					.addOption('vault', strings.vaultRelative)
-					.addOption('external', strings.externalDesktopFolder)
-					.setValue(root.kind)
-					.onChange(async (value) => {
-						root.kind = value as SkillRoot['kind'];
-						await this.plugin.saveSettings();
-					}),
-			);
-			setting.addText((text) =>
-				text.setValue(root.path).setPlaceholder(strings.path).onChange(async (value) => {
-					root.path = value;
-					await this.plugin.saveSettings();
-				}),
-			);
-			setting.addToggle((toggle) =>
-				toggle.setValue(root.enabled).setTooltip(strings.enabled).onChange(async (value) => {
-					root.enabled = value;
-					await this.plugin.saveSettings();
-				}),
-			);
-			setting.addButton((button) =>
-				button.setButtonText(strings.remove).onClick(async () => {
-					this.plugin.settings.roots = this.plugin.settings.roots.filter(
-						(candidate) => candidate.id !== root.id,
-					);
-					await this.plugin.saveSettings();
-				this.refreshTab();
-				}),
-			);
-		});
-
-		new Setting(containerEl).addButton((button) =>
-			button.setButtonText(strings.addSkillRoot).setCta().onClick(async () => {
-				this.plugin.settings.roots.push({
-					id: newId('root'),
-					label: strings.newRoot,
-					path: '',
-					kind: 'external',
-					enabled: true,
-				});
-				await this.plugin.saveSettings();
-				this.refreshTab();
-			}),
-		);
+		renderRootsSection(this.plugin, containerEl, strings, () => this.refreshTab());
 	}
 
 	private renderSyncSource(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
-		new Setting(containerEl).setName(strings.syncSource).setHeading();
-		new Setting(containerEl).setName(strings.canonicalRoot).setDesc(strings.canonicalRootDescription)
-			.addDropdown((dropdown) => {
-				dropdown.addOption('', strings.chooseSource);
-				for (const root of this.plugin.settings.roots.filter((item) => item.enabled)) dropdown.addOption(root.id, root.label || root.path);
-				dropdown.setValue(this.plugin.settings.syncRootId).onChange(async (value) => {
-					this.plugin.settings.syncRootId = value;
-					await this.plugin.saveSettings();
-				});
-			});
-		new Setting(containerEl).setName(strings.syncManifest).setDesc(strings.syncManifestDescription)
-			.addText((text) => text.setValue(this.plugin.settings.syncManifestPath).setPlaceholder(strings.syncManifestAuto)
-				.onChange(async (value) => { this.plugin.settings.syncManifestPath = value; await this.plugin.saveSettings(); }));
+		renderSyncSourceSection(this.plugin, containerEl, strings);
 	}
 
 	private renderExternalPackages(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
-		new Setting(containerEl).setName(strings.externalPackages).setHeading();
-		containerEl.createEl('p', { text: strings.externalPackagesDescription, cls: 'skill-switchboard-muted' });
-		containerEl.createDiv({ text: this.plugin.packageRegistryPath, cls: 'skill-switchboard-path' });
-		const panel = containerEl.createDiv();
-		void this.plugin.reloadLocalPackagePaths().then(() => {
-			if (!panel.isConnected) return;
-			if (this.plugin.localPackagePathsError) panel.createDiv({ text: this.plugin.localPackagePathsError, cls: 'skill-switchboard-muted' });
-			const ids = [...new Set(this.plugin.index.skills.map((skill) => skill.frontmatter.package_id).filter((id): id is string => Boolean(id)))];
-			if (!ids.length) panel.createDiv({ text: strings.externalPackagesEmpty, cls: 'skill-switchboard-muted' });
-			for (const id of ids) {
-				let directory = this.plugin.localPackagePaths[id] ?? '';
-				new Setting(panel).setName(id).setDesc(strings.externalPackagePath)
-					.addText((text) => text.setValue(directory).setPlaceholder('~/tools/toolkit').onChange((value) => { directory = value; }))
-					.addButton((button) => button.setButtonText(strings.saveLocalPath).onClick(async () => {
-						button.setDisabled(true);
-						try { await this.plugin.saveExternalPackagePath(id, directory); new Notice(strings.localPathSaved); }
-						catch (error) { new Notice(`${strings.localPathSaveFailed}: ${error instanceof Error ? error.message : String(error)}`); }
-						finally { button.setDisabled(false); }
-					}));
-			}
-		});
+		renderExternalPackagesSection(this.plugin, containerEl, strings);
 	}
 
 	private renderTargets(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
-		new Setting(containerEl).setName(strings.runtimeTargets).setHeading();
-		containerEl.createEl('p', {
-			text: strings.runtimeTargetsDescription,
-			cls: 'skill-switchboard-muted',
-		});
-
-		this.plugin.settings.targets.forEach((target) => {
-			const setting = new Setting(containerEl).setName(target.label || strings.unnamedTarget);
-			setting.addText((text) =>
-				text.setValue(target.label).setPlaceholder(strings.label).onChange(async (value) => {
-					target.label = value;
-					await this.plugin.saveSettings();
-				}),
-			);
-			setting.addText((text) =>
-				text.setValue(target.path).setPlaceholder(strings.targetPath).onChange(async (value) => {
-					target.path = value;
-					await this.plugin.saveSettings();
-				}),
-			);
-			setting.addDropdown((dropdown) =>
-				dropdown
-					.addOption('copy', strings.copy)
-					.addOption('symlink', strings.symlink)
-					.addOption('wrapper', strings.wrapper)
-					.setValue(target.mode)
-					.onChange(async (value) => {
-						target.mode = value as SyncMode;
-						await this.plugin.saveSettings();
-					}),
-			);
-			setting.addDropdown((dropdown) => {
-				dropdown.addOption('', strings.chooseAgent);
-				for (const runtime of ['codex', 'hermes', 'workbuddy', 'opencode', 'antigravity', 'dsh'] as const) dropdown.addOption(runtime, runtime);
-				dropdown.setValue(target.runtime ?? '').onChange(async (value) => {
-					target.runtime = value ? value as RuntimeTarget['runtime'] : undefined;
-					await this.plugin.saveSettings();
-				});
-			});
-			setting.addToggle((toggle) =>
-				toggle.setValue(target.enabled).setTooltip(strings.enabled).onChange(async (value) => {
-					target.enabled = value;
-					await this.plugin.saveSettings();
-				}),
-			);
-			setting.addButton((button) =>
-				button.setButtonText(strings.remove).onClick(async () => {
-					this.plugin.settings.targets = this.plugin.settings.targets.filter(
-						(candidate) => candidate.id !== target.id,
-					);
-					await this.plugin.saveSettings();
-				this.refreshTab();
-				}),
-			);
-		});
-
-		new Setting(containerEl).addButton((button) =>
-			button.setButtonText(strings.addRuntimeTarget).onClick(async () => {
-				this.plugin.settings.targets.push({
-					id: newId('target'),
-					label: strings.newTarget,
-					path: '',
-					mode: 'wrapper',
-					enabled: true,
-				});
-				await this.plugin.saveSettings();
-				this.refreshTab();
-			}),
-		);
+		renderTargetsSection(this.plugin, containerEl, strings, () => this.refreshTab());
 	}
 
 	private renderHarnesses(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
-		new Setting(containerEl).setName(strings.harnesses).setHeading();
-		containerEl.createEl('p', {
-			text: strings.harnessesDescription,
-			cls: 'skill-switchboard-muted',
-		});
-
-		this.plugin.settings.harnesses.forEach((harness) => {
-			const setting = new Setting(containerEl).setName(harness.label || strings.unnamedHarness);
-			setting.addText((text) =>
-				text.setValue(harness.label).setPlaceholder(strings.label).onChange(async (value) => {
-					harness.label = value;
-					await this.plugin.saveSettings();
-				}),
-			);
-			setting.addText((text) =>
-				text.setValue(harness.command).setPlaceholder(strings.commandTemplate).onChange(async (value) => {
-					harness.command = value;
-					await this.plugin.saveSettings();
-				}),
-			);
-			setting.addToggle((toggle) =>
-				toggle.setValue(harness.enabled).setTooltip(strings.enabled).onChange(async (value) => {
-					harness.enabled = value;
-					await this.plugin.saveSettings();
-				}),
-			);
-			setting.addButton((button) =>
-				button.setButtonText(strings.remove).onClick(async () => {
-					this.plugin.settings.harnesses = this.plugin.settings.harnesses.filter(
-						(candidate) => candidate.id !== harness.id,
-					);
-					await this.plugin.saveSettings();
-				this.refreshTab();
-				}),
-			);
-		});
-
-		new Setting(containerEl).addButton((button) =>
-			button.setButtonText(strings.addHarness).onClick(async () => {
-				this.plugin.settings.harnesses.push({
-					id: newId('harness'),
-					label: strings.newHarness,
-					command: '',
-					enabled: true,
-				});
-				await this.plugin.saveSettings();
-				this.refreshTab();
-			}),
-		);
+		renderHarnessesSection(this.plugin, containerEl, strings, () => this.refreshTab());
 	}
 }
 

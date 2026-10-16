@@ -4,6 +4,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { IndexedSkill, SkillRoot } from './types';
 import { resolveConfiguredPath } from './utils/paths';
+import { normalizeVaultPath } from './utils/vault-paths';
 import { scalarFrontmatter } from './utils/frontmatter';
 
 export interface SkillIndex {
@@ -207,8 +208,4 @@ function isSkillFileName(fileName: string): boolean {
 
 function isDirectMarkdownFile(relativePath: string): boolean {
 	return !relativePath.includes('/') && relativePath.toLowerCase().endsWith('.md');
-}
-
-export function normalizeVaultPath(value: string): string {
-	return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/$/, '');
 }

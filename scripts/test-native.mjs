@@ -135,10 +135,44 @@ try {
 	const codexDrift = await native.checkRuntimeNative(vault, 'codex', targets.codex, manifest.snapshot);
 	assert.equal(codexDrift.kind, 'drift');
 	assert.ok(codexDrift.problems.includes('Description drift: drafting'));
-	const codexRepair = await repair.repairRuntimeNative(vault, 'codex', targets.codex, manifest.snapshot, { backupRoot: path.join(tempRoot, 'backups', 'codex') });
+	const backupHome = path.join(tempRoot, 'backup-home');
+	if (process.platform !== 'win32') {
+		const redirectedHome = path.join(tempRoot, 'redirected-home');
+		const vaultBackupAlias = path.join(vault, 'backup-alias');
+		await fs.mkdir(redirectedHome, { recursive: true });
+		await fs.mkdir(vaultBackupAlias, { recursive: true });
+		await fs.symlink(vaultBackupAlias, path.join(redirectedHome, '.skill-switchboard'));
+		const refusedRepair = await repair.repairRuntimeNative(
+			vault,
+			'codex',
+			targets.codex,
+			manifest.snapshot,
+			{ backupHomeDir: redirectedHome },
+		);
+		assert.equal(refusedRepair.status, 'failed');
+		assert.match(refusedRepair.output, /refused a target inside the vault/);
+		assert.equal((await native.checkRuntimeNative(vault, 'codex', targets.codex, manifest.snapshot)).kind, 'drift');
+	}
+	const codexRepair = await repair.repairRuntimeNative(
+		vault,
+		'codex',
+		targets.codex,
+		manifest.snapshot,
+		{ backupHomeDir: backupHome },
+	);
 	assert.equal(codexRepair.status, 'passed', codexRepair.output);
 	assert.ok(codexRepair.writtenFiles > 0);
 	assert.ok(codexRepair.backupPath && await fileExists(codexRepair.backupPath));
+	const canonicalBackupHome = await fs.realpath(backupHome);
+	const canonicalVault = await fs.realpath(vault);
+	assert.ok(
+		codexRepair.backupPath.startsWith(path.join(canonicalBackupHome, '.skill-switchboard', 'repair-backups')),
+		`default backup root: ${codexRepair.backupPath}`,
+	);
+	assert.equal(path.relative(canonicalVault, codexRepair.backupPath).startsWith('..'), true);
+	const backupIndex = JSON.parse(await fs.readFile(path.join(codexRepair.backupPath, 'backup-index.json'), 'utf8'));
+	assert.ok(backupIndex.entries.length > 0);
+	assert.equal(await fileExists(backupIndex.entries[0].backup), true);
 	assert.equal((await native.checkRuntimeNative(vault, 'codex', targets.codex, manifest.snapshot)).kind, 'clean');
 
 	const hermesReference = path.join(targets.hermes, 'team', 'drafting', 'references', 'support.md');

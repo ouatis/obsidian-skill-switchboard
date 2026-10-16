@@ -27,8 +27,38 @@ jobs:
             - run: npm run test:scanner
             - run: npm run test:readiness
             - run: npm run test:lifecycle
+            - run: npm run test:build-id
+            - run: npm run test:status-queue
             - run: npm run test:native
             - run: npm run test:adapter
+            - run: npm run test:vault-changes
             - run: npm run test:distribution
             - run: npm run test:ui
             - run: npm run lint
+
+    path-portability:
+        runs-on: ${{ matrix.os }}
+
+        strategy:
+            matrix:
+                os: [ubuntu-latest, macos-latest, windows-latest]
+
+        steps:
+            - uses: actions/checkout@v6
+            - name: Use Node.js 22
+              uses: actions/setup-node@v6
+              with:
+                  node-version: 22.x
+                  cache: 'npm'
+            - run: npm ci
+            - run: npm run build
+            - run: npm run test:scanner
+            - run: npm run test:readiness
+            - run: npm run test:lifecycle
+            - run: npm run test:build-id
+            - run: npm run test:status-queue
+            - run: npm run test:native
+            - run: npm run test:adapter
+            - run: npm run test:vault-changes
+            - run: npm run test:distribution
+            - run: npm run test:ui

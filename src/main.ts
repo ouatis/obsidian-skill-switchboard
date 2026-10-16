@@ -1,5 +1,4 @@
 import { Notice, Plugin } from 'obsidian';
-import path from 'node:path';
 import {
 	DEFAULT_SETTINGS,
 	SkillSwitchboardSettings,
@@ -25,9 +24,9 @@ import {
 	runRepairAll,
 	type RepairSummary,
 } from './sync/adapter-run';
-import { normalizeVaultPath } from './scanner';
 import { CheckFreshness } from './sync/freshness';
 import { resolveSyncSource, settingsCheckKey } from './sync/source';
+import { getVaultChangeImpact } from './sync/vault-change-impact';
 import { localPackageRegistryPath, readLocalPackagePaths, resolveLocalPackagePath, saveLocalPackagePath } from './sync/package-paths';
 import { isInside } from './sync/manifest';
 
@@ -145,22 +144,9 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	 * is small, so the whole scan is repeated rather than patched in place.
 	 */
 	private onVaultChanged(...changedPaths: string[]): void {
-		const normalizedRoots = this.settings.roots
-			.filter((root) => root.enabled && root.kind === 'vault' && root.path.trim())
-			.map((root) => normalizeVaultPath(root.path));
-		const relevant = changedPaths.some((changedPath) =>
-			normalizedRoots.some((root) => changedPath === root || changedPath.startsWith(`${root}/`)),
-		);
-		const basePath = this.getVaultBasePath();
-		let affectsChecks = relevant;
-		try {
-			if (basePath) {
-				const source = resolveSyncSource(basePath, this.settings);
-				affectsChecks ||= changedPaths.some((changedPath) => path.resolve(basePath, changedPath) === source.manifestPath);
-			}
-		} catch { /* Invalid source configuration is reported by the next check. */ }
-		if (affectsChecks) { this.invalidateChecks(); this.scheduleBackgroundCheck(); }
-		if (!relevant || !this.settings.autoScan) return;
+		const impact = getVaultChangeImpact(changedPaths, this.settings, this.getVaultBasePath());
+		if (impact.affectsChecks) { this.invalidateChecks(); this.scheduleBackgroundCheck(); }
+		if (!impact.affectsIndex || !this.settings.autoScan) return;
 		if (this.scanQueued) return;
 		this.scanQueued = true;
 		// The `number` control keeps this a number, but data saved by an earlier
@@ -333,7 +319,20 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		// Pause automatic checks while confirmation is open; never overlap a read run and repair.
 		this.adapterRepairRunning = true;
 		this.renderViews();
-		const confirmed = await confirmRepair(this.app, strings, strings.repairConfirmMessage);
+		let confirmed: boolean;
+		try {
+			confirmed = await confirmRepair(this.app, strings, strings.repairConfirmMessage);
+		} catch (error) {
+			const output = error instanceof Error ? error.message : String(error);
+			this.adapterRepair = { status: 'failed', exitCode: 1, output };
+			this.latestOutput = output;
+			this.adapterRepairRunning = false;
+			await writePluginStatus(this, { lastRepair: runRecord('failed', 1, output) });
+			this.renderViews();
+			notifyWithCopy(strings, strings.repairAllFailed(1), output);
+			if (this.checksStale) this.scheduleBackgroundCheck();
+			return;
+		}
 		if (!confirmed) { this.adapterRepairRunning = false; this.renderViews(); if (this.checksStale) this.scheduleBackgroundCheck(); return; }
 		if (this.checkTimer !== null) { window.clearTimeout(this.checkTimer); this.checkTimer = null; }
 
@@ -354,9 +353,22 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		let summary: RepairSummary;
 		try { summary = await runRepairAll(this.adapterContext(revision), vaultPath, strings); }
 		catch (error) {
+			const output = error instanceof Error ? error.message : String(error);
+			this.targetActivity = null;
 			this.adapterRepairRunning = false;
-			if (this.freshness.accept(revision)) this.adapterRepair = { status: 'failed', exitCode: 1, output: error instanceof Error ? error.message : String(error) };
-			this.renderViews();
+			if (!this.disposed && this.freshness.isCurrent(revision)) {
+				this.adapterRepair = { status: 'failed', exitCode: 1, output };
+				this.latestOutput = output;
+				await writePluginStatus(this, {
+					lastRepair: runRecord('failed', 1, output),
+					currentCheck: checkState('stale', 'Repair stopped unexpectedly; run a fresh read-only check.'),
+				});
+				notifyWithCopy(strings, strings.repairAllFailed(1), output);
+			}
+			if (!this.disposed) {
+				this.renderViews();
+				if (this.checksStale) this.scheduleBackgroundCheck();
+			}
 			return;
 		}
 		this.lastRepairSummary = summary;

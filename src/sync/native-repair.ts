@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import type { AdapterCheckResult } from './result';
@@ -35,6 +36,8 @@ export interface NativeRepairOptions {
 	opencodeCommandsDir?: string;
 	/** Test-only override so isolated fixtures never create a backup in the live vault. */
 	backupRoot?: string;
+	/** Test-only home override for exercising the default machine-local backup location. */
+	backupHomeDir?: string;
 }
 
 export async function repairRuntimeNative(
@@ -47,7 +50,14 @@ export async function repairRuntimeNative(
 	let state: RepairState | undefined;
 	try {
 		const configuredTarget = resolveConfiguredPath(targetPath, snapshot.vaultPath);
-		state = new RepairState(snapshot.vaultPath, snapshot.sharedRoot, configuredTarget, runtime, options.backupRoot);
+		state = new RepairState(
+			snapshot.vaultPath,
+			snapshot.sharedRoot,
+			configuredTarget,
+			runtime,
+			options.backupRoot,
+			options.backupHomeDir,
+		);
 		const resolvedTarget = await state.assertOutsideVault(configuredTarget);
 		const skills = loadRuntimeSkills(snapshot, runtime);
 		if (skills.length === 0) return await state.failureResult(`No skills enable the ${runtime} adapter in the configured manifest.`);
@@ -97,13 +107,17 @@ class RepairState {
 		private readonly targetPath: string,
 		private readonly runtime: RuntimeName,
 		backupRoot?: string,
+		private readonly backupHomeDir = os.homedir(),
 	) {
 		this.backupRoot = backupRoot;
 	}
 
 	async assertOutsideVault(candidate: string): Promise<string> {
-		const resolved = await existingRealPath(candidate);
-		if (isInside(this.vaultPath, resolved)) {
+		const [vault, resolved] = await Promise.all([
+			existingRealPath(this.vaultPath),
+			existingRealPath(candidate),
+		]);
+		if (isInside(vault, resolved)) {
 			throw new Error(`Native repair refused a target inside the vault: ${resolved}`);
 		}
 		return resolved;
@@ -159,13 +173,20 @@ class RepairState {
 		if (!(await pathExists(source))) return;
 		if (!this.backupRoot) {
 			const stamp = new Date().toISOString().replace(/[.:]/g, '-');
+			const vault = await existingRealPath(this.vaultPath);
+			const vaultName = path.basename(vault).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'vault';
+			const vaultId = `${vaultName}-${createHash('sha256').update(vault).digest('hex').slice(0, 12)}`;
 			this.backupRoot = path.join(
-				this.vaultPath,
-				'.skill-switchboard-repair-backups',
-				`${stamp}-${this.runtime}`,
+				this.backupHomeDir,
+				'.skill-switchboard',
+				'repair-backups',
+				vaultId,
+				`${stamp}-${this.runtime}-${randomUUID().slice(0, 8)}`,
 			);
 		}
+		await this.assertOutsideVault(this.backupRoot);
 		await fs.mkdir(this.backupRoot, { recursive: true });
+		this.backupRoot = await this.assertOutsideVault(await fs.realpath(this.backupRoot));
 		const backupName = `${String(this.backupNumber).padStart(4, '0')}-${path.basename(source) || 'root'}`;
 		this.backupNumber += 1;
 		const destination = path.join(this.backupRoot, backupName);
@@ -204,6 +225,7 @@ class RepairState {
 
 	private async writeBackupIndex(): Promise<void> {
 		if (!this.backupRoot || this.backupIndex.length === 0) return;
+		await this.assertOutsideVault(this.backupRoot);
 		await fs.writeFile(
 			path.join(this.backupRoot, 'backup-index.json'),
 			JSON.stringify({ runtime: this.runtime, target: this.targetPath, entries: this.backupIndex }, null, 2),

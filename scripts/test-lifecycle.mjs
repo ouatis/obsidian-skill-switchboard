@@ -9,6 +9,8 @@ const tempRoot=await fs.mkdtemp(path.join(os.tmpdir(),'skill-switchboard-lifecyc
 const vaultPath=path.join(tempRoot,'vault');
 await fs.mkdir(vaultPath);
 const statusPath=path.join(vaultPath,'.skill-switchboard-status.json');
+const legacyAt='2026-10-16T16:30:00.000Z';
+await fs.writeFile(statusPath,JSON.stringify({schemaVersion:1,writtenAt:legacyAt,pluginVersion:'0.3.1',lastCheck:{status:'passed',exitCode:0,at:legacyAt,output:'legacy check preserved'},currentCheck:{state:'passed',updatedAt:legacyAt}}));
 const previousWindow=globalThis.window;
 const previousDocument=globalThis.document;
 globalThis.document={};
@@ -16,14 +18,16 @@ const timers=new Map();let timerId=0;
 globalThis.window={setTimeout:fn=>{const id=++timerId;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id),setInterval:()=>++timerId};
 const stub=`export class Plugin{constructor(app){this.app=app;this.manifest={version:'fixture'};this.intervals=[];}async loadData(){return this.app.saved;}async saveData(data){this.app.saved=structuredClone(data);}registerView(){}addRibbonIcon(){}addSettingTab(tab){this.settingTab=tab;}addCommand(){}registerEvent(){}registerInterval(id){this.intervals.push(id);}}
 export class PluginSettingTab{constructor(app,plugin){this.app=app;this.plugin=plugin;}}
-export class ItemView{} export class Modal{} export class Notice{constructor(){globalThis.fixtureNotices++;}}
+export class ItemView{} export class Modal{constructor(){if(globalThis.fixtureModalThrow)throw new Error('fixture modal failure');this.buttons=[];this.titleEl={setText(){}};this.contentEl={createEl(){return{};},createDiv:()=>({createEl:()=>{const button={listeners:{},addEventListener(event,callback){this.listeners[event]=callback;}};this.buttons.push(button);return button;}})};}open(){const button=globalThis.fixtureModalConfirm?this.buttons.at(-1):this.buttons[0];button?.listeners.click?.();}close(){this.onClose?.();}} export class Notice{constructor(){globalThis.fixtureNotices++;}}
 export class Setting{} export class TFile{} export const setIcon=()=>{};export const requireApiVersion=()=>false;`;
 const eventHub=()=>{const callbacks=new Map();return{on(name,callback){const list=callbacks.get(name)||[];list.push(callback);callbacks.set(name,list);return{};},emit(name,...args){for(const callback of callbacks.get(name)||[])callback(...args);}};};
 const waitForStatus=async predicate=>{for(let i=0;i<100;i++){try{const value=JSON.parse(await fs.readFile(statusPath,'utf8'));if(predicate(value))return value;}catch{}await new Promise(resolve=>setTimeout(resolve,5));}throw new Error('Timed out waiting for diagnostic status update.');};
 globalThis.fixtureNotices=0;
+globalThis.fixtureModalConfirm=false;
+globalThis.fixtureModalThrow=false;
 try{
     const bundle=path.join(tempRoot,'main.cjs');
-    await esbuild.build({entryPoints:[path.join(repo,'src/main.ts')],bundle:true,platform:'node',format:'cjs',outfile:bundle,logLevel:'silent',plugins:[{name:'obsidian-fixture',setup(build){build.onResolve({filter:/^obsidian$/},()=>({path:'obsidian',namespace:'fixture'}));build.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:stub,loader:'js'}));}}]});
+    await esbuild.build({entryPoints:[path.join(repo,'src/main.ts')],bundle:true,platform:'node',format:'cjs',outfile:bundle,logLevel:'silent',plugins:[{name:'obsidian-fixture',setup(build){build.onResolve({filter:/^obsidian$/},()=>({path:'obsidian',namespace:'fixture'}));build.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:stub,loader:'js'}));build.onResolve({filter:/^virtual:skill-switchboard-build-info$/},()=>({path:'build-info',namespace:'fixture-build-info'}));build.onLoad({filter:/.*/,namespace:'fixture-build-info'},()=>({contents:"export const BUILD_ID = 'fixture-build-001';",loader:'js'}));}}]});
     const imported=await import(pathToFileURL(bundle).href);
     const Plugin=imported.default.default??imported.default;
     const vaultEvents=eventHub(),workspaceEvents=eventHub();let content='---\nname: test\ndescription: Fixture\n---\n# Test\n';
@@ -31,6 +35,7 @@ try{
     const target={id:'agent',runtime:'codex',mode:'wrapper',enabled:true,path:path.join(tempRoot,'runtime'),label:'Agent'};
     const app={saved:{roots:[root],targets:[target],harnesses:[],language:'zh-CN',autoScan:false,autoCheck:false,scanDelayMs:500,showDistributionBoard:true},vault:{...vaultEvents,getMarkdownFiles:()=>[{path:'team/skills/test.md',name:'test.md'}],read:async()=>content,adapter:{getBasePath:()=>vaultPath}},workspace:{...workspaceEvents,layoutReady:true,getLeavesOfType:()=>[],onLayoutReady:callback=>callback()}};
     const plugin=new Plugin(app);await plugin.onload();assert.equal(plugin.settings.syncRootId,'team');assert.equal(plugin.settings.language,'zh-CN');assert.deepEqual(plugin.settings.roots,[root]);
+    const upgradedStatus=await waitForStatus(value=>value.buildId==='fixture-build-001');assert.equal(upgradedStatus.pluginVersion,'fixture');assert.equal(upgradedStatus.lastCheck.output,'legacy check preserved');assert.equal(upgradedStatus.currentCheck.state,'stale');
     const tab=plugin.settingTab,sectionCalls=[];
     const sectionMethods=['renderRoots','renderSyncSource','renderExternalPackages','renderTargets','renderHarnesses'];
     tab.renderSection=(_setting,render)=>render({});
@@ -48,7 +53,7 @@ try{
     const pass={status:'passed',output:'ok',exitCode:0};
     const provider={id:'fixture',inspectManifest:async()=>({...pass,snapshot:{},resources:{status:'passed',packages:[],crossDevice:'unverified'}}),checkRuntime:async()=>{checks++;return pass;},repairRuntime:async()=>{writes++;return pass;}};
     plugin.syncProvider=provider;await plugin.checkAdapters(false);assert.equal(plugin.checksStale,false);assert.equal(checks,1);assert.equal(globalThis.fixtureNotices,0);
-    let diagnostic=JSON.parse(await fs.readFile(statusPath,'utf8'));assert.equal(diagnostic.schemaVersion,1);assert.equal(diagnostic.currentCheck.state,'passed');assert.match(diagnostic.lastCheck.output,/ok/);
+    let diagnostic=JSON.parse(await fs.readFile(statusPath,'utf8'));assert.equal(diagnostic.schemaVersion,1);assert.equal(diagnostic.pluginVersion,'fixture');assert.equal(diagnostic.buildId,'fixture-build-001');assert.equal(diagnostic.currentCheck.state,'passed');assert.match(diagnostic.lastCheck.output,/ok/);
     plugin.syncProvider={...provider,checkRuntime:async()=>{throw new Error('fixture check failure');}};await plugin.checkAdapters(false);diagnostic=JSON.parse(await fs.readFile(statusPath,'utf8'));assert.equal(diagnostic.currentCheck.state,'failed');assert.equal(diagnostic.lastCheck.output,'fixture check failure','thrown check errors are persisted verbatim');
     plugin.syncProvider=provider;await plugin.checkAdapters(false);
     content+='Changed.\n';app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(plugin.checksStale,true);assert.equal(plugin.adapterCheck,null);assert.deepEqual(plugin.targetChecks,[]);assert.equal(timers.size,0,'automatic checking can be disabled');
@@ -76,11 +81,17 @@ try{
     await assert.rejects(()=>plugin.saveExternalPackagePath('drawing',path.join(vaultPath,'toolkit')));
     fire();await settle();
     plugin.settings.syncManifestPath='configuration/new.json';await plugin.saveSettings();assert.equal(plugin.checksStale,true,'settings changes invalidate immediately');fire();await settle();
+    globalThis.fixtureModalConfirm=false;await plugin.repairAllAdapters();assert.equal(plugin.adapterRepairRunning,false,'canceling confirmation releases the repair lock');assert.equal(writes,0,'canceling confirmation never writes runtime files');
+    globalThis.fixtureModalThrow=true;await plugin.repairAllAdapters();globalThis.fixtureModalThrow=false;assert.equal(plugin.adapterRepairRunning,false,'a confirmation UI failure releases the repair lock');assert.equal(plugin.adapterRepair.output,'fixture modal failure');assert.equal(plugin.latestCheckOutput(),'fixture modal failure','a failed confirmation replaces the previous copied output');
+    globalThis.fixtureModalConfirm=true;plugin.syncProvider={...provider,inspectManifest:async()=>{throw new Error('fixture repair failure');}};await plugin.repairAllAdapters();assert.equal(plugin.adapterRepairRunning,false,'an unexpected repair failure releases the repair lock');assert.equal(plugin.adapterRepair.output,'fixture repair failure');assert.equal(plugin.checksStale,true,'an interrupted repair must leave readiness stale');
+    diagnostic=await waitForStatus(value=>value.lastRepair?.output==='fixture repair failure');assert.equal(diagnostic.lastRepair.status,'failed');assert.equal(diagnostic.currentCheck.state,'stale');assert.match(diagnostic.currentCheck.reason,/Repair stopped unexpectedly/);
+    plugin.syncProvider=provider;fire();await settle();assert.equal(plugin.checksStale,false,'a read-only check restores readiness after repair failure');
+    await plugin.repairAllAdapters();assert.equal(plugin.adapterRepairRunning,false,'the repair action works again after failure');assert.equal(plugin.adapterRepair.status,'passed');assert.equal(writes,0,'a clean repair check remains read-only');
     workspaceEvents.emit('active-leaf-change',{view:{getViewType:()=> 'skill-switchboard-view'}});assert.equal(timers.size,1,'opening the view requests a quiet check');
     plugin.onunload();assert.equal(timers.size,0,'unload cancels queued checks');assert.equal(writes,0,'background checking never repairs');
-    console.log('Lifecycle checks passed: native settings render all editors, persisted language, local paths excluded from synced settings, quiet read-only runs, immediate invalidation, late-result rejection, one follow-up, and unload cleanup.');
+    console.log('Lifecycle checks passed: native settings, local-path privacy, quiet checks, stale-result rejection, repair confirmation and failure recovery, read-only recheck, and unload cleanup.');
 }finally{
-    globalThis.window=previousWindow;delete globalThis.fixtureNotices;
+    globalThis.window=previousWindow;delete globalThis.fixtureNotices;delete globalThis.fixtureModalConfirm;delete globalThis.fixtureModalThrow;
     globalThis.document=previousDocument;
     assert.equal(path.dirname(await fs.realpath(tempRoot)),await fs.realpath(os.tmpdir()));assert(path.basename(tempRoot).startsWith('skill-switchboard-lifecycle-'));
     await fs.rm(tempRoot,{recursive:true,force:true});
