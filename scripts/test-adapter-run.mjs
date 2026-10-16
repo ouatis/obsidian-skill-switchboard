@@ -55,6 +55,28 @@ try {
 		assert.deepEqual(kept.map((item) => item.id), ['t1']);
 	}
 
+	// Read-only resource failures name the affected skill and issue without leaking a machine-local path.
+	{
+		const localPath = '/Users/example/private-toolkit';
+		const provider = {
+			inspectManifest: async () => ({
+				status: 'passed', output: '[manifest] PASS', exitCode: 0, snapshot: {},
+				resources: { status: 'failed', crossDevice: 'unverified', packages: [{
+					skill: 'anatomy', location: 'external', path: localPath, status: 'failed', files: 0, verifiedFiles: 0,
+					issues: [{ code: 'unconfigured', path: 'drawing-kit' }, { code: 'invalid', path: localPath }],
+				}] },
+			}),
+			checkRuntime: async () => passed(),
+			repairRuntime: async () => passed(),
+		};
+		const outcome = await run.checkAllTargets({ provider, settings: { targets: [target()] } }, '/vault', 'no targets');
+		assert.equal(outcome.result.status, 'failed');
+		assert.match(outcome.result.output, /anatomy — external package/);
+		assert.match(outcome.result.output, /unconfigured: drawing-kit/);
+		assert.match(outcome.result.output, /machine-local path omitted/);
+		assert.ok(!outcome.result.output.includes(localPath), 'external absolute paths stay out of the vault diagnostic');
+	}
+
 	// A passing manifest short-circuits: no target is checked.
 	{
 		let checked = 0;

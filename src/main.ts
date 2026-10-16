@@ -8,7 +8,7 @@ import {
 import { SkillIndex, scanConfiguredRoots } from './scanner';
 import { SkillSwitchboardView, VIEW_TYPE_SKILL_SWITCHBOARD } from './ui/view';
 import { notifyWithCopy } from './ui/notice';
-import { runRecord, writePluginStatus } from './status';
+import { checkState, runRecord, writePluginStatus } from './status';
 import { getStrings } from './i18n';
 import { registerCommands } from './commands';
 import { confirmRepair } from './ui/confirm-modal';
@@ -81,6 +81,9 @@ export default class SkillSwitchboardPlugin extends Plugin {
 
 		this.app.workspace.onLayoutReady(() => {
 			if (this.disposed) return;
+			void writePluginStatus(this, {
+				currentCheck: checkState('stale', 'Plugin loaded; waiting for a fresh read-only check.'),
+			});
 			// Obsidian emits create events while loading the vault. Subscribe only
 			// after that pass, then scan the complete file list once.
 			this.registerVaultChangeEvents();
@@ -100,15 +103,21 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		this.disposed = true;
 		this.freshness.invalidate();
 		if (this.checkTimer !== null) window.clearTimeout(this.checkTimer);
+		if (this.adapterCheckRunning) {
+			void writePluginStatus(this, {
+				currentCheck: checkState('stale', 'Plugin unloaded before the read-only check finished.'),
+			});
+		}
 	}
 
-	private invalidateChecks(): void {
+	private invalidateChecks(reason = 'Source, settings, or indexed skills changed; run a fresh read-only check.'): void {
 		this.freshness.invalidate();
 		this.latestOutput = '';
 		this.adapterCheck = null;
 		this.manifestCheck = null;
 		this.targetChecks = [];
 		this.targetActivity = null;
+		void writePluginStatus(this, { currentCheck: checkState('stale', reason) });
 		this.renderViews();
 	}
 
@@ -256,7 +265,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		if (this.adapterCheckRunning || this.adapterRepairRunning) return;
 		if (this.checkTimer !== null) { window.clearTimeout(this.checkTimer); this.checkTimer = null; }
 		this.adapterCheckRunning = true;
-		this.invalidateChecks();
+		this.invalidateChecks('A new read-only check was requested; the previous result is no longer current.');
 		this.renderViews();
 
 		const strings = getStrings(this.settings.language);
@@ -265,6 +274,9 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		try {
 			await this.refreshIndex(false);
 			revision = this.freshness.capture();
+			if (!this.disposed && this.freshness.isCurrent(revision)) {
+				await writePluginStatus(this, { currentCheck: checkState('running') });
+			}
 			const run = basePath ? await checkAllTargets(this.adapterContext(revision), basePath, strings.noRepairTargets) : null;
 			const result = run?.result ?? desktopPathFailure();
 			if (!this.disposed && this.freshness.accept(revision)) {
@@ -273,10 +285,22 @@ export default class SkillSwitchboardPlugin extends Plugin {
 				this.latestOutput = result.output;
 				this.targetCheckedAt = Date.now();
 				if (showNotice) notifyWithCopy(strings, result.status === 'passed' ? strings.adapterCheckPassed : strings.adapterCheckFailed(result.exitCode), result.output);
-				await writePluginStatus(this, { lastCheck: runRecord(result.status, result.exitCode, result.output) });
+				await writePluginStatus(this, {
+					lastCheck: runRecord(result.status, result.exitCode, result.output),
+					currentCheck: checkState(result.status),
+				});
 			}
 		} catch (error) {
-			if (!this.disposed && this.freshness.accept(revision)) this.adapterCheck = { status: 'failed', exitCode: 1, output: error instanceof Error ? error.message : String(error) };
+			if (!this.disposed && this.freshness.accept(revision)) {
+				const output = error instanceof Error ? error.message : String(error);
+				this.adapterCheck = { status: 'failed', exitCode: 1, output };
+				this.latestOutput = output;
+				this.targetCheckedAt = Date.now();
+				await writePluginStatus(this, {
+					lastCheck: runRecord('failed', 1, output),
+					currentCheck: checkState('failed'),
+				});
+			}
 		} finally {
 			this.adapterCheckRunning = false;
 			this.targetActivity = null;
@@ -322,6 +346,9 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		this.targetCheckedAt = 0;
 		this.freshness.invalidate();
 		const revision = this.freshness.capture();
+		void writePluginStatus(this, {
+			currentCheck: checkState('stale', 'Repair may change runtime files; run a separate read-only check afterward.'),
+		});
 		this.renderViews();
 
 		let summary: RepairSummary;

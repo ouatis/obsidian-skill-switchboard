@@ -8,6 +8,7 @@ const repo=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const tempRoot=await fs.mkdtemp(path.join(os.tmpdir(),'skill-switchboard-lifecycle-'));
 const vaultPath=path.join(tempRoot,'vault');
 await fs.mkdir(vaultPath);
+const statusPath=path.join(vaultPath,'.skill-switchboard-status.json');
 const previousWindow=globalThis.window;
 const previousDocument=globalThis.document;
 globalThis.document={};
@@ -18,6 +19,7 @@ export class PluginSettingTab{constructor(app,plugin){this.app=app;this.plugin=p
 export class ItemView{} export class Modal{} export class Notice{constructor(){globalThis.fixtureNotices++;}}
 export class Setting{} export class TFile{} export const setIcon=()=>{};export const requireApiVersion=()=>false;`;
 const eventHub=()=>{const callbacks=new Map();return{on(name,callback){const list=callbacks.get(name)||[];list.push(callback);callbacks.set(name,list);return{};},emit(name,...args){for(const callback of callbacks.get(name)||[])callback(...args);}};};
+const waitForStatus=async predicate=>{for(let i=0;i<100;i++){try{const value=JSON.parse(await fs.readFile(statusPath,'utf8'));if(predicate(value))return value;}catch{}await new Promise(resolve=>setTimeout(resolve,5));}throw new Error('Timed out waiting for diagnostic status update.');};
 globalThis.fixtureNotices=0;
 try{
     const bundle=path.join(tempRoot,'main.cjs');
@@ -46,7 +48,11 @@ try{
     const pass={status:'passed',output:'ok',exitCode:0};
     const provider={id:'fixture',inspectManifest:async()=>({...pass,snapshot:{},resources:{status:'passed',packages:[],crossDevice:'unverified'}}),checkRuntime:async()=>{checks++;return pass;},repairRuntime:async()=>{writes++;return pass;}};
     plugin.syncProvider=provider;await plugin.checkAdapters(false);assert.equal(plugin.checksStale,false);assert.equal(checks,1);assert.equal(globalThis.fixtureNotices,0);
+    let diagnostic=JSON.parse(await fs.readFile(statusPath,'utf8'));assert.equal(diagnostic.schemaVersion,1);assert.equal(diagnostic.currentCheck.state,'passed');assert.match(diagnostic.lastCheck.output,/ok/);
+    plugin.syncProvider={...provider,checkRuntime:async()=>{throw new Error('fixture check failure');}};await plugin.checkAdapters(false);diagnostic=JSON.parse(await fs.readFile(statusPath,'utf8'));assert.equal(diagnostic.currentCheck.state,'failed');assert.equal(diagnostic.lastCheck.output,'fixture check failure','thrown check errors are persisted verbatim');
+    plugin.syncProvider=provider;await plugin.checkAdapters(false);
     content+='Changed.\n';app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(plugin.checksStale,true);assert.equal(plugin.adapterCheck,null);assert.deepEqual(plugin.targetChecks,[]);assert.equal(timers.size,0,'automatic checking can be disabled');
+    diagnostic=await waitForStatus(value=>value.currentCheck?.state==='stale');assert.match(diagnostic.currentCheck.reason,/changed/);assert.match(diagnostic.lastCheck.output,/ok/,'stale state keeps the last completed check as history');
     assert.notEqual(plugin.latestCheckOutput(),'ok','stale diagnostics cannot copy an old success');
     plugin.settings.autoCheck=true;await plugin.saveSettings();assert.equal(timers.size,1);
     const fire=()=>{const callbacks=[...timers.values()];timers.clear();for(const callback of callbacks)callback();};
@@ -55,8 +61,9 @@ try{
     let release,started;
     const start=new Promise(resolve=>{started=resolve;});
     plugin.syncProvider={...provider,checkRuntime:async()=>{started();return await new Promise(resolve=>{release=resolve;});}};
-    const oldRun=plugin.checkAdapters(false);await start;content+='Changed again.\n';app.vault.emit('modify',{path:'team/skills/test.md'});release(pass);await oldRun;
+    const oldRun=plugin.checkAdapters(false);await start;diagnostic=await waitForStatus(value=>value.currentCheck?.state==='running');content+='Changed again.\n';app.vault.emit('modify',{path:'team/skills/test.md'});await waitForStatus(value=>value.currentCheck?.state==='stale');release(pass);await oldRun;
     assert.equal(plugin.checksStale,true,'a late result must not restore the old green light');assert.equal(plugin.adapterCheck,null);assert.deepEqual(plugin.targetChecks,[]);assert.equal(timers.size,1,'schedule exactly one follow-up');
+    diagnostic=JSON.parse(await fs.readFile(statusPath,'utf8'));assert.equal(diagnostic.currentCheck.state,'stale','discarded late results must not restore the persisted green light');
     plugin.syncProvider=provider;fire();await settle();assert.equal(plugin.checksStale,false);
     Object.defineProperty(plugin,'packageRegistryPath',{get:()=>path.join(tempRoot,'local-only','packages.json')});
     plugin.index.skills[0].frontmatter.package_id='drawing';

@@ -85,6 +85,8 @@ Both older and newer Obsidian settings render the source, target, harness, and e
 
 Automatic checking is enabled by default. It runs quietly on opening, after source/manifest/settings changes, and every five minutes. Source changes invalidate previous green states immediately; a result that finishes after another change is discarded and followed by a fresh check. Automatic checks never repair runtime files. You can disable them in settings and check manually. Runtime-folder changes outside the vault are discovered on the next check, not claimed as continuously watched.
 
+The plugin keeps a hidden `.skill-switchboard-status.json` diagnostic file at the vault root. `currentCheck.state` distinguishes `stale`, `running`, `passed`, and `failed`; changes and plugin reloads mark an old result stale instead of presenting it as current. `lastCheck` remains the most recent completed read-only check, and its `output` contains the failure text even when a check throws unexpectedly. Resource failures identify the affected skill and issue; machine-local absolute package paths are omitted. Status writes are serialized and replaced atomically, so an interrupted write does not leave a partial JSON file. This file reports local check state only; it does not prove another device synced the source or that an agent loaded it.
+
 One-click repair still requires confirmation. It validates source resources before writing, records changed skills/files and recovery paths, and rechecks each changed target. The summary counts structured write records, not log text; partial failures remain visible. Old repair results are labeled as history rather than current readiness.
 
 ### Adapter manifest

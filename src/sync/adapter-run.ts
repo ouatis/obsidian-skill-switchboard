@@ -3,6 +3,7 @@ import type { Strings } from '../i18n';
 import type { RuntimeName, RuntimeTarget } from '../types';
 import type { AdapterCheckResult } from './result';
 import type { ManifestCheckResult, SyncProvider, SyncRuntimeCheckResult, SyncManifestSnapshot, SyncRepairResult } from '../sync-provider';
+import type { ResourceCheck, PackageCheck } from './resources';
 import { resolveConfiguredPath } from '../utils/paths';
 
 /** A runtime target that is eligible for drift repair. */
@@ -53,13 +54,38 @@ export async function checkAllTargets(
 	const manifest = await context.provider.inspectManifest(vaultPath);
 	if (manifest.status === 'failed') return { result: manifest, manifest, checks: [] };
 	const checks = await collectTargetChecks(context, vaultPath, manifest.snapshot ?? undefined);
-	const resourceFailure: AdapterCheckResult | null = manifest.resources?.status === 'failed'
-		? { status: 'failed', exitCode: 1, output: 'Source resources are missing, changed, or invalid.' } : null;
+	const resourceReport = manifest.resources && manifest.resources.status !== 'passed'
+		? formatResourceCheck(manifest.resources) : null;
 	return {
-		result: combineResults(manifest, aggregateTargetChecks(checks, emptyMessage), ...(resourceFailure ? [resourceFailure] : [])),
+		result: combineResults(manifest, aggregateTargetChecks(checks, emptyMessage), ...(resourceReport ? [resourceReport] : [])),
 		manifest,
 		checks,
 	};
+}
+
+function formatResourceCheck(resources: ResourceCheck): AdapterCheckResult {
+	const failed = resources.status === 'failed';
+	const affected = resources.packages.filter((item) => item.status !== 'passed');
+	const details = affected.map((item) => {
+		const location = item.location === 'external' ? 'external package (machine-local mapping)' : 'source package';
+		const issues = item.issues.map((issue) => {
+			const issuePath = issue.path ? `: ${displayResourcePath(item, issue.path)}` : '';
+			return `  - ${issue.code}${issuePath}`;
+		});
+		return [`${item.skill} — ${location}`, ...issues].join('\n');
+	});
+	return {
+		status: failed ? 'failed' : 'passed',
+		exitCode: failed ? 1 : 0,
+		output: [`[resources] ${failed ? 'FAIL' : 'WARNING'}`, ...details].join('\n'),
+	};
+}
+
+function displayResourcePath(item: PackageCheck, value: string): string {
+	if (item.location === 'external' && (path.isAbsolute(value) || /^[a-z]:[\\/]/i.test(value) || value.startsWith('\\\\'))) {
+		return '(machine-local path omitted)';
+	}
+	return value;
 }
 
 export async function collectTargetChecks(
