@@ -104,6 +104,7 @@ export const ZH_CN: Strings = {
 	noSearchResults: '没有匹配的结果。',
 	openSource: '打开源文件',
 	pathCopied: '路径已复制到剪贴板',
+	pathCopyFailed: '复制路径失败',
 	sourceMissing: '源文件已不在库中，请刷新索引。',
 	jumpToList: '跳到列表',
 	manageInSettings: '去设置中管理',

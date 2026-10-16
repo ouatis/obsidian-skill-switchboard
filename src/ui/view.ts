@@ -334,8 +334,8 @@ export class SkillSwitchboardView extends ItemView {
 	private async openSkill(skill: IndexedSkill): Promise<void> {
 		const strings = getStrings(this.plugin.settings.language);
 		if (skill.rootKind !== 'vault') {
-			await copyTextToClipboard(skill.path);
-			new Notice(strings.pathCopied);
+			const copied = await copyTextToClipboard(skill.path);
+			new Notice(copied ? strings.pathCopied : strings.pathCopyFailed);
 			return;
 		}
 		// The scanner only indexes markdown files, so narrow the lookup result before

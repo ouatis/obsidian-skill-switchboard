@@ -107,6 +107,7 @@ export interface Strings {
 	noSearchResults: string;
 	openSource: string;
 	pathCopied: string;
+	pathCopyFailed: string;
 	sourceMissing: string;
 	jumpToList: string;
 	manageInSettings: string;
