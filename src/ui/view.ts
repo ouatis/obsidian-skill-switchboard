@@ -3,9 +3,9 @@ import type SkillSwitchboardPlugin from '../main';
 import { IndexedSkill, RootKind } from '../types';
 import { getStrings, Strings } from '../i18n';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { renderAdapterStatus } from './adapter-status';
 import { DistributionBoard } from './distribution-board';
 import { distributionNodes } from './distribution-state';
-import { repairTotals } from './repair-summary';
 import { openPluginSettings } from './open-settings';
 
 export const VIEW_TYPE_SKILL_SWITCHBOARD = 'skill-switchboard-view';
@@ -83,7 +83,7 @@ export class SkillSwitchboardView extends ItemView {
 			for (const error of this.plugin.index.errors) errorBox.createDiv({ text: error });
 		}
 
-		this.renderAdapterSection(contentEl, strings);
+		renderAdapterStatus(contentEl, this.plugin, strings, (output) => this.copyOutput(output));
 
 		if (this.plugin.index.skills.length === 0) {
 			const empty = contentEl.createDiv('skill-switchboard-empty');
@@ -248,99 +248,6 @@ export class SkillSwitchboardView extends ItemView {
 
 		const settings = actionButton(utilities, strings.settings, 'settings');
 		settings.addEventListener('click', () => this.openSettings());
-	}
-
-	/**
-	 * Adapter diagnostics stay collapsed by default: a clean run is a single line,
-	 * and the raw multi-target output is only worth reading when something failed.
-	 */
-	private renderAdapterSection(contentEl: HTMLElement, strings: Strings): void {
-		const check = this.plugin.adapterCheck;
-		const checkRunning = this.plugin.adapterCheckRunning;
-		const repair = this.plugin.adapterRepair;
-		const repairRunning = this.plugin.adapterRepairRunning;
-		const section = contentEl.createDiv('skill-switchboard-check');
-		if (this.plugin.checksStale && !checkRunning && !repairRunning) {
-			this.renderStatusRow(section, this.plugin.targetCheckedAt ? strings.checksStale : strings.checkNotYet, 'unknown', 'clock');
-		}
-		if (checkRunning || check) {
-			const passed = check?.status === 'passed' || (this.plugin.targetChecks.length > 0 && this.plugin.targetChecks.every((item) => item.result.status === 'passed'));
-			const text = checkRunning
-				? strings.adapterCheckRunning
-				: passed
-					? strings.adapterCheckPassed
-					: strings.adapterCheckFailed(check?.exitCode ?? 1);
-			this.renderStatusRow(section, text, checkRunning ? 'running' : passed ? 'passed' : 'failed', checkRunning ? 'scan-line' : passed ? 'check-circle' : 'alert-triangle');
-			if (check?.output && !passed) {
-				this.renderOutputBlock(section, strings, strings.adapterCheckOutput, check.output);
-			}
-		}
-		const resources = this.plugin.manifestCheck?.resources;
-		if (resources && !this.plugin.checksStale) {
-			const text = resources.status === 'failed' ? strings.resourcesFailed : resources.status === 'warning' ? strings.resourcesWarning
-				: resources.packages.length ? strings.resourcesComplete(resources.packages.length, resources.packages.reduce((count, item) => count + item.verifiedFiles, 0)) : strings.resourcesNone;
-			this.renderStatusRow(section, `${strings.resourcesLabel} · ${text}`, resources.status === 'failed' ? 'failed' : resources.status === 'warning' ? 'warning' : 'passed', resources.status === 'passed' ? 'package-check' : 'package-search');
-			if (resources.packages.length) {
-				const details = section.createEl('details', { cls: 'skill-switchboard-details' });
-				details.createEl('summary', { text: strings.resourceDetails, cls: 'skill-switchboard-check-label' });
-				const body = details.createDiv('skill-switchboard-resource-details');
-				for (const item of resources.packages) {
-					body.createEl('strong', { text: `${item.skill} · ${item.verifiedFiles}/${item.files}` });
-					if (item.location === 'external') body.createDiv({ text: strings.externalPackageStorage, cls: 'skill-switchboard-evidence-note' });
-					body.createDiv({ text: item.path, cls: 'skill-switchboard-path' });
-					for (const issue of item.issues.slice(0, 30)) body.createDiv({ text: `${strings.resourceIssue(issue.code)} · ${issue.path}` });
-					if (item.issues.length > 30) body.createDiv({ text: strings.moreLines(item.issues.length - 30) });
-				}
-			}
-		}
-		section.createDiv({ text: `${strings.crossDeviceLabel} · ${strings.crossDeviceUnverified}`, cls: 'skill-switchboard-evidence-note' });
-
-		if (repairRunning || repair) {
-			const passed = repair?.status === 'passed';
-			const summary = this.plugin.lastRepairSummary;
-			const totals = summary ? repairTotals(summary) : null;
-			const text = repairRunning
-				? strings.repairAllRunning
-				: passed
-					? totals?.targets ? strings.repairSummary(totals.targets, totals.skills, totals.files) : strings.repairAllNoDrift
-					: summary?.aborted && summary.manifest.resources?.status === 'failed' ? strings.sourceResourcesBlocked
-						: summary && totals ? strings.repairPartial(totals.files, summary.failedCount) : strings.adapterCheckFailed(repair?.exitCode ?? 1);
-			this.renderStatusRow(section, repairRunning ? text : `${strings.lastRepairResult} · ${text}`, repairRunning ? 'running' : this.plugin.checksStale ? 'unknown' : passed ? 'passed' : 'failed', repairRunning || passed ? 'wrench' : 'alert-triangle');
-			if (summary?.details.length) {
-				const details = section.createEl('details', { cls: 'skill-switchboard-details' });
-				details.createEl('summary', { text: strings.repairChanges, cls: 'skill-switchboard-check-label' });
-				const body = details.createDiv('skill-switchboard-resource-details');
-				for (const item of summary.details) {
-					body.createEl('strong', { text: `${item.label} · ${item.repair.native?.changedSkills.join(', ') || (item.followUp?.status === 'passed' ? strings.adapterCheckPassed : strings.repairAllFailed(1))}` });
-					for (const change of item.repair.native?.changes ?? []) body.createDiv({ text: `${strings.changeLabel(change.kind, change.action)} · ${change.path}`, cls: 'skill-switchboard-path' });
-					if (item.repair.native?.backupPath) body.createDiv({ text: `${strings.repairBackup} · ${item.repair.native.backupPath}`, cls: 'skill-switchboard-path' });
-				}
-			}
-			if (repair?.output && !passed) {
-				this.renderOutputBlock(section, strings, strings.repairAllOutput, repair.output);
-			}
-		}
-	}
-
-	private renderStatusRow(container: HTMLElement, text: string, state: 'passed' | 'failed' | 'running' | 'warning' | 'unknown', icon: string): void {
-		const row = container.createDiv('skill-switchboard-status');
-		row.addClass(`is-${state}`);
-		const marker = row.createSpan('skill-switchboard-status-icon');
-		setIcon(marker, icon);
-		row.createSpan({ text });
-	}
-
-	private renderOutputBlock(container: HTMLElement, strings: Strings, label: string, output: string): void {
-		const details = container.createEl('details', { cls: 'skill-switchboard-details' });
-		details.createEl('summary', { text: label, cls: 'skill-switchboard-check-label' });
-		const body = details.createDiv('skill-switchboard-output-body');
-		const copyButton = body.createEl('button', {
-			text: strings.copyOutput,
-			cls: 'skill-switchboard-copy-button',
-		});
-		copyButton.setAttribute('aria-label', strings.copyOutput);
-		copyButton.addEventListener('click', () => void this.copyOutput(output));
-		body.createEl('pre', { text: output, cls: 'skill-switchboard-check-output' });
 	}
 
 	private renderSkillGroups(
