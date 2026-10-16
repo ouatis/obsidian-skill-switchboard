@@ -16,6 +16,7 @@ const previousDocument=globalThis.document;
 globalThis.document={};
 const timers=new Map();let timerId=0;
 globalThis.window={setTimeout:(fn,delay=0)=>{const id=++timerId;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),setInterval:()=>++timerId};
+let plugin;
 const stub=`export class Plugin{constructor(app){this.app=app;this.manifest={version:'fixture'};this.intervals=[];}async loadData(){return this.app.saved;}async saveData(data){this.app.saved=structuredClone(data);}registerView(){}addRibbonIcon(){}addSettingTab(tab){this.settingTab=tab;}addCommand(){}registerEvent(){}registerInterval(id){this.intervals.push(id);}}
 export class PluginSettingTab{constructor(app,plugin){this.app=app;this.plugin=plugin;}}
 export class ItemView{} export class Modal{constructor(){if(globalThis.fixtureModalThrow)throw new Error('fixture modal failure');this.buttons=[];this.titleEl={setText(){}};this.contentEl={createEl(){return{};},createDiv:()=>({createEl:()=>{const button={listeners:{},addEventListener(event,callback){this.listeners[event]=callback;}};this.buttons.push(button);return button;}})};}open(){const button=globalThis.fixtureModalConfirm?this.buttons.at(-1):this.buttons[0];button?.listeners.click?.();}close(){this.onClose?.();}} export class Notice{constructor(){globalThis.fixtureNotices++;}}
@@ -34,7 +35,7 @@ try{
     const root={id:'team',kind:'vault',label:'Team',path:'team/skills',enabled:true};
     const target={id:'agent',runtime:'codex',mode:'wrapper',enabled:true,path:path.join(tempRoot,'runtime'),label:'Agent'};
     const app={saved:{roots:[root],targets:[target],harnesses:[],language:'zh-CN',autoScan:false,autoCheck:false,scanDelayMs:500,showDistributionBoard:true},vault:{...vaultEvents,getMarkdownFiles:()=>{vaultScans++;return[{path:'team/skills/test.md',name:'test.md'},{path:'other/skills/new.md',name:'new.md'}];},read:async()=>content,adapter:{getBasePath:()=>vaultPath}},workspace:{...workspaceEvents,layoutReady:true,getLeavesOfType:()=>[],onLayoutReady:callback=>callback()}};
-    const plugin=new Plugin(app);await plugin.onload();assert.equal(plugin.settings.syncRootId,'team');assert.equal(plugin.settings.language,'zh-CN');assert.deepEqual(plugin.settings.roots,[root]);
+    plugin=new Plugin(app);await plugin.onload();assert.equal(plugin.settings.syncRootId,'team');assert.equal(plugin.settings.language,'zh-CN');assert.deepEqual(plugin.settings.roots,[root]);
     const upgradedStatus=await waitForStatus(value=>value.buildId==='fixture-build-001');assert.equal(upgradedStatus.pluginVersion,'fixture');assert.equal(upgradedStatus.lastCheck.output,'legacy check preserved');assert.equal(upgradedStatus.currentCheck.state,'stale');
     const tab=plugin.settingTab,sectionCalls=[];
     const sectionMethods=['renderRoots','renderSyncSource','renderExternalPackages','renderTargets','renderHarnesses'];
@@ -105,6 +106,9 @@ try{
     plugin.onunload();assert.equal(timers.size,0,'unload cancels queued checks and scans');assert.equal(writes,0,'background checking never repairs');
     console.log('Lifecycle checks passed: settings and local-path privacy, quiet checks, stale-result rejection, trailing scan debounce, scan coalescing, root-change refresh, stale-scan rejection, repair confirmation and recovery, read-only recheck, and timer cleanup.');
 }finally{
+    plugin?.onunload();timers.clear();
+    const statusWrites=globalThis.window?.[Symbol.for('ouatis.skill-switchboard.status-write-queues')];
+    while(statusWrites?.size)await Promise.allSettled([...statusWrites.values()]);
     globalThis.window=previousWindow;delete globalThis.fixtureNotices;delete globalThis.fixtureModalConfirm;delete globalThis.fixtureModalThrow;
     globalThis.document=previousDocument;
     assert.equal(path.dirname(await fs.realpath(tempRoot)),await fs.realpath(os.tmpdir()));assert(path.basename(tempRoot).startsWith('skill-switchboard-lifecycle-'));
