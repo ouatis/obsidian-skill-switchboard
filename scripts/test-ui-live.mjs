@@ -157,7 +157,8 @@ try {
 
 	const originalIndex = evaluate(`app.plugins.plugins["skill-switchboard"].index`);
 	const externalSkill = {
-		id: 'external-copy-fixture', name: 'External copy fixture', description: 'Temporary UI fixture',
+		id: 'external-copy-fixture', name: 'External copy fixture',
+		description: 'Temporary UI fixture with a deliberately long description that must wrap in a narrow panel without covering the technical details. '.repeat(3),
 		rootLabel: 'External fixture', rootKind: 'external', path: '/tmp/external-copy-fixture.md',
 		relativePath: 'external-copy-fixture.md', sha256: '0123456789abcdef'.repeat(4), frontmatter: {},
 	};
@@ -166,26 +167,43 @@ try {
 			const clipboard=w.navigator.clipboard;v.pathCopyRegressionCalls=[];
 			v.pathCopyRegressionWriteText=Object.getOwnPropertyDescriptor(clipboard,'writeText')||null;
 			clipboard.writeText=async text=>v.pathCopyRegressionCalls.push(text);
-			p.index={...p.index,skills:[${JSON.stringify(externalSkill)}],errors:[]};v.query='';v.renderIndex();return true;
+			p.index={...p.index,skills:[${JSON.stringify(externalSkill)}],errors:[]};v.query='';v.contentEl.style.width='320px';v.renderIndex();return true;
 		`);
 		for (const language of ['en', 'zh-CN']) {
-			const externalCard = inView(`p.settings.language=${JSON.stringify(language)};v.renderIndex();const c=v.contentEl.querySelector('.skill-switchboard-card');return {role:c.getAttribute('role'),tabindex:c.getAttribute('tabindex'),label:c.getAttribute('aria-label'),badge:c.querySelector('.skill-switchboard-badge')?.textContent,actionable:c.classList.contains('is-actionable')};`);
-			assert.equal(externalCard.role, 'button');
-			assert.equal(externalCard.tabindex, '0');
+			const externalCard = inView(`p.settings.language=${JSON.stringify(language)};v.renderIndex();const c=v.contentEl.querySelector('.skill-switchboard-card'),b=c.querySelector('.skill-switchboard-card-action'),d=b.querySelector('.skill-switchboard-description'),br=b.getBoundingClientRect(),dr=d.getBoundingClientRect(),tr=c.querySelector('details').getBoundingClientRect();return {cardRole:c.getAttribute('role'),cardTabindex:c.getAttribute('tabindex'),tag:b.tagName,type:b.type,tabindex:b.tabIndex,label:b.getAttribute('aria-label'),nestedInteractive:Boolean(b.querySelector('details,button,a,input,select,textarea,[tabindex]')),badge:c.querySelector('.skill-switchboard-badge')?.textContent,actionable:c.classList.contains('is-actionable'),cardOverflow:c.scrollWidth-c.clientWidth,cardVerticalOverflow:c.scrollHeight-c.clientHeight,actionOverflow:b.scrollWidth-b.clientWidth,descriptionOverflow:d.scrollWidth-d.clientWidth,descriptionContained:dr.bottom<=br.bottom+1,detailsBelowDescription:tr.top>=dr.bottom-1};`);
+			assert.equal(externalCard.cardRole, null, 'the card is a visual group, not a simulated button around nested controls');
+			assert.equal(externalCard.cardTabindex, null);
+			assert.equal(externalCard.tag, 'BUTTON');
+			assert.equal(externalCard.type, 'button');
+			assert.equal(externalCard.tabindex, 0);
 			assert.equal(externalCard.label, `${language === 'zh-CN' ? '复制来源路径' : 'Copy source path'}: External copy fixture`);
+			assert.equal(externalCard.nestedInteractive, false, 'the native action does not contain the technical-details disclosure');
 			assert.equal(externalCard.badge, language === 'zh-CN' ? '外部目录' : 'External');
 			assert.equal(externalCard.actionable, true);
+			assert.ok(externalCard.cardOverflow <= 1, 'narrow skill cards fit their list row');
+			assert.ok(externalCard.cardVerticalOverflow <= 1, 'the card grows to contain its description');
+			assert.ok(externalCard.actionOverflow <= 1, 'native button text wraps instead of overflowing');
+			assert.ok(externalCard.descriptionOverflow <= 1, 'long descriptions stay inside the card');
+			assert.equal(externalCard.descriptionContained, true, 'the native button grows to contain long descriptions');
+			assert.equal(externalCard.detailsBelowDescription, true, 'the disclosure follows the description without overlap');
 		}
 		inView(`p.settings.language=${JSON.stringify(baseline.language)};v.renderIndex();return true;`);
-		inView(`v.contentEl.querySelector('.skill-switchboard-card').click();return true;`);
+		inView(`v.contentEl.querySelector('.skill-switchboard-card-action').click();return true;`);
 		await evaluate(`new Promise(resolve=>setTimeout(()=>resolve(true),20))`);
-		assert.deepEqual(inView('return v.pathCopyRegressionCalls;'), [externalSkill.path], 'clicking an external skill copies its path');
-		for (const key of ['Enter', ' ']) {
-			const prevented = inView(`const c=v.contentEl.querySelector('.skill-switchboard-card'),e=new w.KeyboardEvent('keydown',{key:${JSON.stringify(key)},bubbles:true,cancelable:true});c.dispatchEvent(e);return e.defaultPrevented;`);
-			assert.equal(prevented, true, `${JSON.stringify(key)} activates the copy button`);
+		assert.deepEqual(inView('return v.pathCopyRegressionCalls;'), [externalSkill.path], 'clicking the native action copies the external skill path');
+		for (const key of [{ key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' }, { key: ' ', code: 'Space', windowsVirtualKeyCode: 32, text: ' ' }]) {
+			const focused = inView(`const b=v.contentEl.querySelector('.skill-switchboard-card-action');b.focus();return w.document.activeElement===b;`);
+			assert.equal(focused, true, 'the native action receives keyboard focus');
+			for (const type of ['keyDown', 'keyUp']) {
+				const params = { type, key: key.key, code: key.code, windowsVirtualKeyCode: key.windowsVirtualKeyCode };
+				if (type === 'keyDown' && key.text) params.text = key.text;
+				execFileSync(cli, [`vault=${vault}`, 'dev:cdp', 'method=Input.dispatchKeyEvent',
+					`params=${JSON.stringify(params)}`],
+				{ encoding: 'utf8', windowsHide: true, timeout: 20000, maxBuffer: 1024 * 1024 });
+			}
 			await evaluate(`new Promise(resolve=>setTimeout(()=>resolve(true),20))`);
 		}
-		assert.deepEqual(inView('return v.pathCopyRegressionCalls;'), [externalSkill.path, externalSkill.path, externalSkill.path], 'Enter and Space both copy the external path');
+		assert.deepEqual(inView('return v.pathCopyRegressionCalls;'), [externalSkill.path, externalSkill.path, externalSkill.path], 'real Enter and Space key events copy the external path');
 	} finally {
 		inView(`
 			p.index=${JSON.stringify(originalIndex)};v.query=${JSON.stringify(baseline.query)};
@@ -194,7 +212,7 @@ try {
 			delete v.pathCopyRegressionCalls;delete v.pathCopyRegressionWriteText;v.renderIndex();return true;
 		`);
 	}
-	console.log('Live UI checks passed: tooltip-safe accessible SVG, native hover, family styling, settings navigation, bilingual layouts, search/reset, and light/dark status contrast.');
+	console.log('Live UI checks passed: native skill actions and keyboard activation, narrow-card wrapping, tooltip-safe accessible SVG, native hover, family styling, settings navigation, bilingual layouts, search/reset, and light/dark status contrast.');
 } finally {
 	inView(`
 		p.settings.language=${JSON.stringify(baseline.language)};v.query=${JSON.stringify(baseline.query)};v.contentEl.style.width=${JSON.stringify(baseline.width)};

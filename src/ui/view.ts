@@ -293,27 +293,20 @@ export class SkillSwitchboardView extends ItemView {
 		const card = container.createDiv('skill-switchboard-card');
 		const opensInObsidian = skill.rootKind === 'vault';
 		card.addClass('is-actionable');
-		card.setAttribute('role', opensInObsidian ? 'link' : 'button');
-		card.setAttribute('tabindex', '0');
-		card.setAttribute('aria-label', `${opensInObsidian ? strings.openSource : strings.copySourcePath}: ${skill.name}`);
-		card.addEventListener('click', (event) => {
-			if ((event.target as HTMLElement).closest('details, button')) return;
-			void this.openSkill(skill);
-		});
-		card.addEventListener('keydown', (event) => {
-			const activates = event.key === 'Enter' || (!opensInObsidian && event.key === ' ');
-			if (!activates || (event.target as HTMLElement).closest('details, button')) return;
-			event.preventDefault();
-			void this.openSkill(skill);
-		});
+		const action = card.createEl('button', { cls: 'skill-switchboard-card-action' });
+		action.setAttribute('type', 'button');
+		const actionLabel = opensInObsidian ? strings.openSource : strings.copySourcePath;
+		action.setAttribute('aria-label', `${actionLabel}: ${skill.name}`);
+		action.setAttribute('title', actionLabel);
+		action.addEventListener('click', () => void this.openSkill(skill));
 
-		const heading = card.createDiv('skill-switchboard-card-heading');
+		const heading = action.createSpan('skill-switchboard-card-heading');
 		heading.createEl('strong', { text: skill.name });
 		if (skill.rootKind !== 'vault') {
 			heading.createSpan({ text: rootKindLabel(skill.rootKind, strings), cls: 'skill-switchboard-badge' });
 		}
 
-		card.createDiv({
+		action.createSpan({
 			text: skill.description || strings.noDescription,
 			cls: 'skill-switchboard-description',
 		});

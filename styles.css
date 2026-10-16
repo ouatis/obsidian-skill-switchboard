@@ -424,7 +424,6 @@
 	background: var(--ssb-surface);
 	border: none;
 	border-bottom: 1px solid var(--ssb-border);
-	padding: 16px;
 	transition: background var(--ssb-motion) var(--ssb-ease);
 }
 
@@ -440,7 +439,26 @@
 	background: var(--ssb-soft);
 }
 
-.skill-switchboard-card.is-actionable:focus-visible {
+.skill-switchboard-card-action {
+	appearance: none;
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	box-sizing: border-box;
+	color: inherit;
+	cursor: pointer;
+	display: block;
+	font: inherit;
+	height: auto;
+	max-height: none;
+	min-height: 0;
+	padding: 16px 16px var(--size-2-2);
+	text-align: left;
+	white-space: normal;
+	width: 100%;
+}
+
+.skill-switchboard-card-action:focus-visible {
 	outline: 2px solid var(--interactive-accent);
 	outline-offset: -3px;
 }
@@ -470,15 +488,17 @@
 
 .skill-switchboard-description {
 	color: var(--text-muted);
+	display: block;
 	font-size: var(--font-ui-smaller);
 	line-height: 1.5;
 	margin-top: var(--size-2-1);
+	overflow-wrap: anywhere;
 }
 
 /* Collapsible details ----------------------------------------------------- */
 
 .skill-switchboard-details {
-	margin-top: var(--size-2-2);
+	padding: 0 16px 16px;
 }
 
 .skill-switchboard-details > summary {
