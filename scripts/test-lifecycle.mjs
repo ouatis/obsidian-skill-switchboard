@@ -27,7 +27,7 @@ try{
     const vaultEvents=eventHub(),workspaceEvents=eventHub();let content='---\nname: test\ndescription: Fixture\n---\n# Test\n';
     const root={id:'team',kind:'vault',label:'Team',path:'team/skills',enabled:true};
     const target={id:'agent',runtime:'codex',mode:'wrapper',enabled:true,path:path.join(tempRoot,'runtime'),label:'Agent'};
-    const app={saved:{roots:[root],targets:[target],harnesses:[],language:'zh-CN',autoScan:false,autoCheck:false,scanDelayMs:500,showDistributionBoard:true},vault:{...vaultEvents,getMarkdownFiles:()=>[{path:'team/skills/test.md',name:'test.md'}],read:async()=>content,adapter:{getBasePath:()=>vaultPath}},workspace:{...workspaceEvents,getLeavesOfType:()=>[],onLayoutReady:callback=>callback()}};
+    const app={saved:{roots:[root],targets:[target],harnesses:[],language:'zh-CN',autoScan:false,autoCheck:false,scanDelayMs:500,showDistributionBoard:true},vault:{...vaultEvents,getMarkdownFiles:()=>[{path:'team/skills/test.md',name:'test.md'}],read:async()=>content,adapter:{getBasePath:()=>vaultPath}},workspace:{...workspaceEvents,layoutReady:true,getLeavesOfType:()=>[],onLayoutReady:callback=>callback()}};
     const plugin=new Plugin(app);await plugin.onload();assert.equal(plugin.settings.syncRootId,'team');assert.equal(plugin.settings.language,'zh-CN');assert.deepEqual(plugin.settings.roots,[root]);
     const tab=plugin.settingTab,sectionCalls=[];
     const sectionMethods=['renderRoots','renderSyncSource','renderExternalPackages','renderTargets','renderHarnesses'];

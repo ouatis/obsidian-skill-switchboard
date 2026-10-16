@@ -10,7 +10,7 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'skill-switchboard-native-'));
 const vault = path.join(tempRoot, 'fixture-vault');
 const sharedRoot = path.join(vault, 'methods', 'skills');
-const location = { sharedRoot, manifestPath: path.join(vault, 'configuration', 'adapters.json') };
+const location = { sharedRoot, manifestPath: path.join(vault, 'configuration', 'adapters.json'), confineToVault: true };
 
 try {
 	await fs.mkdir(path.join(sharedRoot, 'references'), { recursive: true });
@@ -77,6 +77,31 @@ try {
 	const manifest = await native.inspectManifest(vault, location);
 	assert.equal(manifest.status, 'passed', manifest.output);
 	assert.ok(manifest.snapshot, 'native manifest snapshot should exist');
+	const outsideRoot = path.join(tempRoot, 'outside-skills');
+	await fs.mkdir(outsideRoot, { recursive: true });
+	const escapedRoot = await native.inspectManifest(vault, {
+		...location,
+		sharedRoot: outsideRoot,
+	});
+	assert.equal(escapedRoot.status, 'failed');
+	assert.match(escapedRoot.output, /resolves outside the vault/);
+	if (process.platform !== 'win32') {
+		const escapedRootLink = path.join(vault, 'escaped-skills');
+		await fs.symlink(outsideRoot, escapedRootLink);
+		const escapedRootSymlink = await native.inspectManifest(vault, { ...location, sharedRoot: escapedRootLink });
+		assert.equal(escapedRootSymlink.status, 'failed');
+		assert.match(escapedRootSymlink.output, /resolves outside the vault/);
+		const outsideManifest = path.join(tempRoot, 'outside-manifest.json');
+		await fs.writeFile(outsideManifest, '{}', 'utf8');
+		const escapedManifestLink = path.join(vault, 'escaped-manifest.json');
+		await fs.symlink(outsideManifest, escapedManifestLink);
+		const escapedManifestSymlink = await native.inspectManifest(vault, {
+			...location,
+			manifestPath: escapedManifestLink,
+		});
+		assert.equal(escapedManifestSymlink.status, 'failed');
+		assert.match(escapedManifestSymlink.output, /manifest resolves outside the vault/);
+	}
 	// Derived from the canonical root so adding a skill doesn't fail the suite.
 	const canonicalSkillCount = (
 		await fs.readdir(sharedRoot, { withFileTypes: true })

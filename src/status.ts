@@ -24,6 +24,14 @@ export interface StatusExtra {
 export async function writePluginStatus(plugin: SkillSwitchboardPlugin, extra: StatusExtra = {}): Promise<void> {
 	const basePath = plugin.getVaultBasePath();
 	if (!basePath) return;
+	const statusPath = path.join(basePath, STATUS_FILE);
+	let previous: StatusExtra = {};
+	try {
+		const existing = JSON.parse(await fs.readFile(statusPath, 'utf8')) as StatusExtra;
+		previous = { lastCheck: existing.lastCheck, lastRepair: existing.lastRepair };
+	} catch {
+		// A missing or malformed diagnostic file must not prevent a fresh status write.
+	}
 	const payload = {
 		writtenAt: new Date().toISOString(),
 		pluginVersion: plugin.manifest.version,
@@ -37,10 +45,11 @@ export async function writePluginStatus(plugin: SkillSwitchboardPlugin, extra: S
 			path: target.path,
 		})),
 		skillCount: plugin.index.skills.length,
+		...previous,
 		...extra,
 	};
 	try {
-		await fs.writeFile(path.join(basePath, STATUS_FILE), `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+		await fs.writeFile(statusPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 	} catch (error) {
 		// Diagnostics must never break the plugin itself.
 		void error;

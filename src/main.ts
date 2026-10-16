@@ -79,31 +79,21 @@ export default class SkillSwitchboardPlugin extends Plugin {
 
 		this.addSettingTab(new SkillSwitchboardSettingTab(this.app, this));
 
-		await this.refreshIndex(false);
-		void writePluginStatus(this);
-
-		{
-			// A vault event beats a fixed interval: the index only needs rebuilding
-			// when a file inside a configured root actually changed, and polling
-			// would re-scan the vault every interval for nothing.
-			this.registerEvent(
-				this.app.vault.on('create', (file) => this.onVaultChanged(file.path)),
-			);
-			this.registerEvent(
-				this.app.vault.on('modify', (file) => this.onVaultChanged(file.path)),
-			);
-			this.registerEvent(
-				this.app.vault.on('delete', (file) => this.onVaultChanged(file.path)),
-			);
-			this.registerEvent(
-				this.app.vault.on('rename', (file, oldPath) => this.onVaultChanged(file.path, oldPath)),
-			);
-		}
+		this.app.workspace.onLayoutReady(() => {
+			if (this.disposed) return;
+			// Obsidian emits create events while loading the vault. Subscribe only
+			// after that pass, then scan the complete file list once.
+			this.registerVaultChangeEvents();
+			void this.refreshIndex(false).then(() => {
+				if (this.disposed) return;
+				void writePluginStatus(this);
+				this.scheduleBackgroundCheck();
+			});
+		});
 		this.registerEvent(this.app.workspace.on('active-leaf-change', (leaf) => {
 			if (leaf?.view.getViewType() === VIEW_TYPE_SKILL_SWITCHBOARD) this.scheduleBackgroundCheck();
 		}));
 		this.registerInterval(window.setInterval(() => this.scheduleBackgroundCheck(), 5 * 60 * 1000));
-		this.app.workspace.onLayoutReady(() => this.scheduleBackgroundCheck());
 	}
 
 	onunload(): void {
@@ -123,13 +113,22 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	}
 
 	private scheduleBackgroundCheck(): void {
-		if (this.disposed || !this.settings.autoCheck || this.adapterCheckRunning || this.adapterRepairRunning) return;
+		if (!this.app.workspace.layoutReady || this.disposed || !this.settings.autoCheck || this.adapterCheckRunning || this.adapterRepairRunning) return;
 		if (this.checkTimer !== null) window.clearTimeout(this.checkTimer);
 		const delay = Number.isFinite(this.settings.scanDelayMs) ? Math.max(0, this.settings.scanDelayMs) : INDEX_DEBOUNCE_MS;
 		this.checkTimer = window.setTimeout(() => {
 			this.checkTimer = null;
 			if (!this.disposed && this.settings.autoCheck) void this.checkAdapters(false);
 		}, delay);
+	}
+
+	private registerVaultChangeEvents(): void {
+		// A vault event beats a fixed interval: the index only needs rebuilding
+		// when a file inside a configured root actually changed.
+		this.registerEvent(this.app.vault.on('create', (file) => this.onVaultChanged(file.path)));
+		this.registerEvent(this.app.vault.on('modify', (file) => this.onVaultChanged(file.path)));
+		this.registerEvent(this.app.vault.on('delete', (file) => this.onVaultChanged(file.path)));
+		this.registerEvent(this.app.vault.on('rename', (file, oldPath) => this.onVaultChanged(file.path, oldPath)));
 	}
 
 	/**

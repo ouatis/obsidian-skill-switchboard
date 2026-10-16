@@ -30,7 +30,7 @@ try{
     const {repairTotals}=await load('ui/repair-summary');
     const config={roots:[{id:'other',kind:'vault',enabled:true,path:'unrelated'},{id:'team',kind:'vault',enabled:true,path:'knowledge/team-skills'}],syncRootId:'team',syncManifestPath:'config/agent-skills.json',targets:[]};
     const location=sources.resolveSyncSource(vault,config);
-    assert.deepEqual(location,{sharedRoot:source,manifestPath});
+    assert.deepEqual(location,{sharedRoot:source,manifestPath,confineToVault:true});
     assert.equal(sources.resolveSyncSource(vault,{...config,syncManifestPath:''}).manifestPath,path.join(vault,'knowledge','skills-manifest.json'));
     assert.throws(()=>sources.resolveSyncSource(vault,{...config,syncRootId:'missing'}),/Choose/);
     assert.throws(()=>sources.resolveSyncSource(vault,{roots:[{id:'bad',kind:'vault',enabled:true,path:'../outside'}],syncRootId:'bad'}),/stay inside/);

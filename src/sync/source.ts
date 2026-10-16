@@ -11,6 +11,8 @@ export interface SyncSourceSettings {
 export interface ManifestLocation {
 	sharedRoot: string;
 	manifestPath: string;
+	/** Reject symlink escapes when the configured source is inside the vault. */
+	confineToVault?: boolean;
 	/** Optional injection for isolated tests; production uses the home-directory registry. */
 	packageRegistryPath?: string;
 }
@@ -31,6 +33,7 @@ export function resolveSyncSource(vaultPath: string, settings: SyncSourceSetting
 		manifestPath: settings.syncManifestPath?.trim()
 			? resolveConfiguredPath(settings.syncManifestPath, vaultPath)
 			: path.join(path.dirname(sharedRoot), 'skills-manifest.json'),
+		confineToVault: root.kind === 'vault',
 	};
 }
 

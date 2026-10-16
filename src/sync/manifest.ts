@@ -37,8 +37,16 @@ export interface ManifestCheckResult extends AdapterCheckResult {
 export async function inspectManifest(vaultPath: string, location?: ManifestLocation): Promise<ManifestCheckResult> {
 	try {
 		const resolvedVault = await fs.realpath(vaultPath);
-		const manifestPath = resolveConfiguredPath(location?.manifestPath ?? 'skills-manifest.json', resolvedVault);
-		const sharedRoot = await fs.realpath(resolveConfiguredPath(location?.sharedRoot ?? 'skills', resolvedVault));
+		const [manifestPath, sharedRoot] = await Promise.all([
+			fs.realpath(resolveConfiguredPath(location?.manifestPath ?? 'skills-manifest.json', resolvedVault)),
+			fs.realpath(resolveConfiguredPath(location?.sharedRoot ?? 'skills', resolvedVault)),
+		]);
+		if (location?.confineToVault && !isInside(resolvedVault, sharedRoot)) {
+			throw new Error(`Vault skills root resolves outside the vault: ${location.sharedRoot}`);
+		}
+		if (location?.confineToVault && !isInside(resolvedVault, manifestPath)) {
+			throw new Error(`Vault skills manifest resolves outside the vault: ${location.manifestPath}`);
+		}
 		const relativeRoot = path.relative(resolvedVault, sharedRoot).replaceAll(path.sep, '/');
 		const sharedPrefix = isInside(resolvedVault, sharedRoot) ? `${relativeRoot}/` : '';
 		const value: unknown = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
