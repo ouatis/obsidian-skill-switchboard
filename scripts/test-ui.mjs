@@ -48,6 +48,8 @@ try {
 	assert.equal(openPluginSettings({ setting: { open() {}, openTabById() { throw new Error('unavailable'); } } }, 'skill-switchboard'), false);
 	assert.equal(getStrings('zh-CN').viewTitle, '技能接线台');
 	assert.equal(getStrings('en').viewTitle, 'Skill Switchboard');
+	assert.equal(getStrings('en').externalRoot, 'External');
+	assert.equal(getStrings('zh-CN').externalRoot, '外部目录');
 	for (const locale of ['en', 'zh-CN']) {
 		assert.ok(getStrings(locale).viewDescription);
 		assert.ok(getStrings(locale).skillLibrary);

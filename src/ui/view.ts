@@ -310,7 +310,7 @@ export class SkillSwitchboardView extends ItemView {
 		const heading = card.createDiv('skill-switchboard-card-heading');
 		heading.createEl('strong', { text: skill.name });
 		if (skill.rootKind !== 'vault') {
-			heading.createSpan({ text: rootKindLabel(skill.rootKind), cls: 'skill-switchboard-badge' });
+			heading.createSpan({ text: rootKindLabel(skill.rootKind, strings), cls: 'skill-switchboard-badge' });
 		}
 
 		card.createDiv({
@@ -347,8 +347,8 @@ export class SkillSwitchboardView extends ItemView {
 	}
 }
 
-function rootKindLabel(kind: RootKind): string {
-	return kind === 'external' ? 'external' : 'vault';
+function rootKindLabel(kind: RootKind, strings: Strings): string {
+	return kind === 'external' ? strings.externalRoot : strings.vaultRelative;
 }
 
 function actionButton(parent: HTMLElement, label: string, icon: string, extraClass = ''): HTMLButtonElement {

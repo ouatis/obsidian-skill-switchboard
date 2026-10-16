@@ -168,11 +168,15 @@ try {
 			clipboard.writeText=async text=>v.pathCopyRegressionCalls.push(text);
 			p.index={...p.index,skills:[${JSON.stringify(externalSkill)}],errors:[]};v.query='';v.renderIndex();return true;
 		`);
-		const externalCard = inView(`const c=v.contentEl.querySelector('.skill-switchboard-card');return {role:c.getAttribute('role'),tabindex:c.getAttribute('tabindex'),label:c.getAttribute('aria-label'),actionable:c.classList.contains('is-actionable')};`);
-		assert.equal(externalCard.role, 'button');
-		assert.equal(externalCard.tabindex, '0');
-		assert.equal(externalCard.label, `${baseline.language === 'zh-CN' ? '复制来源路径' : 'Copy source path'}: External copy fixture`);
-		assert.equal(externalCard.actionable, true);
+		for (const language of ['en', 'zh-CN']) {
+			const externalCard = inView(`p.settings.language=${JSON.stringify(language)};v.renderIndex();const c=v.contentEl.querySelector('.skill-switchboard-card');return {role:c.getAttribute('role'),tabindex:c.getAttribute('tabindex'),label:c.getAttribute('aria-label'),badge:c.querySelector('.skill-switchboard-badge')?.textContent,actionable:c.classList.contains('is-actionable')};`);
+			assert.equal(externalCard.role, 'button');
+			assert.equal(externalCard.tabindex, '0');
+			assert.equal(externalCard.label, `${language === 'zh-CN' ? '复制来源路径' : 'Copy source path'}: External copy fixture`);
+			assert.equal(externalCard.badge, language === 'zh-CN' ? '外部目录' : 'External');
+			assert.equal(externalCard.actionable, true);
+		}
+		inView(`p.settings.language=${JSON.stringify(baseline.language)};v.renderIndex();return true;`);
 		inView(`v.contentEl.querySelector('.skill-switchboard-card').click();return true;`);
 		await evaluate(`new Promise(resolve=>setTimeout(()=>resolve(true),20))`);
 		assert.deepEqual(inView('return v.pathCopyRegressionCalls;'), [externalSkill.path], 'clicking an external skill copies its path');
