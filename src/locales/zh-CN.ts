@@ -117,7 +117,7 @@ export const ZH_CN: Strings = {
 	scanAutomatically: '自动扫描',
 	scanAutomaticallyDescription: 'Obsidian 打开时刷新只读技能索引。',
 	scanDelay: '扫描延迟（毫秒）',
-	scanDelayDescription: '文件变动后等待多久再重建索引。调大可吸收连续编辑。',
+	scanDelayDescription: '文件或技能来源目录设置变动后，等待多久再重建索引。调大可合并连续变动。',
 	skillRoots: '技能来源目录',
 	skillRootsDescription: '来源可以是 vault 内相对目录，也可以是外部目录。为便于跨机器使用，外部路径请用 ~ 表示当前用户主目录，例如 ~/.codex/skills。插件只扫描已配置的来源。',
 	unnamedRoot: '未命名来源',

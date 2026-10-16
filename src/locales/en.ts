@@ -117,7 +117,7 @@ export const EN: Strings = {
 	scanAutomatically: 'Scan automatically',
 	scanAutomaticallyDescription: 'Refresh the read-only skill index while Obsidian is open.',
 	scanDelay: 'Scan delay (milliseconds)',
-	scanDelayDescription: 'How long to wait after a file change before rebuilding the index. Higher values absorb bursts of edits.',
+	scanDelayDescription: 'How long to wait after a file or skill-root change before rebuilding the index. Higher values absorb bursts of edits.',
 	skillRoots: 'Skill roots',
 	skillRootsDescription: 'A root may be a vault-relative folder or an external folder. For portable external paths, use ~ for the current user home (for example ~/.codex/skills). Only configured roots are scanned.',
 	unnamedRoot: 'Unnamed root',

@@ -33,7 +33,7 @@ try{
     const vaultEvents=eventHub(),workspaceEvents=eventHub();let content='---\nname: test\ndescription: Fixture\n---\n# Test\n',vaultScans=0;
     const root={id:'team',kind:'vault',label:'Team',path:'team/skills',enabled:true};
     const target={id:'agent',runtime:'codex',mode:'wrapper',enabled:true,path:path.join(tempRoot,'runtime'),label:'Agent'};
-    const app={saved:{roots:[root],targets:[target],harnesses:[],language:'zh-CN',autoScan:false,autoCheck:false,scanDelayMs:500,showDistributionBoard:true},vault:{...vaultEvents,getMarkdownFiles:()=>{vaultScans++;return[{path:'team/skills/test.md',name:'test.md'}];},read:async()=>content,adapter:{getBasePath:()=>vaultPath}},workspace:{...workspaceEvents,layoutReady:true,getLeavesOfType:()=>[],onLayoutReady:callback=>callback()}};
+    const app={saved:{roots:[root],targets:[target],harnesses:[],language:'zh-CN',autoScan:false,autoCheck:false,scanDelayMs:500,showDistributionBoard:true},vault:{...vaultEvents,getMarkdownFiles:()=>{vaultScans++;return[{path:'team/skills/test.md',name:'test.md'},{path:'other/skills/new.md',name:'new.md'}];},read:async()=>content,adapter:{getBasePath:()=>vaultPath}},workspace:{...workspaceEvents,layoutReady:true,getLeavesOfType:()=>[],onLayoutReady:callback=>callback()}};
     const plugin=new Plugin(app);await plugin.onload();assert.equal(plugin.settings.syncRootId,'team');assert.equal(plugin.settings.language,'zh-CN');assert.deepEqual(plugin.settings.roots,[root]);
     const upgradedStatus=await waitForStatus(value=>value.buildId==='fixture-build-001');assert.equal(upgradedStatus.pluginVersion,'fixture');assert.equal(upgradedStatus.lastCheck.output,'legacy check preserved');assert.equal(upgradedStatus.currentCheck.state,'stale');
     const tab=plugin.settingTab,sectionCalls=[];
@@ -93,9 +93,17 @@ try{
     plugin.settings.autoScan=true;const beforeDebouncedScan=vaultScans;app.vault.emit('modify',{path:'team/skills/test.md'});const firstScanTimer=[...timers.keys()][0];
     app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(timers.size,1,'repeated edits stay in one debounce window');assert.equal(timers.has(firstScanTimer),false,'each edit restarts the scan delay');fire();assert.equal(vaultScans,beforeDebouncedScan+1,'a burst of edits performs one index scan');
     plugin.settings.autoCheck=true;app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(timers.size,2,'a change queues one read-only check and one auto-scan');const beforeCoalescedScan=vaultScans;fire();await settle();assert.equal(vaultScans,beforeCoalescedScan+1,'the read-only check satisfies the queued auto-scan');
-    plugin.settings.autoCheck=false;app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(timers.size,1,'a final rescan is pending');
+    plugin.settings.autoCheck=false;plugin.settings.autoScan=false;
+    const originalRead=app.vault.read;let releaseOldRead,signalOldRead;const oldReadStarted=new Promise(resolve=>{signalOldRead=resolve;});
+    app.vault.read=async file=>{if(file.path==='team/skills/test.md'){signalOldRead();return await new Promise(resolve=>{releaseOldRead=resolve;});}return content;};
+    const staleScan=plugin.refreshIndex(false);await oldReadStarted;
+    plugin.settings.roots=[{id:'other',kind:'vault',label:'Other',path:'other/skills',enabled:true}];await plugin.saveSettings();assert.equal(timers.size,1,'root changes queue an index refresh even when auto-check is disabled');fire();
+    for(let i=0;i<100&&plugin.index.skills[0]?.path!=='other/skills/new.md';i++)await new Promise(resolve=>setTimeout(resolve,5));
+    assert.equal(plugin.index.skills[0]?.path,'other/skills/new.md','root changes refresh the index');releaseOldRead(content);await staleScan;
+    assert.equal(plugin.index.skills[0]?.path,'other/skills/new.md','a stale scan cannot overwrite the newer root index');app.vault.read=originalRead;
+    plugin.settings.autoScan=true;app.vault.emit('modify',{path:'other/skills/new.md'});assert.equal(timers.size,1,'a final rescan is pending');
     plugin.onunload();assert.equal(timers.size,0,'unload cancels queued checks and scans');assert.equal(writes,0,'background checking never repairs');
-    console.log('Lifecycle checks passed: settings and local-path privacy, quiet checks, stale-result rejection, trailing scan debounce, scan coalescing, repair confirmation and failure recovery, read-only recheck, and timer cleanup.');
+    console.log('Lifecycle checks passed: settings and local-path privacy, quiet checks, stale-result rejection, trailing scan debounce, scan coalescing, root-change refresh, stale-scan rejection, repair confirmation and recovery, read-only recheck, and timer cleanup.');
 }finally{
     globalThis.window=previousWindow;delete globalThis.fixtureNotices;delete globalThis.fixtureModalConfirm;delete globalThis.fixtureModalThrow;
     globalThis.document=previousDocument;

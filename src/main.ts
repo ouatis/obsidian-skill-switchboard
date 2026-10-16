@@ -50,8 +50,12 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	lastRepairSummary: RepairSummary | null = null;
 	private readonly freshness = new CheckFreshness();
 	private checkTimer: number | null = null;
+	private rootRefreshTimer: number | null = null;
+	private rootsRefreshPending = false;
 	private disposed = false;
 	private indexKey = '';
+	private rootsKey = '';
+	private indexRevision = 0;
 	private configurationKey = '';
 	private latestOutput = '';
 	localPackagePaths: Record<string, string> = {};
@@ -101,8 +105,10 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	onunload(): void {
 		this.disposed = true;
 		this.freshness.invalidate();
+		this.indexRevision++;
 		if (this.checkTimer !== null) window.clearTimeout(this.checkTimer);
 		this.clearQueuedScan();
+		this.clearRootRefresh();
 		if (this.adapterCheckRunning) {
 			void writePluginStatus(this, {
 				currentCheck: checkState('stale', 'Plugin unloaded before the read-only check finished.'),
@@ -166,6 +172,28 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		this.scanTimer = null;
 	}
 
+	private clearRootRefresh(): void {
+		if (this.rootRefreshTimer !== null) window.clearTimeout(this.rootRefreshTimer);
+		this.rootRefreshTimer = null;
+	}
+
+	private scheduleRootRefresh(): void {
+		if (!this.rootsRefreshPending) return;
+		if (this.settings.autoCheck && !this.adapterCheckRunning && !this.adapterRepairRunning) {
+			this.clearRootRefresh();
+			return;
+		}
+		this.clearRootRefresh();
+		const stored = Number(this.settings.scanDelayMs);
+		const delay = Number.isFinite(stored) && stored >= 0 ? stored : INDEX_DEBOUNCE_MS;
+		this.rootRefreshTimer = window.setTimeout(() => {
+			this.rootRefreshTimer = null;
+			if (this.disposed) return;
+			if (this.adapterRepairRunning) { this.scheduleRootRefresh(); return; }
+			void this.refreshIndex(false);
+		}, delay);
+	}
+
 	async loadSettings(): Promise<void> {
 		const data = (await this.loadData()) as Partial<SkillSwitchboardSettings> | null;
 		this.settings = {
@@ -185,13 +213,21 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			this.settings.scanDelayMs = DEFAULT_SETTINGS.scanDelayMs;
 		}
 		this.configurationKey = settingsCheckKey(this.settings);
+		this.rootsKey = JSON.stringify(this.settings.roots);
 	}
 
 	async saveSettings(): Promise<void> {
 		if (!this.settings.autoScan) this.clearQueuedScan();
+		const rootsKey = JSON.stringify(this.settings.roots);
+		if (rootsKey !== this.rootsKey) {
+			this.rootsKey = rootsKey;
+			this.rootsRefreshPending = true;
+			this.indexRevision++;
+		}
 		const key = settingsCheckKey(this.settings);
 		if (key !== this.configurationKey) { this.configurationKey = key; this.invalidateChecks(); }
 		await this.saveData(this.settings);
+		this.scheduleRootRefresh();
 		this.scheduleBackgroundCheck();
 	}
 
@@ -212,9 +248,15 @@ export default class SkillSwitchboardPlugin extends Plugin {
 
 	async onExternalSettingsChange(): Promise<void> {
 		const previous = this.configurationKey;
+		const previousRoots = this.rootsKey;
 		await this.loadSettings();
+		if (previousRoots !== this.rootsKey) {
+			this.rootsRefreshPending = true;
+			this.indexRevision++;
+		}
 		if (!this.settings.autoScan) this.clearQueuedScan();
 		if (previous !== this.configurationKey) this.invalidateChecks();
+		this.scheduleRootRefresh();
 		this.renderViews();
 		this.scheduleBackgroundCheck();
 	}
@@ -228,7 +270,13 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	async refreshIndex(showNotice: boolean): Promise<void> {
 		// A foreground or check-triggered refresh satisfies any queued scan.
 		this.clearQueuedScan();
-		this.index = await scanConfiguredRoots(this.app, this.settings.roots);
+		this.clearRootRefresh();
+		this.rootsRefreshPending = false;
+		const revision = ++this.indexRevision;
+		const roots = this.settings.roots.map((root) => ({ ...root }));
+		const index = await scanConfiguredRoots(this.app, roots);
+		if (this.disposed || revision !== this.indexRevision) return;
+		this.index = index;
 		const key = JSON.stringify(this.index.skills.map((skill) => [skill.id, skill.sha256]));
 		if (this.indexKey && this.indexKey !== key) { this.invalidateChecks(); this.scheduleBackgroundCheck(); }
 		this.indexKey = key;
