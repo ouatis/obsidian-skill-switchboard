@@ -15,7 +15,7 @@ const previousWindow=globalThis.window;
 const previousDocument=globalThis.document;
 globalThis.document={};
 const timers=new Map();let timerId=0;
-globalThis.window={setTimeout:fn=>{const id=++timerId;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id),setInterval:()=>++timerId};
+globalThis.window={setTimeout:(fn,delay=0)=>{const id=++timerId;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),setInterval:()=>++timerId};
 const stub=`export class Plugin{constructor(app){this.app=app;this.manifest={version:'fixture'};this.intervals=[];}async loadData(){return this.app.saved;}async saveData(data){this.app.saved=structuredClone(data);}registerView(){}addRibbonIcon(){}addSettingTab(tab){this.settingTab=tab;}addCommand(){}registerEvent(){}registerInterval(id){this.intervals.push(id);}}
 export class PluginSettingTab{constructor(app,plugin){this.app=app;this.plugin=plugin;}}
 export class ItemView{} export class Modal{constructor(){if(globalThis.fixtureModalThrow)throw new Error('fixture modal failure');this.buttons=[];this.titleEl={setText(){}};this.contentEl={createEl(){return{};},createDiv:()=>({createEl:()=>{const button={listeners:{},addEventListener(event,callback){this.listeners[event]=callback;}};this.buttons.push(button);return button;}})};}open(){const button=globalThis.fixtureModalConfirm?this.buttons.at(-1):this.buttons[0];button?.listeners.click?.();}close(){this.onClose?.();}} export class Notice{constructor(){globalThis.fixtureNotices++;}}
@@ -30,10 +30,10 @@ try{
     await esbuild.build({entryPoints:[path.join(repo,'src/main.ts')],bundle:true,platform:'node',format:'cjs',outfile:bundle,logLevel:'silent',plugins:[{name:'obsidian-fixture',setup(build){build.onResolve({filter:/^obsidian$/},()=>({path:'obsidian',namespace:'fixture'}));build.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:stub,loader:'js'}));build.onResolve({filter:/^virtual:skill-switchboard-build-info$/},()=>({path:'build-info',namespace:'fixture-build-info'}));build.onLoad({filter:/.*/,namespace:'fixture-build-info'},()=>({contents:"export const BUILD_ID = 'fixture-build-001';",loader:'js'}));}}]});
     const imported=await import(pathToFileURL(bundle).href);
     const Plugin=imported.default.default??imported.default;
-    const vaultEvents=eventHub(),workspaceEvents=eventHub();let content='---\nname: test\ndescription: Fixture\n---\n# Test\n';
+    const vaultEvents=eventHub(),workspaceEvents=eventHub();let content='---\nname: test\ndescription: Fixture\n---\n# Test\n',vaultScans=0;
     const root={id:'team',kind:'vault',label:'Team',path:'team/skills',enabled:true};
     const target={id:'agent',runtime:'codex',mode:'wrapper',enabled:true,path:path.join(tempRoot,'runtime'),label:'Agent'};
-    const app={saved:{roots:[root],targets:[target],harnesses:[],language:'zh-CN',autoScan:false,autoCheck:false,scanDelayMs:500,showDistributionBoard:true},vault:{...vaultEvents,getMarkdownFiles:()=>[{path:'team/skills/test.md',name:'test.md'}],read:async()=>content,adapter:{getBasePath:()=>vaultPath}},workspace:{...workspaceEvents,layoutReady:true,getLeavesOfType:()=>[],onLayoutReady:callback=>callback()}};
+    const app={saved:{roots:[root],targets:[target],harnesses:[],language:'zh-CN',autoScan:false,autoCheck:false,scanDelayMs:500,showDistributionBoard:true},vault:{...vaultEvents,getMarkdownFiles:()=>{vaultScans++;return[{path:'team/skills/test.md',name:'test.md'}];},read:async()=>content,adapter:{getBasePath:()=>vaultPath}},workspace:{...workspaceEvents,layoutReady:true,getLeavesOfType:()=>[],onLayoutReady:callback=>callback()}};
     const plugin=new Plugin(app);await plugin.onload();assert.equal(plugin.settings.syncRootId,'team');assert.equal(plugin.settings.language,'zh-CN');assert.deepEqual(plugin.settings.roots,[root]);
     const upgradedStatus=await waitForStatus(value=>value.buildId==='fixture-build-001');assert.equal(upgradedStatus.pluginVersion,'fixture');assert.equal(upgradedStatus.lastCheck.output,'legacy check preserved');assert.equal(upgradedStatus.currentCheck.state,'stale');
     const tab=plugin.settingTab,sectionCalls=[];
@@ -60,7 +60,7 @@ try{
     diagnostic=await waitForStatus(value=>value.currentCheck?.state==='stale');assert.match(diagnostic.currentCheck.reason,/changed/);assert.match(diagnostic.lastCheck.output,/ok/,'stale state keeps the last completed check as history');
     assert.notEqual(plugin.latestCheckOutput(),'ok','stale diagnostics cannot copy an old success');
     plugin.settings.autoCheck=true;await plugin.saveSettings();assert.equal(timers.size,1);
-    const fire=()=>{const callbacks=[...timers.values()];timers.clear();for(const callback of callbacks)callback();};
+    const fire=()=>{const queued=[...timers.keys()];for(const id of queued){const timer=timers.get(id);if(!timer)continue;timers.delete(id);timer.fn();}};
     const settle=async()=>{for(let i=0;i<200&&plugin.adapterCheckRunning;i++)await new Promise(resolve=>setTimeout(resolve,5));assert.equal(plugin.adapterCheckRunning,false);};
     fire();await settle();assert.equal(plugin.checksStale,false);assert.equal(plugin.adapterCheck.status,'passed');assert.equal(writes,0);assert.equal(globalThis.fixtureNotices,0);
     let release,started;
@@ -87,9 +87,15 @@ try{
     diagnostic=await waitForStatus(value=>value.lastRepair?.output==='fixture repair failure');assert.equal(diagnostic.lastRepair.status,'failed');assert.equal(diagnostic.currentCheck.state,'stale');assert.match(diagnostic.currentCheck.reason,/Repair stopped unexpectedly/);
     plugin.syncProvider=provider;fire();await settle();assert.equal(plugin.checksStale,false,'a read-only check restores readiness after repair failure');
     await plugin.repairAllAdapters();assert.equal(plugin.adapterRepairRunning,false,'the repair action works again after failure');assert.equal(plugin.adapterRepair.status,'passed');assert.equal(writes,0,'a clean repair check remains read-only');
-    workspaceEvents.emit('active-leaf-change',{view:{getViewType:()=> 'skill-switchboard-view'}});assert.equal(timers.size,1,'opening the view requests a quiet check');
-    plugin.onunload();assert.equal(timers.size,0,'unload cancels queued checks');assert.equal(writes,0,'background checking never repairs');
-    console.log('Lifecycle checks passed: native settings, local-path privacy, quiet checks, stale-result rejection, repair confirmation and failure recovery, read-only recheck, and unload cleanup.');
+    workspaceEvents.emit('active-leaf-change',{view:{getViewType:()=> 'skill-switchboard-view'}});assert.equal(timers.size,1,'opening the view requests a quiet check');fire();await settle();
+    plugin.settings.autoCheck=false;plugin.settings.autoScan=true;app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(timers.size,1,'auto-scan queues one trailing rescan');
+    plugin.settings.autoScan=false;await plugin.saveSettings();assert.equal(timers.size,0,'disabling auto-scan cancels its queued rescan');
+    plugin.settings.autoScan=true;const beforeDebouncedScan=vaultScans;app.vault.emit('modify',{path:'team/skills/test.md'});const firstScanTimer=[...timers.keys()][0];
+    app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(timers.size,1,'repeated edits stay in one debounce window');assert.equal(timers.has(firstScanTimer),false,'each edit restarts the scan delay');fire();assert.equal(vaultScans,beforeDebouncedScan+1,'a burst of edits performs one index scan');
+    plugin.settings.autoCheck=true;app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(timers.size,2,'a change queues one read-only check and one auto-scan');const beforeCoalescedScan=vaultScans;fire();await settle();assert.equal(vaultScans,beforeCoalescedScan+1,'the read-only check satisfies the queued auto-scan');
+    plugin.settings.autoCheck=false;app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(timers.size,1,'a final rescan is pending');
+    plugin.onunload();assert.equal(timers.size,0,'unload cancels queued checks and scans');assert.equal(writes,0,'background checking never repairs');
+    console.log('Lifecycle checks passed: settings and local-path privacy, quiet checks, stale-result rejection, trailing scan debounce, scan coalescing, repair confirmation and failure recovery, read-only recheck, and timer cleanup.');
 }finally{
     globalThis.window=previousWindow;delete globalThis.fixtureNotices;delete globalThis.fixtureModalConfirm;delete globalThis.fixtureModalThrow;
     globalThis.document=previousDocument;

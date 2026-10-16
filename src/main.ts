@@ -36,8 +36,8 @@ const INDEX_DEBOUNCE_MS = 500;
 export default class SkillSwitchboardPlugin extends Plugin {
 	settings!: SkillSwitchboardSettings;
 	index: SkillIndex = { skills: [], errors: [], scannedAt: 0 };
-	/** True while a debounced rescan is pending, so a burst of events stays one scan. */
-	private scanQueued = false;
+	/** Trailing debounce for vault changes; cleared on refresh and unload. */
+	private scanTimer: number | null = null;
 	adapterCheck: AdapterCheckResult | null = null;
 	adapterCheckRunning = false;
 	adapterRepair: AdapterCheckResult | null = null;
@@ -102,6 +102,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		this.disposed = true;
 		this.freshness.invalidate();
 		if (this.checkTimer !== null) window.clearTimeout(this.checkTimer);
+		this.clearQueuedScan();
 		if (this.adapterCheckRunning) {
 			void writePluginStatus(this, {
 				currentCheck: checkState('stale', 'Plugin unloaded before the read-only check finished.'),
@@ -146,18 +147,23 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	private onVaultChanged(...changedPaths: string[]): void {
 		const impact = getVaultChangeImpact(changedPaths, this.settings, this.getVaultBasePath());
 		if (impact.affectsChecks) { this.invalidateChecks(); this.scheduleBackgroundCheck(); }
-		if (!impact.affectsIndex || !this.settings.autoScan) return;
-		if (this.scanQueued) return;
-		this.scanQueued = true;
+		if (!impact.affectsIndex) return;
+		if (!this.settings.autoScan) { this.clearQueuedScan(); return; }
+		this.clearQueuedScan();
 		// The `number` control keeps this a number, but data saved by an earlier
 		// build used a text control, so the value is still coerced on read.
 		const stored = Number(this.settings.scanDelayMs);
 		const delay = Number.isFinite(stored) && stored >= 0 ? stored : INDEX_DEBOUNCE_MS;
-		window.setTimeout(() => {
-			this.scanQueued = false;
+		this.scanTimer = window.setTimeout(() => {
+			this.scanTimer = null;
 			if (this.disposed || !this.settings.autoScan) return;
 			void this.refreshIndex(false);
 		}, delay);
+	}
+
+	private clearQueuedScan(): void {
+		if (this.scanTimer !== null) window.clearTimeout(this.scanTimer);
+		this.scanTimer = null;
 	}
 
 	async loadSettings(): Promise<void> {
@@ -182,6 +188,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	}
 
 	async saveSettings(): Promise<void> {
+		if (!this.settings.autoScan) this.clearQueuedScan();
 		const key = settingsCheckKey(this.settings);
 		if (key !== this.configurationKey) { this.configurationKey = key; this.invalidateChecks(); }
 		await this.saveData(this.settings);
@@ -206,6 +213,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	async onExternalSettingsChange(): Promise<void> {
 		const previous = this.configurationKey;
 		await this.loadSettings();
+		if (!this.settings.autoScan) this.clearQueuedScan();
 		if (previous !== this.configurationKey) this.invalidateChecks();
 		this.renderViews();
 		this.scheduleBackgroundCheck();
@@ -218,6 +226,8 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	}
 
 	async refreshIndex(showNotice: boolean): Promise<void> {
+		// A foreground or check-triggered refresh satisfies any queued scan.
+		this.clearQueuedScan();
 		this.index = await scanConfiguredRoots(this.app, this.settings.roots);
 		const key = JSON.stringify(this.index.skills.map((skill) => [skill.id, skill.sha256]));
 		if (this.indexKey && this.indexKey !== key) { this.invalidateChecks(); this.scheduleBackgroundCheck(); }
