@@ -103,6 +103,7 @@ export const EN: Strings = {
 	matchCount: (count) => `${count}`,
 	noSearchResults: 'No skill matches this search.',
 	openSource: 'Open source',
+	copySourcePath: 'Copy source path',
 	pathCopied: 'Path copied to clipboard',
 	pathCopyFailed: 'Copying the path failed',
 	sourceMissing: 'The source file is no longer in the vault. Refresh the index.',

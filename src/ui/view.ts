@@ -291,23 +291,21 @@ export class SkillSwitchboardView extends ItemView {
 	/** Name and description carry the meaning; path and hash are diagnostics. */
 	private renderSkill(container: HTMLElement, skill: IndexedSkill, strings: Strings): void {
 		const card = container.createDiv('skill-switchboard-card');
-		const openable = skill.rootKind === 'vault';
-		if (openable) {
-			card.addClass('is-openable');
-			card.setAttribute('role', 'link');
-			card.setAttribute('tabindex', '0');
-			card.setAttribute('aria-label', `${strings.openSource}: ${skill.name}`);
-			card.addEventListener('click', (event) => {
-				if ((event.target as HTMLElement).closest('details, button')) return;
-				void this.openSkill(skill);
-			});
-			card.addEventListener('keydown', (event) => {
-				if (event.key !== 'Enter' && event.key !== ' ') return;
-				if ((event.target as HTMLElement).closest('details, button')) return;
-				event.preventDefault();
-				void this.openSkill(skill);
-			});
-		}
+		const opensInObsidian = skill.rootKind === 'vault';
+		card.addClass('is-actionable');
+		card.setAttribute('role', opensInObsidian ? 'link' : 'button');
+		card.setAttribute('tabindex', '0');
+		card.setAttribute('aria-label', `${opensInObsidian ? strings.openSource : strings.copySourcePath}: ${skill.name}`);
+		card.addEventListener('click', (event) => {
+			if ((event.target as HTMLElement).closest('details, button')) return;
+			void this.openSkill(skill);
+		});
+		card.addEventListener('keydown', (event) => {
+			const activates = event.key === 'Enter' || (!opensInObsidian && event.key === ' ');
+			if (!activates || (event.target as HTMLElement).closest('details, button')) return;
+			event.preventDefault();
+			void this.openSkill(skill);
+		});
 
 		const heading = card.createDiv('skill-switchboard-card-heading');
 		heading.createEl('strong', { text: skill.name });

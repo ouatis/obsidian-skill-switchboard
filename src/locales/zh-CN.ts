@@ -103,6 +103,7 @@ export const ZH_CN: Strings = {
 	matchCount: (count) => `${count} 条`,
 	noSearchResults: '没有匹配的结果。',
 	openSource: '打开源文件',
+	copySourcePath: '复制来源路径',
 	pathCopied: '路径已复制到剪贴板',
 	pathCopyFailed: '复制路径失败',
 	sourceMissing: '源文件已不在库中，请刷新索引。',

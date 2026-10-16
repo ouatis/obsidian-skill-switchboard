@@ -154,6 +154,42 @@ try {
 		`);
 		for (const [state, ratio] of Object.entries(contrast)) assert.ok(ratio >= 4.5, `${theme}/${state}: contrast ${ratio}`);
 	}
+
+	const originalIndex = evaluate(`app.plugins.plugins["skill-switchboard"].index`);
+	const externalSkill = {
+		id: 'external-copy-fixture', name: 'External copy fixture', description: 'Temporary UI fixture',
+		rootLabel: 'External fixture', rootKind: 'external', path: '/tmp/external-copy-fixture.md',
+		relativePath: 'external-copy-fixture.md', sha256: '0123456789abcdef'.repeat(4), frontmatter: {},
+	};
+	try {
+		inView(`
+			const clipboard=w.navigator.clipboard;v.pathCopyRegressionCalls=[];
+			v.pathCopyRegressionWriteText=Object.getOwnPropertyDescriptor(clipboard,'writeText')||null;
+			clipboard.writeText=async text=>v.pathCopyRegressionCalls.push(text);
+			p.index={...p.index,skills:[${JSON.stringify(externalSkill)}],errors:[]};v.query='';v.renderIndex();return true;
+		`);
+		const externalCard = inView(`const c=v.contentEl.querySelector('.skill-switchboard-card');return {role:c.getAttribute('role'),tabindex:c.getAttribute('tabindex'),label:c.getAttribute('aria-label'),actionable:c.classList.contains('is-actionable')};`);
+		assert.equal(externalCard.role, 'button');
+		assert.equal(externalCard.tabindex, '0');
+		assert.equal(externalCard.label, `${baseline.language === 'zh-CN' ? '复制来源路径' : 'Copy source path'}: External copy fixture`);
+		assert.equal(externalCard.actionable, true);
+		inView(`v.contentEl.querySelector('.skill-switchboard-card').click();return true;`);
+		await evaluate(`new Promise(resolve=>setTimeout(()=>resolve(true),20))`);
+		assert.deepEqual(inView('return v.pathCopyRegressionCalls;'), [externalSkill.path], 'clicking an external skill copies its path');
+		for (const key of ['Enter', ' ']) {
+			const prevented = inView(`const c=v.contentEl.querySelector('.skill-switchboard-card'),e=new w.KeyboardEvent('keydown',{key:${JSON.stringify(key)},bubbles:true,cancelable:true});c.dispatchEvent(e);return e.defaultPrevented;`);
+			assert.equal(prevented, true, `${JSON.stringify(key)} activates the copy button`);
+			await evaluate(`new Promise(resolve=>setTimeout(()=>resolve(true),20))`);
+		}
+		assert.deepEqual(inView('return v.pathCopyRegressionCalls;'), [externalSkill.path, externalSkill.path, externalSkill.path], 'Enter and Space both copy the external path');
+	} finally {
+		inView(`
+			p.index=${JSON.stringify(originalIndex)};v.query=${JSON.stringify(baseline.query)};
+			const clipboard=w.navigator.clipboard;
+			if(v.pathCopyRegressionWriteText)Object.defineProperty(clipboard,'writeText',v.pathCopyRegressionWriteText);else delete clipboard.writeText;
+			delete v.pathCopyRegressionCalls;delete v.pathCopyRegressionWriteText;v.renderIndex();return true;
+		`);
+	}
 	console.log('Live UI checks passed: tooltip-safe accessible SVG, native hover, family styling, settings navigation, bilingual layouts, search/reset, and light/dark status contrast.');
 } finally {
 	inView(`

@@ -432,15 +432,15 @@
 	border-bottom: 0;
 }
 
-.skill-switchboard-card.is-openable {
+.skill-switchboard-card.is-actionable {
 	cursor: pointer;
 }
 
-.skill-switchboard-card.is-openable:hover {
+.skill-switchboard-card.is-actionable:hover {
 	background: var(--ssb-soft);
 }
 
-.skill-switchboard-card.is-openable:focus-visible {
+.skill-switchboard-card.is-actionable:focus-visible {
 	outline: 2px solid var(--interactive-accent);
 	outline-offset: -3px;
 }

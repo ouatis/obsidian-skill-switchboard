@@ -106,6 +106,7 @@ export interface Strings {
 	matchCount: (count: number) => string;
 	noSearchResults: string;
 	openSource: string;
+	copySourcePath: string;
 	pathCopied: string;
 	pathCopyFailed: string;
 	sourceMissing: string;
