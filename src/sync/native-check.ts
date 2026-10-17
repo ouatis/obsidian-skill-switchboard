@@ -32,13 +32,15 @@ import {
 	existingRealPath,
 } from './filesystem';
 import { resolveConfiguredPath } from '../utils/paths';
+import { blockedResourceSkills, resourceBlockMessage } from './resources';
 
-export type NativeCheckKind = 'clean' | 'drift' | 'error';
+export type NativeCheckKind = 'clean' | 'drift' | 'blocked' | 'error';
 
 export interface NativeCheckResult extends AdapterCheckResult {
 	kind: NativeCheckKind;
 	problems: string[];
 	checkedSkillCount: number;
+	blockedSkills?: string[];
 }
 
 export interface NativeCheckOptions {
@@ -75,8 +77,11 @@ export async function checkRuntimeNative(
 			}
 		}
 
-		const skills = loadRuntimeSkills(snapshot, runtime);
-		if (skills.length === 0) return errorResult(`No skills enable the ${runtime} adapter in the configured manifest.`);
+		const candidates = loadRuntimeSkills(snapshot, runtime);
+		if (candidates.length === 0) return errorResult(`No skills enable the ${runtime} adapter in the configured manifest.`);
+		const blockedSkills = blockedResourceSkills(snapshot.resources, candidates);
+		const blocked = new Set(blockedSkills);
+		const skills = candidates.filter((skill) => !blocked.has(skill.name));
 		const policy = snapshot.runtimePolicies[runtime];
 		const retired = new Set(policy.retiredNames);
 		const problems: string[] = [];
@@ -101,15 +106,15 @@ export async function checkRuntimeNative(
 		}
 
 		const unique = [...new Set(problems)].sort((left, right) => left.localeCompare(right));
-		if (unique.length === 0) {
+		if (unique.length === 0 && blockedSkills.length === 0) {
 			return {
 				status: 'passed', kind: 'clean', checkedSkillCount: skills.length, problems: [], exitCode: 0,
 				output: `[native] PASS\nChecked ${skills.length} skill(s) without writing runtime files.`,
 			};
 		}
 		return {
-			status: 'failed', kind: 'drift', checkedSkillCount: skills.length, problems: unique, exitCode: 1,
-			output: `[native] DRIFT\n${unique.join('\n')}`,
+			status: 'failed', kind: unique.length ? 'drift' : 'blocked', checkedSkillCount: candidates.length, blockedSkills, problems: unique, exitCode: 1,
+			output: [unique.length ? `[native] DRIFT\n${unique.join('\n')}` : '', resourceBlockMessage(blockedSkills)].filter(Boolean).join('\n\n'),
 		};
 	} catch (error) {
 		return errorResult(error instanceof Error ? error.message : String(error));

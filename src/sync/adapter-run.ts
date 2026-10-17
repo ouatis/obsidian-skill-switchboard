@@ -4,7 +4,7 @@ import type { RuntimeName, RuntimeTarget } from '../types';
 import type { AdapterCheckResult } from './result';
 import type { ManifestCheckResult, SyncProvider, SyncRuntimeCheckResult, SyncManifestSnapshot, SyncRepairResult } from '../sync-provider';
 import type { ResourceCheck, PackageCheck } from './resources';
-import { isInside, pathsOverlap } from './manifest';
+import { adapterFor, isInside, pathsOverlap, sameSourceSnapshot } from './manifest';
 import { existingRealPath } from './filesystem';
 import { resolveConfiguredPath } from '../utils/paths';
 
@@ -56,13 +56,21 @@ export async function checkAllTargets(
 	const manifest = await context.provider.inspectManifest(vaultPath);
 	if (manifest.status === 'failed') return { result: manifest, manifest, checks: [] };
 	const checks = await collectTargetChecks(context, vaultPath, manifest.snapshot ?? undefined);
-	const resourceReport = manifest.resources && manifest.resources.status !== 'passed'
-		? formatResourceCheck(manifest.resources) : null;
+	const resources = resourcesForTargets(manifest, context.settings.targets);
+	const resourceReport = resources && resources.status !== 'passed' ? formatResourceCheck(resources) : null;
 	return {
 		result: combineResults(manifest, aggregateTargetChecks(checks, emptyMessage), ...(resourceReport ? [resourceReport] : [])),
 		manifest,
 		checks,
 	};
+}
+
+function resourcesForTargets(manifest: ManifestCheckResult, targets: RuntimeTarget[]): ResourceCheck | undefined {
+	if (!manifest.resources || !manifest.snapshot?.skills) return manifest.resources;
+	const runtimes = getRepairTargets(targets).map((target) => target.runtime);
+	const names = new Set(manifest.snapshot.skills.filter((skill) => runtimes.some((runtime) => adapterFor(skill, runtime) !== null)).map((skill) => skill.name));
+	const packages = manifest.resources.packages.filter((item) => names.has(item.skill));
+	return { ...manifest.resources, packages, status: packages.some((item) => item.status === 'failed') ? 'failed' : packages.some((item) => item.status === 'warning') ? 'warning' : 'passed' };
 }
 
 function formatResourceCheck(resources: ResourceCheck): AdapterCheckResult {
@@ -137,7 +145,7 @@ export async function collectTargetChecks(
 		record({
 			target,
 			targetPath: resolvedTarget,
-			repairable: result.native?.kind !== 'error',
+			repairable: result.native?.kind !== 'error' && result.native?.kind !== 'blocked',
 			result,
 		});
 	}
@@ -179,10 +187,13 @@ export async function runRepairAll(
 	context: AdapterRunContext,
 	vaultPath: string,
 	strings: Strings,
+	approvedSnapshot?: SyncManifestSnapshot,
 ): Promise<RepairSummary> {
 	const manifest = await context.provider.inspectManifest(vaultPath);
-	if (manifest.status === 'failed' || manifest.resources?.status === 'failed') {
-		const failure = manifest.status === 'failed' ? manifest : { status: 'failed' as const, output: strings.sourceResourcesBlocked, exitCode: 1 };
+	const failure = manifest.status === 'failed' ? manifest
+		: approvedSnapshot && (!manifest.snapshot || !sameSourceSnapshot(approvedSnapshot, manifest.snapshot))
+			? { status: 'failed' as const, output: strings.checksStale, exitCode: 1 } : null;
+	if (failure) {
 		return {
 			manifest,
 			checkResult: failure,
@@ -229,7 +240,7 @@ export async function runRepairAll(
 	);
 	const finalChecks = checks.map((check) => {
 		const detail = details.find((item) => item.targetId === check.target.id);
-		return detail ? { ...check, result: detail.followUp ?? checkResultFromRepair(detail.repair), repairFailed: detail.repair.status === 'failed' } : check;
+		return detail ? { ...check, result: detail.followUp ?? checkResultFromRepair(detail.repair), repairFailed: detail.repair.status === 'failed' && !detail.repair.native?.partial } : check;
 	});
 	return { manifest, checkResult: combineResults(manifest, aggregateTargetChecks(finalChecks, strings.noRepairTargets)), repair, repairedCount, failedCount, details, aborted: false };
 }
@@ -273,7 +284,7 @@ export async function repairDriftedTargets(
 		const repair = await context.provider.repairRuntime(vaultPath, runtime, check.target.path, snapshot);
 		const detail: TargetRepairDetail = { targetId: check.target.id, label, runtime, repair };
 		details.push(detail);
-		if (repair.status === 'failed') {
+		if (repair.status === 'failed' && !repair.native?.partial) {
 			context.onTargetCheck?.({ ...check, result: checkResultFromRepair(repair), repairFailed: true });
 			failedCount += 1;
 			firstFailureCode ??= repair.exitCode;
@@ -282,7 +293,7 @@ export async function repairDriftedTargets(
 		}
 
 		context.onTargetActivity?.({ targetId: check.target.id, phase: 'checking' });
-		const followUp = await context.provider.checkRuntime(vaultPath, runtime, check.target.path, snapshot);
+		const followUp = await context.provider.checkRuntime(vaultPath, runtime, check.target.path);
 		detail.followUp = followUp;
 		context.onTargetCheck?.({ ...check, result: followUp, repairFailed: false });
 		if (followUp.status === 'passed') {
@@ -294,7 +305,7 @@ export async function repairDriftedTargets(
 			failedCount += 1;
 			firstFailureCode ??= followUp.exitCode;
 			repairOutputs.push(
-				`[${label}] REPAIR FAILED (follow-up)\n${repair.output}\n--- follow-up check ---\n${followUp.output}`,
+				`[${label}] ${repair.native?.partial ? 'PARTIAL (resources blocked)' : 'REPAIR FAILED (follow-up)'}\n${repair.output}\n--- follow-up check ---\n${followUp.output}`,
 			);
 		}
 	}

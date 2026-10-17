@@ -216,6 +216,7 @@ export class DistributionBoard {
 			repairing: strings.distributionRepairing,
 			clean: strings.distributionClean,
 			drift: strings.distributionDrift,
+			blocked: strings.distributionBlocked,
 			unavailable: strings.distributionUnavailable,
 			'repair-failed': strings.distributionRepairFailed,
 		}[state];

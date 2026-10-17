@@ -6,7 +6,7 @@ import { Strings } from '../i18n';
  * Obsidian ships no ConfirmModal in the public typings, so this wraps the base
  * Modal and resolves a promise once the user picks an option.
  */
-export function confirmRepair(app: App, strings: Strings, message: string): Promise<boolean> {
+export function confirmRepair(app: App, strings: Strings, message: string, details?: string): Promise<boolean> {
 	return new Promise((resolve) => {
 		let settled = false;
 		const finish = (value: boolean) => {
@@ -17,6 +17,7 @@ export function confirmRepair(app: App, strings: Strings, message: string): Prom
 		const modal = new Modal(app);
 		modal.titleEl.setText(strings.repairAllAdapters);
 		modal.contentEl.createEl('p', { text: message });
+		if (details) modal.contentEl.createEl('pre', { text: details, cls: 'skill-switchboard-repair-plan' });
 
 		const buttons = modal.contentEl.createDiv('modal-button-container');
 		const cancel = buttons.createEl('button', { text: strings.cancelRepair });

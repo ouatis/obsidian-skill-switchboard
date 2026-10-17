@@ -49,6 +49,7 @@ export function renderAdapterStatus(
 		const text = resources.status === 'failed' ? strings.resourcesFailed : resources.status === 'warning' ? strings.resourcesWarning
 			: resources.packages.length ? strings.resourcesComplete(resources.packages.length, resources.packages.reduce((count, item) => count + item.verifiedFiles, 0)) : strings.resourcesNone;
 		renderStatusRow(section, `${strings.resourcesLabel} · ${text}`, resources.status === 'failed' ? 'failed' : resources.status === 'warning' ? 'warning' : 'passed', resources.status === 'passed' ? 'package-check' : 'package-search');
+		if (resources.status === 'failed') section.createDiv({ text: strings.sourceResourcesBlocked, cls: 'skill-switchboard-evidence-note' });
 		if (resources.packages.length) {
 			const details = section.createEl('details', { cls: 'skill-switchboard-details' });
 			details.createEl('summary', { text: strings.resourceDetails, cls: 'skill-switchboard-check-label' });
@@ -72,8 +73,7 @@ export function renderAdapterStatus(
 			? strings.repairAllRunning
 			: passed
 				? totals?.targets ? strings.repairSummary(totals.targets, totals.skills, totals.files) : strings.repairAllNoDrift
-				: summary?.aborted && summary.manifest.resources?.status === 'failed' ? strings.sourceResourcesBlocked
-					: summary && totals ? strings.repairPartial(totals.files, summary.failedCount) : strings.adapterCheckFailed(repair?.exitCode ?? 1);
+				: summary && !summary.aborted && totals ? strings.repairPartial(totals.files, summary.failedCount) : strings.adapterCheckFailed(repair?.exitCode ?? 1);
 		renderStatusRow(section, repairRunning ? text : `${strings.lastRepairResult} · ${text}`, repairRunning ? 'running' : state.checksStale ? 'unknown' : passed ? 'passed' : 'failed', repairRunning || passed ? 'wrench' : 'alert-triangle');
 		if (summary?.details.length) {
 			const details = section.createEl('details', { cls: 'skill-switchboard-details' });

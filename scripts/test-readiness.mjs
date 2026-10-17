@@ -19,7 +19,7 @@ const adapter={codex:{display_name:'Drawing',short_description:'Draw diagrams',d
 const manifest={schema_version:1,total_skills:1,skills:[{name:'drawing',shared_file:'knowledge/team-skills/drawing.md',adapters:adapter}]};
 async function write(file,text){await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,text);}
 try{
-    for(const entry of ['sync/manifest','sync/source','sync/freshness','sync/native-repair','sync/package-paths','ui/repair-summary','sync-provider']){
+    for(const entry of ['sync/manifest','sync/source','sync/freshness','sync/native-repair','sync/package-paths','sync/adapter-run','ui/repair-plan','ui/repair-summary','sync-provider']){
         await esbuild.build({entryPoints:[path.join(repo,'src',entry+'.ts')],bundle:true,platform:'node',format:'cjs',outfile:path.join(tempRoot,entry.replaceAll('/','-')+'.cjs'),logLevel:'silent'});
     }
     const load=entry=>import(pathToFileURL(path.join(tempRoot,entry.replaceAll('/','-')+'.cjs')).href);
@@ -28,6 +28,8 @@ try{
     const localPackages=await load('sync/package-paths');
     const {CheckFreshness}=await load('sync/freshness');
     const {repairTotals}=await load('ui/repair-summary');
+    const {runRepairAll,checkAllTargets}=await load('sync/adapter-run');
+    const {repairPlanDetails}=await load('ui/repair-plan');
     const config={roots:[{id:'other',kind:'vault',enabled:true,path:'unrelated'},{id:'team',kind:'vault',enabled:true,path:'knowledge/team-skills'}],syncRootId:'team',syncManifestPath:'config/agent-skills.json',targets:[]};
     const location=sources.resolveSyncSource(vault,config);
     assert.deepEqual(location,{sharedRoot:source,manifestPath,confineToVault:true});
@@ -50,6 +52,34 @@ try{
     await fs.unlink(path.join(toolkit,'kit.mjs'));
     checked=await inspect();assert.equal(checked.resources.status,'failed');assert(checked.resources.packages[0].issues.some(i=>i.code==='missing'&&i.path==='kit.mjs'));
     const refused=await provider.repairRuntime(vault,'codex',path.join(tempRoot,'never-written'));assert.equal(refused.status,'failed');assert.equal(await fs.access(path.join(tempRoot,'never-written')).then(()=>true,()=>false),false);
+    // One missing toolkit blocks its own skill, while an independent skill still deploys.
+    await write(path.join(source,'safe.md'),'---\nname: safe\ndescription: Independent skill.\n---\n# Safe\n');
+    await write(manifestPath,JSON.stringify({...manifest,total_skills:2,skills:[...manifest.skills,{name:'safe',shared_file:'safe.md',adapters:adapter}]}));
+    const partialTarget=path.join(tempRoot,'partial-runtime');
+    await write(path.join(partialTarget,'drawing','SKILL.md'),'preserve blocked entry');
+    const targetConfig={id:'partial',label:'Codex',path:partialTarget,runtime:'codex',mode:'wrapper',enabled:true};
+    const repairStrings={noRepairTargets:'none',repairAllPassed:n=>`repaired ${n}`,repairAllFailed:n=>`incomplete ${n}`,repairAllNoDrift:'clean'};
+    const partial=await runRepairAll({provider,settings:{targets:[targetConfig]}},vault,repairStrings);
+    assert.equal(partial.aborted,false);assert.equal(partial.failedCount,1);assert.equal(partial.repair.status,'failed','partial repair is never reported as all green');
+    assert.equal(partial.details[0].repair.native.partial,true);assert.deepEqual(partial.details[0].repair.native.changedSkills,['safe']);
+    assert.equal(partial.details[0].followUp.native.kind,'blocked');
+    const plan=repairPlanDetails([{target:targetConfig,targetPath:partialTarget,result:partial.details[0].followUp,repairable:false}],{repairPlanLine:(label,ready,blocked)=>`${label}: ${ready} ready, ${blocked} blocked`,distributionBlocked:'Blocked skills'});
+    assert.match(plan,/1 ready, 1 blocked/);assert.match(plan,/Blocked skills: drawing/);assert(plan.includes(partialTarget));
+    assert.equal(await fs.readFile(path.join(partialTarget,'drawing','SKILL.md'),'utf8'),'preserve blocked entry');
+    assert.equal(await fs.access(path.join(partialTarget,'drawing','agents')).then(()=>true,()=>false),false,'blocked metadata is not created');
+    assert.match(await fs.readFile(path.join(partialTarget,'safe','SKILL.md'),'utf8'),/safe\.md/);
+    const blockedOnly=await runRepairAll({provider,settings:{targets:[targetConfig]}},vault,repairStrings);
+    assert.equal(blockedOnly.details.length,0,'an already-clean healthy subset is not rewritten on repeated repair');
+    const approvedBlocked=(await inspect()).snapshot;
+    await write(path.join(toolkit,'kit.mjs'),files['kit.mjs']);
+    const expanded=await provider.repairRuntime(vault,'codex',path.join(tempRoot,'unapproved-expansion'),approvedBlocked);
+    assert.equal(expanded.status,'failed');assert.match(expanded.output,/Source changed/,'newly unblocked skills require a new preview');
+    assert.equal(await fs.access(path.join(tempRoot,'unapproved-expansion')).then(()=>true,()=>false),false);
+    await fs.unlink(path.join(toolkit,'kit.mjs'));
+    await write(manifestPath,JSON.stringify({...manifest,total_skills:2,skills:[{...manifest.skills[0],adapters:{codex:false}},{name:'safe',shared_file:'safe.md',adapters:adapter}]}));
+    const unrelated=await checkAllTargets({provider,settings:{targets:[targetConfig]}},vault,'none');
+    assert.equal(unrelated.result.status,'passed','a toolkit for a skill disabled on this agent cannot fail its adapter check');
+    await write(manifestPath,JSON.stringify(manifest));await fs.unlink(path.join(source,'safe.md'));
     await write(path.join(toolkit,'kit.mjs'),'changed\n');assert((await inspect()).resources.packages[0].issues.some(i=>i.code==='changed'));
     await write(path.join(toolkit,'kit.mjs'),files['kit.mjs']);await write(path.join(toolkit,'extra.mjs'),'extra');assert((await inspect()).resources.packages[0].issues.some(i=>i.code==='unexpected'));
     await fs.unlink(path.join(toolkit,'extra.mjs'));

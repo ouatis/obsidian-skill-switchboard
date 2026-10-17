@@ -53,6 +53,7 @@ export const STATE_MARKS = {
 	repairing: 'M -4 0 H 4 M 0 -4 V 4',
 	clean: 'M -5 0 L -1 3 L 5 -3',
 	drift: 'M 0 -4 V 1 M 0 4 h .01',
+	blocked: 'M -4 -2 H 4 M -4 2 H 4',
 	unavailable: 'M -3 -3 L 3 3 M 3 -3 L -3 3',
 	'repair-failed': 'M -3 -3 L 3 3 M 3 -3 L -3 3',
 };

@@ -1,6 +1,6 @@
 import type { AdapterCheckResult } from './sync/result';
 import type { RuntimeName } from './types';
-import { inspectManifest, type ManifestCheckResult, type SyncManifestSnapshot } from './sync/manifest';
+import { inspectManifest, sameSourceSnapshot, type ManifestCheckResult, type SyncManifestSnapshot } from './sync/manifest';
 import type { ManifestLocation } from './sync/source';
 import { checkRuntimeNative, type NativeCheckResult } from './sync/native-check';
 import { repairRuntimeNative, type NativeRepairResult } from './sync/native-repair';
@@ -44,9 +44,8 @@ export class NativeSyncProvider implements SyncProvider {
 	async repairRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot?: SyncManifestSnapshot): Promise<SyncRepairResult> {
 		const manifest = await this.inspectManifest(vaultPath);
 		if (manifest.status === 'failed' || !manifest.snapshot) return manifest;
-		if (manifest.resources?.status === 'failed') return { status: 'failed', exitCode: 1, output: 'Source resources are incomplete; restore them before repairing agent entries.' };
 		// Re-read the source before writing; never apply a snapshot whose rules changed.
-		if (snapshot && (snapshot.sharedRoot !== manifest.snapshot.sharedRoot || JSON.stringify(snapshot.skills) !== JSON.stringify(manifest.snapshot.skills))) {
+		if (snapshot && !sameSourceSnapshot(snapshot, manifest.snapshot)) {
 			return { status: 'failed', exitCode: 1, output: 'Source changed during repair. Check again before writing.' };
 		}
 		const native = await repairRuntimeNative(vaultPath, runtime, targetPath, manifest.snapshot);

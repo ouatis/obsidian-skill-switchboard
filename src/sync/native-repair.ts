@@ -20,6 +20,7 @@ import {
 } from './filesystem';
 import { referencedSharedFiles } from './native-check';
 import { resolveConfiguredPath } from '../utils/paths';
+import { blockedResourceSkills, resourceBlockMessage } from './resources';
 
 export interface NativeRepairResult extends AdapterCheckResult {
 	writtenFiles: number;
@@ -27,6 +28,9 @@ export interface NativeRepairResult extends AdapterCheckResult {
 	backupPath?: string;
 	changedSkills: string[];
 	changes: RepairChange[];
+	/** Healthy entries completed; blocked skill entries were left untouched. */
+	partial?: boolean;
+	blockedSkills?: string[];
 }
 
 export interface RepairChange { skill: string; path: string; kind: 'wrapper' | 'metadata' | 'command' | 'references'; action: 'created' | 'updated' }
@@ -59,8 +63,11 @@ export async function repairRuntimeNative(
 			options.backupHomeDir,
 		);
 		const resolvedTarget = await state.assertSafeWritePath(configuredTarget);
-		const skills = loadRuntimeSkills(snapshot, runtime);
-		if (skills.length === 0) return await state.failureResult(`No skills enable the ${runtime} adapter in the configured manifest.`);
+		const candidates = loadRuntimeSkills(snapshot, runtime);
+		if (candidates.length === 0) return await state.failureResult(`No skills enable the ${runtime} adapter in the configured manifest.`);
+		const blockedSkills = blockedResourceSkills(snapshot.resources, candidates);
+		const blocked = new Set(blockedSkills);
+		const skills = candidates.filter((skill) => !blocked.has(skill.name));
 		const commandRoot = runtime === 'opencode'
 			? resolveConfiguredPath(options.opencodeCommandsDir ?? defaultOpenCodeCommandsDir(), snapshot.vaultPath)
 			: undefined;
@@ -84,7 +91,11 @@ export async function repairRuntimeNative(
 			}
 		}
 
-		return await state.successResult();
+		const result = await state.successResult();
+		return blockedSkills.length ? {
+			...result, status: 'failed', exitCode: 1, partial: true, blockedSkills,
+			output: `${result.output}\n\n${resourceBlockMessage(blockedSkills)}`,
+		} : result;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		return state

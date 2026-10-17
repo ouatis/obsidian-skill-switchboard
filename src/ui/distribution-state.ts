@@ -1,7 +1,7 @@
 import type { RuntimeTarget } from '../types';
 import { getRepairTargets, type TargetActivity, type TargetCheck } from '../sync/adapter-run';
 
-export type DistributionState = 'unknown' | 'checking' | 'repairing' | 'clean' | 'drift' | 'unavailable' | 'repair-failed';
+export type DistributionState = 'unknown' | 'checking' | 'repairing' | 'clean' | 'drift' | 'blocked' | 'unavailable' | 'repair-failed';
 
 export interface DistributionNode {
 	id: string;
@@ -27,7 +27,8 @@ export function distributionNodes(input: DistributionInput): DistributionNode[] 
 		if (input.activity?.targetId === target.id) state = input.activity.phase;
 		else if (check?.repairFailed) state = 'repair-failed';
 		else if (check) {
-			if (!check.repairable || check.result.native?.kind === 'error' || check.result.exitCode === 2) state = 'unavailable';
+			if (check.result.native?.kind === 'blocked') state = 'blocked';
+			else if (!check.repairable || check.result.native?.kind === 'error' || check.result.exitCode === 2) state = 'unavailable';
 			else state = check.result.status === 'passed' ? 'clean' : 'drift';
 		} else if (input.blocked) state = 'unavailable';
 		return { id: target.id, label: target.label.trim() || target.runtime, path: target.path, state };

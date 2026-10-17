@@ -15,6 +15,7 @@ const strings = {
 	repairAllPassed: (count) => `repaired ${count}`,
 	repairAllFailed: (count) => `failed ${count}`,
 	repairAllNoDrift: 'no drift',
+	checksStale: 'source changed; check again',
 };
 
 try {
@@ -93,6 +94,24 @@ try {
 		assert.equal(outcome.aborted, true);
 		assert.equal(outcome.repair.status, 'failed');
 		assert.equal(outcome.repair.exitCode, 9, 'the manifest exit code carries through');
+	}
+
+	// A changed deployment scope must not silently expand what the user approved.
+	{
+		let checked = 0;
+		const approved = { path: '/manifest.json', sharedRoot: '/source', skills: [], resources: { status: 'failed' } };
+		let current = { ...approved, resources: { status: 'passed' } };
+		const provider = {
+			inspectManifest: async () => ({ ...passed(), snapshot: current }),
+			checkRuntime: async () => { checked++; return passed(); },
+			repairRuntime: async () => { throw new Error('must never write'); },
+		};
+		const outcome = await run.runRepairAll({ provider, settings: { targets: [target()] } }, '/vault', strings, approved);
+		assert.equal(outcome.aborted, true); assert.equal(checked, 0);
+		assert.equal(outcome.repair.output, strings.checksStale);
+		current = { ...approved, runtimePolicies: { codex: { retiredNames: ['retired'] } } };
+		assert.equal((await run.runRepairAll({ provider, settings: { targets: [target()] } }, '/vault', strings, approved)).aborted, true);
+		assert.equal(checked, 0, 'changed validation policy also requires a new approval');
 	}
 
 	// Blocked (non-repairable) failures count in the summary even with no drift.

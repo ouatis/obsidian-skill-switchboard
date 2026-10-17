@@ -24,6 +24,16 @@ export interface ResourceCheck {
 	crossDevice: 'unverified';
 }
 
+/** Only skills declaring a failed package are blocked; independent skills stay deployable. */
+export function blockedResourceSkills(resources: ResourceCheck | undefined, skills: readonly { name: string }[]): string[] {
+	const failed = new Set(resources?.packages.filter((item) => item.status === 'failed').map((item) => item.skill));
+	return skills.filter((skill) => failed.has(skill.name)).map((skill) => skill.name);
+}
+
+export function resourceBlockMessage(names: string[]): string {
+	return names.length ? `[resources] BLOCKED\nKept existing entries unchanged: ${names.join(', ')}. Restore their package resources before deploying these skills.` : '';
+}
+
 function inside(root: string, candidate: string): boolean {
 	const relative = path.relative(root, candidate);
 	return !path.isAbsolute(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`);

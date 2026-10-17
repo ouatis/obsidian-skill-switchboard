@@ -22,6 +22,7 @@ try {
 	assert.equal(nodes({ checks: [check] })[0].state, 'clean');
 	assert.equal(nodes({ checks: [{ ...check, result: { status: 'failed', output: 'drift', exitCode: 1 } }] })[0].state, 'drift');
 	assert.equal(nodes({ checks: [{ ...check, repairable: false }] })[0].state, 'unavailable');
+	assert.equal(nodes({ checks: [{ ...check, repairable: false, result: { status: 'failed', exitCode: 1, native: { kind: 'blocked', blockedSkills: ['drawing'] } } }] })[0].state, 'blocked');
 	assert.equal(nodes({ checks: [{ ...check, result: { status: 'failed', output: 'error', exitCode: 2 } }] })[0].state, 'unavailable');
 	assert.equal(nodes({ checks: [{ ...check, result: { status: 'failed', output: 'error', exitCode: 1, native: { kind: 'error' } } }] })[0].state, 'unavailable');
 	assert.equal(nodes({ checks: [{ ...check, repairFailed: true }] })[0].state, 'repair-failed');

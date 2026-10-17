@@ -33,9 +33,11 @@ Skill Switchboard 是一款 Obsidian 桌面插件，用于索引 Agent Skills，
 
 笔记库内的根目录使用相对路径；外部根目录和目标使用 `~` 路径，便于跨设备复用。也支持单机绝对路径。
 
-技能可用 `package_path` 声明配套文件，也可用 `package_id` 引用本机工具包。可选的 schema-v1 `package_manifest` 会列出文件及 SHA-256 哈希；文件缺失、变更或多出时会阻止修复。没有清单时，package 资源标为未经验证。每台机器在 `~/.skill-switchboard/packages.json` 中单独映射 package ID 和本地路径；插件不会下载或更新工具包。
+来源、目标、启用的 Agent 和 Harness 命令按本机笔记库分别保存到 `~/.skill-switchboard/vaults/<vault-id>/settings.json`。旧接线配置会自动迁移，并保留 `legacy-settings.json` 恢复副本；新设备单独配置接线。技能清单继续共享。0.4.0 以前的版本不会读取这份本机配置。
 
-插件只检查已配置的根目录和目标。修复前会验证来源资源并要求确认，只写入 vault 以外已启用的 wrapper 目标。被替换或移除的文件会备份到 `~/.skill-switchboard/repair-backups/<vault-id>/`，由你决定何时删除；每份备份都带有记录恢复路径的 `backup-index.json`。保存外部 package 路径时，只会更新本机 package registry。
+技能可用 `package_path` 声明配套文件，也可用 `package_id` 引用本机工具包。可选的 schema-v1 `package_manifest` 会列出文件及 SHA-256 哈希；文件缺失、变更或多出时会阻断对应技能。没有清单时，package 资源标为未经验证。每台机器在 `~/.skill-switchboard/packages.json` 中单独映射 package ID 和本地路径；插件不会下载或更新工具包。
+
+插件只检查已配置的根目录和目标。修复前先进行只读检查，列出可处理和受阻的技能供你确认；只写入 vault 以外已启用的 wrapper 目标。资源受阻的技能入口保持原样，独立技能仍可修复，部分完成会明确报告。被替换或移除的文件会备份到 `~/.skill-switchboard/repair-backups/<vault-id>/`，由你决定何时删除；每份备份都带有记录恢复路径的 `backup-index.json`。保存外部 package 路径时，只会更新本机 package registry。
 
 Vault 根目录下的隐藏文件 `.skill-switchboard-status.json` 记录本次安装的版本、构建 ID、技能数量，以及最近的检查和修复输出。文件元数据不含 vault、来源或目标路径，但诊断输出可能包含本机 manifest 或备份路径，分享前请先检查。它不能确认其他设备已同步文件或 Agent 已加载技能。插件不联网，也不收集遥测。
 

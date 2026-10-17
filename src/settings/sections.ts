@@ -75,6 +75,8 @@ export function renderRootsSection(
 
 export function renderSyncSourceSection(plugin: SkillSwitchboardPlugin, containerEl: HTMLElement, strings: Strings): void {
 	new Setting(containerEl).setName(strings.syncSource).setHeading();
+	containerEl.createEl('p', { text: strings.localConnectionsDescription, cls: 'skill-switchboard-muted' });
+	if (plugin.machineSettingsPath) containerEl.createDiv({ text: plugin.machineSettingsPath, cls: 'skill-switchboard-path' });
 	new Setting(containerEl).setName(strings.canonicalRoot).setDesc(strings.canonicalRootDescription)
 		.addDropdown((dropdown) => {
 			dropdown.addOption('', strings.chooseSource);

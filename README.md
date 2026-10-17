@@ -47,16 +47,24 @@ Use vault-relative paths for roots inside the vault and `~` paths for external
 roots and targets to keep settings portable. Absolute paths are also supported
 for machine-specific setups.
 
+Sources, targets, enabled agents, and harness commands are local to each vault
+checkout, in `~/.skill-switchboard/vaults/<vault-id>/settings.json`. Existing
+connections migrate automatically, with a `legacy-settings.json` recovery copy;
+new devices configure their own connections. The skill manifest stays shared.
+Versions before 0.4.0 do not read this local configuration.
+
 Skills can declare support files with `package_path` or reference a local
 package with `package_id`. An optional schema-v1 `package_manifest` lists files
-and SHA-256 hashes. Missing, changed, or unexpected files block repair; without
+and SHA-256 hashes. Missing, changed, or unexpected files block that skill; without
 an inventory, package resources are unverified. Each machine maps package IDs
 to local paths in `~/.skill-switchboard/packages.json`. The plugin does not
 download or update packages.
 
-Only configured roots and targets are inspected. Repair validates source
-resources, asks for confirmation, and writes enabled wrapper targets outside
-the vault. Replaced or removed files are backed up under
+Only configured roots and targets are inspected. Repair first performs a
+read-only check and previews the eligible and blocked skills for confirmation.
+It writes enabled wrapper targets outside the vault, leaving resource-blocked
+skill entries untouched. Independent skills can still be repaired; partial
+results are reported explicitly. Replaced or removed files are backed up under
 `~/.skill-switchboard/repair-backups/<vault-id>/` and kept until you remove
 them; each backup includes a `backup-index.json` with recovery paths. Saving an
 external package path updates only the local package registry.

@@ -115,7 +115,7 @@ export class SkillSwitchboardView extends ItemView {
 			nodes: distributionNodes({ targets: plugin.settings.targets, checks: plugin.targetChecks, activity: plugin.targetActivity, blocked }),
 			// Use the active sync provider's canonical path, not an unrelated indexing root.
 			sourcePath: plugin.settings.roots.find((root) => root.id === plugin.settings.syncRootId)?.path ?? '',
-			sourceUnavailable: blocked || plugin.manifestCheck?.resources?.status === 'failed',
+			sourceUnavailable: blocked,
 			checkedAt: plugin.targetCheckedAt,
 			strings: getStrings(plugin.settings.language),
 		};

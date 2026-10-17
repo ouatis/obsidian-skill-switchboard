@@ -842,7 +842,15 @@
 	stroke-dasharray: none;
 }
 
-.ssb-deck .is-drift {
+.skill-switchboard-repair-plan {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-height: 40vh;
+	overflow: auto;
+}
+
+.ssb-deck .is-drift,
+.ssb-deck .is-blocked {
 	color: var(--ssb-warning);
 }
 

@@ -16,6 +16,7 @@ export default defineConfig(
 		'scripts/test-scanner.mjs',
 		'scripts/test-readiness.mjs',
 		'scripts/test-lifecycle.mjs',
+		'scripts/test-machine-settings.mjs',
 		'scripts/build-id-plugin.mjs',
 		'scripts/test-build-id.mjs',
 		'scripts/test-status-write-queue.mjs',

@@ -28,11 +28,19 @@ export interface SyncManifestSnapshot {
 	runtimes: RuntimeName[];
 	runtimePolicies: Record<RuntimeName, RuntimeValidationPolicy>;
 	skills: ManifestSkill[];
+	resources?: ResourceCheck;
 }
 
 export interface ManifestCheckResult extends AdapterCheckResult {
 	snapshot: SyncManifestSnapshot | null;
 	resources?: ResourceCheck;
+}
+
+export function sameSourceSnapshot(left: SyncManifestSnapshot, right: SyncManifestSnapshot): boolean {
+	return left.path === right.path && left.sharedRoot === right.sharedRoot && left.vaultPath === right.vaultPath
+		&& JSON.stringify(left.skills) === JSON.stringify(right.skills)
+		&& JSON.stringify(left.runtimePolicies) === JSON.stringify(right.runtimePolicies)
+		&& JSON.stringify(left.resources) === JSON.stringify(right.resources);
 }
 
 export async function inspectManifest(vaultPath: string, location?: ManifestLocation): Promise<ManifestCheckResult> {
@@ -95,6 +103,7 @@ export async function inspectManifest(vaultPath: string, location?: ManifestLoca
 			runtimes: RUNTIMES.filter((runtime) => skills.some((skill) => adapterFor(skill, runtime) !== null)),
 		};
 		const resources = await checkResources(snapshot, location?.packageRegistryPath);
+		snapshot.resources = resources;
 		return { status: 'passed', output: `[manifest] PASS\nLoaded ${skills.length} skill(s) from ${manifestPath}.`, exitCode: 0, snapshot, resources };
 	} catch (error) {
 		return { status: 'failed', output: `[manifest] FAIL\n${formatError(error)}`, exitCode: 1, snapshot: null };

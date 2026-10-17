@@ -19,7 +19,7 @@ globalThis.window={setTimeout:(fn,delay=0)=>{const id=++timerId;timers.set(id,{f
 let plugin;
 const stub=`export class Plugin{constructor(app){this.app=app;this.manifest={version:'fixture'};this.intervals=[];}async loadData(){return this.app.saved;}async saveData(data){this.app.saved=structuredClone(data);}registerView(){}addRibbonIcon(){}addSettingTab(tab){this.settingTab=tab;}addCommand(){}registerEvent(){}registerInterval(id){this.intervals.push(id);}}
 export class PluginSettingTab{constructor(app,plugin){this.app=app;this.plugin=plugin;}}
-export class ItemView{} export class Modal{constructor(){if(globalThis.fixtureModalThrow)throw new Error('fixture modal failure');this.buttons=[];this.titleEl={setText(){}};this.contentEl={createEl(){return{};},createDiv:()=>({createEl:()=>{const button={listeners:{},addEventListener(event,callback){this.listeners[event]=callback;}};this.buttons.push(button);return button;}})};}open(){const button=globalThis.fixtureModalConfirm?this.buttons.at(-1):this.buttons[0];button?.listeners.click?.();}close(){this.onClose?.();}} export class Notice{constructor(message){globalThis.fixtureNotices++;globalThis.fixtureNoticeMessages.push(message);}}
+export class ItemView{} export class Modal{constructor(){if(globalThis.fixtureModalThrow)throw new Error('fixture modal failure');this.buttons=[];this.titleEl={setText(){}};this.contentEl={createEl(){return{};},createDiv:()=>({createEl:()=>{const button={listeners:{},addEventListener(event,callback){this.listeners[event]=callback;}};this.buttons.push(button);return button;}})};}open(){globalThis.fixtureModalOnOpen?.();const button=globalThis.fixtureModalConfirm?this.buttons.at(-1):this.buttons[0];button?.listeners.click?.();}close(){this.onClose?.();}} export class Notice{constructor(message){globalThis.fixtureNotices++;globalThis.fixtureNoticeMessages.push(message);}}
 export class Setting{} export class TFile{} export const setIcon=()=>{};export const requireApiVersion=()=>false;`;
 const eventHub=()=>{const callbacks=new Map();return{on(name,callback){const list=callbacks.get(name)||[];list.push(callback);callbacks.set(name,list);return{};},emit(name,...args){for(const callback of callbacks.get(name)||[])callback(...args);}};};
 const waitForStatus=async predicate=>{for(let i=0;i<100;i++){try{const value=JSON.parse(await fs.readFile(statusPath,'utf8'));if(predicate(value))return value;}catch{}await new Promise(resolve=>setTimeout(resolve,5));}throw new Error('Timed out waiting for diagnostic status update.');};
@@ -63,7 +63,10 @@ try{
     const root={id:'team',kind:'vault',label:'Team',path:'team/skills',enabled:true};
     const target={id:'agent',runtime:'codex',mode:'wrapper',enabled:true,path:path.join(tempRoot,'runtime'),label:'Agent'};
     const app={saved:{roots:[root],targets:[target],harnesses:[],language:'zh-CN',autoScan:false,autoCheck:false,scanDelayMs:500,showDistributionBoard:true},vault:{...vaultEvents,getMarkdownFiles:()=>{vaultScans++;return[{path:'team/skills/test.md',name:'test.md'},{path:'other/skills/new.md',name:'new.md'}];},read:async()=>content,adapter:{getBasePath:()=>vaultPath}},workspace:{...workspaceEvents,layoutReady:true,getLeavesOfType:()=>[],onLayoutReady:callback=>callback()}};
-    plugin=new Plugin(app);await plugin.onload();assert.equal(plugin.settings.syncRootId,'team');assert.equal(plugin.settings.language,'zh-CN');assert.deepEqual(plugin.settings.roots,[root]);
+    plugin=new Plugin(app);Object.defineProperty(plugin,'machineSettingsPath',{get:()=>path.join(tempRoot,'machine','settings.json')});
+    await plugin.onload();assert.equal(plugin.settings.syncRootId,'team');assert.equal(plugin.settings.language,'zh-CN');assert.deepEqual(plugin.settings.roots,[root]);
+    assert.equal(app.saved.roots,undefined,'legacy source paths are removed from shared settings after successful local migration');
+    assert.deepEqual(JSON.parse(await fs.readFile(plugin.machineSettingsPath,'utf8')).connections.targets,[target]);
     const upgradedStatus=await waitForStatus(value=>value.buildId==='fixture-build-001');assert.equal(upgradedStatus.pluginVersion,'fixture');assert.equal(upgradedStatus.lastCheck.output,'legacy check preserved');assert.equal(upgradedStatus.currentCheck.state,'stale');
     const tab=plugin.settingTab,sectionCalls=[];
     const sectionMethods=['renderRoots','renderSyncSource','renderExternalPackages','renderTargets','renderHarnesses'];
@@ -74,7 +77,7 @@ try{
     delete tab.renderSection;for(const method of sectionMethods)delete tab[method];
     let settingRefreshes=0;tab.refreshTab=()=>{settingRefreshes++;};
     await tab.setControlValue('language','en');assert.equal(app.saved.language,'en');
-    await tab.setControlValue('language','zh-CN');assert.equal(app.saved.language,'zh-CN');assert.equal(settingRefreshes,2);assert.deepEqual(app.saved.roots,[root]);
+    await tab.setControlValue('language','zh-CN');assert.equal(app.saved.language,'zh-CN');assert.equal(settingRefreshes,2);assert.equal(app.saved.roots,undefined);
     await tab.setControlValue('scanDelayMs',NaN);assert.equal(plugin.settings.scanDelayMs,500);
     await assert.rejects(()=>tab.setControlValue('autoCheck','false'));await assert.rejects(()=>tab.setControlValue('unknown',true));
     delete tab.refreshTab;
@@ -122,7 +125,12 @@ try{
     plugin.settings.roots[0].kind='vault';plugin.settings.roots[0].path='team/skills';
     fire();await settle();
     plugin.settings.syncManifestPath='configuration/new.json';await plugin.saveSettings();assert.equal(plugin.checksStale,true,'settings changes invalidate immediately');fire();await settle();
+    const beforeConfirmationChecks=checks;
     globalThis.fixtureModalConfirm=false;await plugin.repairAllAdapters();assert.equal(plugin.adapterRepairRunning,false,'canceling confirmation releases the repair lock');assert.equal(writes,0,'canceling confirmation never writes runtime files');
+    assert(checks>beforeConfirmationChecks,'a fresh read-only check runs before showing the repair confirmation');
+    globalThis.fixtureModalConfirm=true;globalThis.fixtureModalOnOpen=()=>app.vault.emit('modify',{path:'team/skills/test.md'});
+    await plugin.repairAllAdapters();delete globalThis.fixtureModalOnOpen;
+    assert.equal(writes,0,'a source change while confirmation is open cannot authorize a different repair');assert.equal(plugin.checksStale,true);
     globalThis.fixtureModalThrow=true;await plugin.repairAllAdapters();globalThis.fixtureModalThrow=false;assert.equal(plugin.adapterRepairRunning,false,'a confirmation UI failure releases the repair lock');assert.equal(plugin.adapterRepair.output,'fixture modal failure');assert.equal(plugin.latestCheckOutput(),'fixture modal failure','a failed confirmation replaces the previous copied output');
     globalThis.fixtureModalConfirm=true;plugin.syncProvider={...provider,inspectManifest:async()=>{throw new Error('fixture repair failure');}};await plugin.repairAllAdapters();assert.equal(plugin.adapterRepairRunning,false,'an unexpected repair failure releases the repair lock');assert.equal(plugin.adapterRepair.output,'fixture repair failure');assert.equal(plugin.checksStale,true,'an interrupted repair must leave readiness stale');
     diagnostic=await waitForStatus(value=>value.lastRepair?.output==='fixture repair failure');assert.equal(diagnostic.lastRepair.status,'failed');assert.equal(diagnostic.currentCheck.state,'stale');assert.match(diagnostic.currentCheck.reason,/Repair stopped unexpectedly/);

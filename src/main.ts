@@ -11,8 +11,9 @@ import { checkState, runRecord, writePluginStatus } from './status';
 import { getStrings } from './i18n';
 import { registerCommands } from './commands';
 import { confirmRepair } from './ui/confirm-modal';
+import { repairPlanDetails } from './ui/repair-plan';
 import type { AdapterCheckResult } from './sync/result';
-import { createSyncProvider, ManifestCheckResult, SyncProvider } from './sync-provider';
+import { createSyncProvider, ManifestCheckResult, SyncProvider, type SyncManifestSnapshot } from './sync-provider';
 import {
 	AdapterRunContext,
 	RepairTarget,
@@ -30,12 +31,17 @@ import { getVaultChangeImpact } from './sync/vault-change-impact';
 import { localPackageRegistryPath, readLocalPackagePaths, resolveLocalPackagePath, saveLocalPackagePath } from './sync/package-paths';
 import { existingRealPath } from './sync/filesystem';
 import { pathsOverlap } from './utils/paths';
+import { machineSettingsPath, readMachineSettings, restoredSettings, hasLegacyConnections, persistSettings } from './settings/storage';
 
 /** Fallback wait when the setting holds an unusable value. */
 const INDEX_DEBOUNCE_MS = 500;
 
 export default class SkillSwitchboardPlugin extends Plugin {
 	settings!: SkillSwitchboardSettings;
+	get machineSettingsPath(): string | null {
+		const vaultPath = this.getVaultBasePath();
+		return vaultPath ? machineSettingsPath(vaultPath) : null;
+	}
 	index: SkillIndex = { skills: [], errors: [], scannedAt: 0 };
 	/** Trailing debounce for vault changes; cleared on refresh and unload. */
 	private scanTimer: number | null = null;
@@ -196,9 +202,13 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		const normalized = normalizeSettings(await this.loadData());
+		const file = this.machineSettingsPath;
+		const local = file ? await readMachineSettings(file) : null;
+		const saved: unknown = await this.loadData();
+		const normalized = normalizeSettings(restoredSettings(saved, local));
 		this.settings = normalized.settings;
 		if (normalized.recovered) new Notice(getStrings(this.settings.language).settingsRecovered);
+		if (file && hasLegacyConnections(saved)) await persistSettings(this.settings, file, (data) => this.saveData(data), saved);
 		this.configurationKey = settingsCheckKey(this.settings);
 		this.rootsKey = JSON.stringify(this.settings.roots);
 	}
@@ -213,7 +223,8 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		}
 		const key = settingsCheckKey(this.settings);
 		if (key !== this.configurationKey) { this.configurationKey = key; this.invalidateChecks(); }
-		await this.saveData(this.settings);
+		if (!this.machineSettingsPath) throw new Error('Machine settings require a local desktop vault.');
+		await persistSettings(this.settings, this.machineSettingsPath, (data) => this.saveData(data));
 		this.scheduleRootRefresh();
 		this.scheduleBackgroundCheck();
 	}
@@ -375,9 +386,26 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		this.adapterRepairRunning = true;
 		this.renderViews();
 		let confirmed: boolean;
+		let approvedSnapshot: SyncManifestSnapshot | undefined;
+		let previewComplete = false;
+		const previewRevision = this.freshness.capture();
 		try {
-			confirmed = await confirmRepair(this.app, strings, strings.repairConfirmMessage);
+			const preview = await checkAllTargets(this.adapterContext(previewRevision), vaultPath, strings.noRepairTargets);
+			if (this.disposed || !this.freshness.isCurrent(previewRevision)) throw new Error(strings.checksStale);
+			if (preview.manifest.status === 'failed') throw new Error(preview.result.output);
+			approvedSnapshot = preview.manifest.snapshot ?? undefined;
+			this.manifestCheck = preview.manifest;
+			this.adapterCheck = preview.result;
+			this.latestOutput = preview.result.output;
+			this.targetChecks = preview.checks;
+			this.targetCheckedAt = Date.now();
+			this.freshness.accept(previewRevision);
+			previewComplete = true;
+			await writePluginStatus(this, { lastCheck: runRecord(preview.result.status, preview.result.exitCode, preview.result.output), currentCheck: checkState(preview.result.status) });
+			confirmed = await confirmRepair(this.app, strings, strings.repairConfirmMessage, repairPlanDetails(preview.checks, strings));
+			if (confirmed && !this.freshness.isCurrent(previewRevision)) throw new Error(strings.checksStale);
 		} catch (error) {
+			if (!previewComplete) this.invalidateChecks('Repair stopped unexpectedly; run a fresh read-only check.');
 			const output = error instanceof Error ? error.message : String(error);
 			this.adapterRepair = { status: 'failed', exitCode: 1, output };
 			this.latestOutput = output;
@@ -406,7 +434,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		this.renderViews();
 
 		let summary: RepairSummary;
-		try { summary = await runRepairAll(this.adapterContext(revision), vaultPath, strings); }
+		try { summary = await runRepairAll(this.adapterContext(revision), vaultPath, strings, approvedSnapshot); }
 		catch (error) {
 			const output = error instanceof Error ? error.message : String(error);
 			this.targetActivity = null;
@@ -462,8 +490,8 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	}
 
 	getVaultBasePath(): string | null {
-		const adapter = this.app.vault.adapter as { getBasePath?: () => string };
-		return adapter.getBasePath?.() ?? null;
+		const adapter = this.app.vault?.adapter as { getBasePath?: () => string } | undefined;
+		return adapter?.getBasePath?.() ?? null;
 	}
 
 	private renderViews(): void {

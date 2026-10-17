@@ -27,6 +27,7 @@ jobs:
             - run: npm run test:scanner
             - run: npm run test:readiness
             - run: npm run test:lifecycle
+            - run: npm run test:machine-settings
             - run: npm run test:build-id
             - run: npm run test:status-queue
             - run: npm run test:native
@@ -56,6 +57,7 @@ jobs:
             - run: npm run test:scanner
             - run: npm run test:readiness
             - run: npm run test:lifecycle
+            - run: npm run test:machine-settings
             - run: npm run test:build-id
             - run: npm run test:status-queue
             - run: npm run test:native

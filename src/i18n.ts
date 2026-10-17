@@ -27,6 +27,7 @@ export interface Strings {
 	distributionRepairing: string;
 	distributionClean: string;
 	distributionDrift: string;
+	distributionBlocked: string;
 	distributionUnavailable: string;
 	distributionRepairFailed: string;
 	refresh: string;
@@ -44,6 +45,7 @@ export interface Strings {
 	repairAllAdapters: string;
 	repairAllDescription: string;
 	repairConfirmMessage: string;
+	repairPlanLine: (label: string, eligible: number, blocked: number) => string;
 	confirmRepair: string;
 	cancelRepair: string;
 	repairAllRunning: string;
@@ -73,6 +75,7 @@ export interface Strings {
 	autoCheck: string;
 	autoCheckDescription: string;
 	syncSource: string;
+	localConnectionsDescription: string;
 	canonicalRoot: string;
 	canonicalRootDescription: string;
 	chooseSource: string;
