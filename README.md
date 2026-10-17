@@ -17,7 +17,7 @@ is required. English and Simplified Chinese are available in settings.
 
 > [!NOTE]
 > Checks are read-only. Repair requires confirmation. The plugin never runs
-> agents, harness commands, or tool packages.
+> agents or tool packages.
 
 ## Install
 
@@ -35,7 +35,7 @@ version, use the Development steps below.
   source.
 - Inspect `copy`, `symlink`, and `wrapper` targets on an interactive map.
 - Check metadata, commands, references, duplicates, paths, and package resources
-  without running agents or harness commands.
+  without running agents.
 - Run read-only checks when the board opens, after changes, and every five
   minutes; refresh them from the command palette.
 - Repair enabled wrapper targets after confirmation and copy check output for
@@ -47,7 +47,7 @@ Use vault-relative paths for roots inside the vault and `~` paths for external
 roots and targets to keep settings portable. Absolute paths are also supported
 for machine-specific setups.
 
-Sources, targets, enabled agents, and harness commands are local to each vault
+Sources, targets, and enabled agents are local to each vault
 checkout, in `~/.skill-switchboard/vaults/<vault-id>/settings.json`. Existing
 connections migrate automatically, with a `legacy-settings.json` recovery copy;
 new devices configure their own connections. The skill manifest stays shared.

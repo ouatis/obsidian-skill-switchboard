@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { SkillSwitchboardSettings } from '../settings';
 
-const CONNECTION_KEYS = ['roots', 'targets', 'harnesses', 'syncRootId', 'syncManifestPath'] as const;
+const CONNECTION_KEYS = ['roots', 'targets', 'syncRootId', 'syncManifestPath'] as const;
 const PREFERENCE_KEYS = ['language', 'autoScan', 'autoCheck', 'scanDelayMs', 'showDistributionBoard'] as const;
 type ConnectionSettings = Pick<SkillSwitchboardSettings, typeof CONNECTION_KEYS[number]>;
 type SharedSettings = Pick<SkillSwitchboardSettings, typeof PREFERENCE_KEYS[number]> & { settingsStorageVersion: 2 };
@@ -27,6 +27,10 @@ export function machineSettingsPath(vaultPath: string, home = os.homedir()): str
 
 export async function readMachineSettings(file: string): Promise<Record<string, unknown> | null> {
 	await writes.get(file)?.catch(() => undefined);
+	return readStoredConnections(file);
+}
+
+async function readStoredConnections(file: string): Promise<Record<string, unknown> | null> {
 	try {
 		if ((await fs.stat(file)).size > 1024 * 1024) throw new Error('Machine settings exceed the size limit.');
 		const value: unknown = JSON.parse(await fs.readFile(file, 'utf8'));
@@ -42,6 +46,7 @@ export async function readMachineSettings(file: string): Promise<Record<string, 
 export function restoredSettings(saved: unknown, local: Record<string, unknown> | null): unknown {
 	if (!record(saved) && !local) return saved;
 	const data = record(saved) ? { ...saved } : {};
+	delete data.harnesses;
 	if (local || data.settingsStorageVersion === 2) {
 		for (const key of CONNECTION_KEYS) delete data[key];
 		if (local) for (const key of CONNECTION_KEYS) if (Object.prototype.hasOwnProperty.call(local, key)) data[key] = local[key];
@@ -50,7 +55,7 @@ export function restoredSettings(saved: unknown, local: Record<string, unknown> 
 }
 
 export function hasLegacyConnections(saved: unknown): boolean {
-	return record(saved) && CONNECTION_KEYS.some((key) => Object.prototype.hasOwnProperty.call(saved, key));
+	return record(saved) && [...CONNECTION_KEYS, 'harnesses'].some((key) => Object.prototype.hasOwnProperty.call(saved, key));
 }
 
 /** Capture before queuing, then save locally before removing legacy values from shared data. */
@@ -63,9 +68,16 @@ export function persistSettings(
 	const connections = Object.fromEntries(CONNECTION_KEYS.map((key) => [key, settings[key]])) as ConnectionSettings;
 	const payload = JSON.stringify({ schemaVersion: 1, connections }, null, 2) + '\n';
 	const legacyPayload = legacy === undefined ? null : JSON.stringify(legacy, null, 2) + '\n';
+	const legacyHarnesses = record(legacy) && Object.prototype.hasOwnProperty.call(legacy, 'harnesses')
+		? JSON.stringify(legacy.harnesses) : undefined;
 	const preferences = Object.fromEntries(PREFERENCE_KEYS.map((key) => [key, settings[key]])) as SharedSettings;
 	preferences.settingsStorageVersion = 2;
 	const operation = (writes.get(file) ?? Promise.resolve()).catch(() => undefined).then(async () => {
+		// Retired command records stay on disk for recovery, outside active settings.
+		const stored = await readStoredConnections(file);
+		const document = JSON.parse(payload) as { schemaVersion: 1; connections: Record<string, unknown> };
+		if (stored && Object.prototype.hasOwnProperty.call(stored, 'harnesses')) document.connections.harnesses = stored.harnesses;
+		else if (legacyHarnesses !== undefined) document.connections.harnesses = JSON.parse(legacyHarnesses) as unknown;
 		await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
 		if (legacyPayload !== null) {
 			try { await fs.writeFile(path.join(path.dirname(file), 'legacy-settings.json'), legacyPayload, { flag: 'wx', mode: 0o600 }); }
@@ -73,7 +85,7 @@ export function persistSettings(
 		}
 		const temporary = `${file}.${randomUUID()}.tmp`;
 		try {
-			await fs.writeFile(temporary, payload, { flag: 'wx', mode: 0o600 });
+			await fs.writeFile(temporary, JSON.stringify(document, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
 			await fs.rename(temporary, file);
 		} finally { await fs.rm(temporary, { force: true }); }
 		await saveShared(preferences);

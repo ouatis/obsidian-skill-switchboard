@@ -23,13 +23,6 @@ export interface RuntimeTarget {
 	runtime?: RuntimeName;
 }
 
-export interface HarnessDefinition {
-	id: string;
-	label: string;
-	command: string;
-	enabled: boolean;
-}
-
 export interface IndexedSkill {
 	id: string;
 	name: string;

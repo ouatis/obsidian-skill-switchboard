@@ -13,7 +13,7 @@ Skill Switchboard 是一款 Obsidian 桌面插件，用于索引 Agent Skills，
 安静的面板和细线与 Desk Lamp、Scriptorium 共享视觉节奏，界面仍跟随 Obsidian 主题；使用本插件不需要安装另外两款产品。设置中提供英文和简体中文。
 
 > [!NOTE]
-> 检查只读，修复需要确认。插件不会运行 Agent、harness 命令或工具包。
+> 检查只读，修复需要确认。插件不会运行 Agent 或工具包。
 
 ## 安装
 
@@ -25,7 +25,7 @@ Skill Switchboard 是一款 Obsidian 桌面插件，用于索引 Agent Skills，
 
 - 从选定的 vault 或桌面目录索引技能，并指定一个权威源。
 - 在交互式接线图中查看 `copy`、`symlink` 和 `wrapper` 目标。
-- 检查元数据、命令、引用、重复项、路径和 package 资源；不会运行 Agent 或 harness 命令。
+- 检查元数据、命令、引用、重复项、路径和 package 资源；不会运行 Agent。
 - 打开接线台、来源变更后，以及每五分钟自动进行只读检查；也可从命令面板刷新。
 - 确认后修复已启用的 wrapper 目标，并复制检查输出用于排查。
 
@@ -33,7 +33,7 @@ Skill Switchboard 是一款 Obsidian 桌面插件，用于索引 Agent Skills，
 
 笔记库内的根目录使用相对路径；外部根目录和目标使用 `~` 路径，便于跨设备复用。也支持单机绝对路径。
 
-来源、目标、启用的 Agent 和 Harness 命令按本机笔记库分别保存到 `~/.skill-switchboard/vaults/<vault-id>/settings.json`。旧接线配置会自动迁移，并保留 `legacy-settings.json` 恢复副本；新设备单独配置接线。技能清单继续共享。0.4.0 以前的版本不会读取这份本机配置。
+来源、目标和启用的 Agent 按本机笔记库分别保存到 `~/.skill-switchboard/vaults/<vault-id>/settings.json`。旧接线配置会自动迁移，并保留 `legacy-settings.json` 恢复副本；新设备单独配置接线。技能清单继续共享。0.4.0 以前的版本不会读取这份本机配置。
 
 技能可用 `package_path` 声明配套文件，也可用 `package_id` 引用本机工具包。可选的 schema-v1 `package_manifest` 会列出文件及 SHA-256 哈希；文件缺失、变更或多出时会阻断对应技能。没有清单时，package 资源标为未经验证。每台机器在 `~/.skill-switchboard/packages.json` 中单独映射 package ID 和本地路径；插件不会下载或更新工具包。
 

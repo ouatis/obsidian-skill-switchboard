@@ -146,7 +146,7 @@
 
 .skill-switchboard-summary {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-template-columns: repeat(3, minmax(0, 1fr));
 	gap: 0;
 	background: var(--ssb-surface);
 	border: 1px solid var(--ssb-border);
@@ -1010,11 +1010,9 @@
 		padding: 10px 12px;
 	}
 
-	.skill-switchboard-view button.skill-switchboard-stat:nth-child(2) {
+	.skill-switchboard-view button.skill-switchboard-stat:first-child {
+		grid-column: 1 / -1;
 		border-right: 0;
-	}
-
-	.skill-switchboard-view button.skill-switchboard-stat:nth-child(-n + 2) {
 		border-bottom: 1px solid var(--ssb-border);
 	}
 }

@@ -67,7 +67,6 @@ export class SkillSwitchboardView extends ItemView {
 		const summary = contentEl.createDiv('skill-switchboard-summary');
 		const activeRoots = this.plugin.settings.roots.filter((root) => root.enabled && root.path).length;
 		const enabledTargets = this.plugin.settings.targets.filter((target) => target.enabled).length;
-		const enabledHarnesses = this.plugin.settings.harnesses.filter((harness) => harness.enabled).length;
 		const goToList = () => {
 			contentEl.querySelector('.skill-switchboard-search')?.scrollIntoView({
 				behavior: contentEl.win.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start',
@@ -76,7 +75,6 @@ export class SkillSwitchboardView extends ItemView {
 		addStat(summary, strings, strings.skills, String(this.plugin.index.skills.length), 'list', goToList);
 		addStat(summary, strings, strings.roots, String(activeRoots), 'settings', () => this.openSettings());
 		addStat(summary, strings, strings.targets, String(enabledTargets), 'settings', () => this.openSettings());
-		addStat(summary, strings, strings.harnesses, String(enabledHarnesses), 'settings', () => this.openSettings());
 
 		if (this.plugin.index.errors.length > 0) {
 			const errorBox = contentEl.createDiv('skill-switchboard-errors');
@@ -321,7 +319,7 @@ function actionButton(parent: HTMLElement, label: string, icon: string, extraCla
 
 /**
  * The counts double as navigation: the skill count points at the list, while
- * roots, targets and harnesses live in settings and say so.
+ * roots and targets live in settings and say so.
  */
 function addStat(
 	container: HTMLElement,

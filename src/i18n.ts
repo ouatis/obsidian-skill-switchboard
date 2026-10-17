@@ -97,7 +97,6 @@ export interface Strings {
 	skills: string;
 	roots: string;
 	targets: string;
-	harnesses: string;
 	scanWarnings: string;
 	noSkillsTitle: string;
 	noSkillsDescription: string;
@@ -148,11 +147,6 @@ export interface Strings {
 	wrapper: string;
 	addRuntimeTarget: string;
 	newTarget: string;
-	harnessesDescription: string;
-	unnamedHarness: string;
-	commandTemplate: string;
-	addHarness: string;
-	newHarness: string;
 }
 
 export function getStrings(language: Language): Strings {

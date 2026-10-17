@@ -2,10 +2,9 @@ import { App, PluginSettingTab, Setting, requireApiVersion } from 'obsidian';
 import type { SettingDefinitionItem } from 'obsidian';
 import type SkillSwitchboardPlugin from './main';
 import { getStrings, Language } from './i18n';
-import { RUNTIME_NAMES, HarnessDefinition, RuntimeTarget, SkillRoot } from './types';
+import { RUNTIME_NAMES, RuntimeTarget, SkillRoot } from './types';
 import {
 	renderExternalPackagesSection,
-	renderHarnessesSection,
 	renderRootsSection,
 	renderSyncSourceSection,
 	renderTargetsSection,
@@ -14,7 +13,6 @@ import {
 export interface SkillSwitchboardSettings {
 	roots: SkillRoot[];
 	targets: RuntimeTarget[];
-	harnesses: HarnessDefinition[];
 	language: Language;
 	autoScan: boolean;
 	scanDelayMs: number;
@@ -35,7 +33,6 @@ export const DEFAULT_SETTINGS: SkillSwitchboardSettings = {
 		},
 	],
 	targets: [],
-	harnesses: [],
 	language: 'en',
 	autoScan: false,
 	scanDelayMs: 500,
@@ -109,12 +106,6 @@ function normalizeTarget(value: unknown): RuntimeTarget | null {
 	};
 }
 
-function normalizeHarness(value: unknown): HarnessDefinition | null {
-	if (!isRecord(value)) return null;
-	if (typeof value.id !== 'string' || !value.id.trim() || typeof value.label !== 'string' || typeof value.command !== 'string' || typeof value.enabled !== 'boolean') return null;
-	return { ...value, id: value.id, label: value.label, command: value.command, enabled: value.enabled };
-}
-
 export interface SettingsNormalization {
 	settings: SkillSwitchboardSettings;
 	recovered: boolean;
@@ -125,12 +116,11 @@ export function normalizeSettings(value: unknown): SettingsNormalization {
 	const data = isRecord(value) ? value : {};
 	const roots = normalizeRecords(data.roots, DEFAULT_SETTINGS.roots, normalizeRoot);
 	const targets = normalizeRecords(data.targets, DEFAULT_SETTINGS.targets, normalizeTarget);
-	const harnesses = normalizeRecords(data.harnesses, DEFAULT_SETTINGS.harnesses, normalizeHarness);
 	const firstEnabledRoot = roots.items.find((root) => root.enabled && root.path.trim())?.id ?? '';
 	const hasInvalidValue = (key: keyof SkillSwitchboardSettings, valid: (candidate: unknown) => boolean): boolean =>
 		Object.prototype.hasOwnProperty.call(data, key) && !valid(data[key]);
 	const recovered = (value !== null && value !== undefined && !isRecord(value)) ||
-		roots.recovered || targets.recovered || harnesses.recovered ||
+		roots.recovered || targets.recovered ||
 		hasInvalidValue('language', (candidate) => candidate === 'en' || candidate === 'zh-CN') ||
 		hasInvalidValue('autoScan', (candidate) => typeof candidate === 'boolean') ||
 		hasInvalidValue('scanDelayMs', (candidate) => typeof candidate === 'number' && Number.isFinite(candidate) && candidate >= 0) ||
@@ -139,11 +129,8 @@ export function normalizeSettings(value: unknown): SettingsNormalization {
 		hasInvalidValue('syncManifestPath', (candidate) => typeof candidate === 'string') ||
 		hasInvalidValue('autoCheck', (candidate) => typeof candidate === 'boolean');
 	const settings: SkillSwitchboardSettings = {
-		...data,
-		...DEFAULT_SETTINGS,
 		roots: roots.items,
 		targets: targets.items,
-		harnesses: harnesses.items,
 		language: data.language === 'zh-CN' ? 'zh-CN' : DEFAULT_SETTINGS.language,
 		autoScan: typeof data.autoScan === 'boolean' ? data.autoScan : DEFAULT_SETTINGS.autoScan,
 		scanDelayMs: typeof data.scanDelayMs === 'number' && Number.isFinite(data.scanDelayMs) && data.scanDelayMs >= 0
@@ -166,7 +153,7 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 	}
 
 	/**
-	 * Re-renders the tab after a root, target or harness entry is added or removed.
+	 * Re-renders the tab after a root or target entry is added or removed.
 	 * Obsidian 1.13.0+ rebuilds from getSettingDefinitions() through update(),
 	 * while older versions still go through the imperative display().
 	 */
@@ -230,7 +217,6 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 			{ name: strings.syncSource, render: (setting) => this.renderSection(setting, (el) => this.renderSyncSource(el, strings)) },
 			{ name: strings.externalPackages, render: (setting) => this.renderSection(setting, (el) => this.renderExternalPackages(el, strings)) },
 			{ name: strings.runtimeTargets, render: (setting) => this.renderSection(setting, (el) => this.renderTargets(el, strings)) },
-			{ name: strings.harnesses, render: (setting) => this.renderSection(setting, (el) => this.renderHarnesses(el, strings)) },
 		];
 	}
 
@@ -257,7 +243,7 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 
 	/**
 	 * Imperative fallback, still the only renderer on Obsidian older than 1.13.0
-	 * and the home of the root, target and harness list editors.
+	 * and the home of the root and target list editors.
 	 */
 	display(): void {
 		const { containerEl } = this;
@@ -334,7 +320,6 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 		this.renderSyncSource(containerEl, strings);
 		this.renderExternalPackages(containerEl, strings);
 		this.renderTargets(containerEl, strings);
-		this.renderHarnesses(containerEl, strings);
 	}
 
 	private renderRoots(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
@@ -351,10 +336,6 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 
 	private renderTargets(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
 		renderTargetsSection(this.plugin, containerEl, strings, () => this.refreshTab());
-	}
-
-	private renderHarnesses(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
-		renderHarnessesSection(this.plugin, containerEl, strings, () => this.refreshTab());
 	}
 }
 

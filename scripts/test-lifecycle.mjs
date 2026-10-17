@@ -44,7 +44,7 @@ try{
     await settingsFixture.loadSettings();
     assert.deepEqual(settingsFixture.settings.roots,[recoveredRoot],'malformed and duplicate roots are removed while valid paths survive');
     assert.deepEqual(settingsFixture.settings.targets,[recoveredTarget],'targets with unknown runtimes are rejected before use');
-    assert.deepEqual(settingsFixture.settings.harnesses,[recoveredHarness],'invalid harness entries do not reach settings controls');
+    assert.equal(settingsFixture.settings.harnesses,undefined,'retired harness records never reach active settings');
     assert.equal(settingsFixture.settings.language,'en');assert.equal(settingsFixture.settings.autoScan,false);assert.equal(settingsFixture.settings.autoCheck,true);
     assert.equal(settingsFixture.settings.showDistributionBoard,true);assert.equal(settingsFixture.settings.scanDelayMs,500);
     assert.equal(settingsFixture.settings.syncRootId,'recovered');assert.equal(settingsFixture.settings.syncManifestPath,'');
@@ -52,11 +52,11 @@ try{
     settingsFixture.app.saved={roots:{invalid:true},targets:'invalid',harnesses:null,language:'zh-CN'};
     await settingsFixture.loadSettings();
     assert.deepEqual(settingsFixture.settings.roots,[{id:'vault-skills',label:'Vault skills',path:'skills',kind:'vault',enabled:true}],'non-array data falls back to a usable default root instead of crashing startup');
-    assert.deepEqual(settingsFixture.settings.targets,[]);assert.deepEqual(settingsFixture.settings.harnesses,[]);
+    assert.deepEqual(settingsFixture.settings.targets,[]);assert.equal(settingsFixture.settings.harnesses,undefined);
     assert.equal(globalThis.fixtureNotices,2);assert.match(globalThis.fixtureNoticeMessages.at(-1),/部分已保存设置格式无效/,'settings recovery notice is translated');
-    settingsFixture.app.saved={roots:[],targets:[],harnesses:[],syncRootId:''};
+    settingsFixture.app.saved={roots:[],targets:[],harnesses:'retired-invalid-data',syncRootId:''};
     await settingsFixture.loadSettings();assert.deepEqual(settingsFixture.settings.roots,[],'an intentional empty source list stays empty');
-    assert.equal(globalThis.fixtureNotices,2,'a valid empty configuration does not trigger a recovery notice');
+    assert.equal(globalThis.fixtureNotices,2,'retired harness data does not trigger a recovery notice');
     settingsFixture.app.saved=null;await settingsFixture.loadSettings();assert.equal(globalThis.fixtureNotices,2,'a fresh install with no saved data is not reported as corrupt');
     globalThis.fixtureNotices=0;globalThis.fixtureNoticeMessages=[];
     const vaultEvents=eventHub(),workspaceEvents=eventHub();let content='---\nname: test\ndescription: Fixture\n---\n# Test\n',vaultScans=0;
@@ -69,7 +69,7 @@ try{
     assert.deepEqual(JSON.parse(await fs.readFile(plugin.machineSettingsPath,'utf8')).connections.targets,[target]);
     const upgradedStatus=await waitForStatus(value=>value.buildId==='fixture-build-001');assert.equal(upgradedStatus.pluginVersion,'fixture');assert.equal(upgradedStatus.lastCheck.output,'legacy check preserved');assert.equal(upgradedStatus.currentCheck.state,'stale');
     const tab=plugin.settingTab,sectionCalls=[];
-    const sectionMethods=['renderRoots','renderSyncSource','renderExternalPackages','renderTargets','renderHarnesses'];
+    const sectionMethods=['renderRoots','renderSyncSource','renderExternalPackages','renderTargets'];
     tab.renderSection=(_setting,render)=>render({});
     for(const method of sectionMethods)tab[method]=()=>sectionCalls.push(method);
     for(const definition of tab.getSettingDefinitions())if(definition.render)definition.render({});
