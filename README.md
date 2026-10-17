@@ -1,119 +1,99 @@
+<div align="center">
+
 # Skill Switchboard
 
-An Obsidian desktop plugin for indexing and inspecting Agent Skills across configurable roots, runtime targets, adapters, and harness definitions.
+_One skill source. Connected agents. Clear status._
 
-## Current scope
+</div>
 
-The first MVP keeps indexing read-only. Adapter repair is explicit through one button:
+An Obsidian desktop plugin for indexing and inspecting Agent Skills across
+configurable roots, runtime targets, adapters, and harness definitions. It
+shows how one selected source connects to agent folders and checks their
+current state.
 
-- scan vault-relative roots and explicitly configured desktop folders;
-- discover canonical Markdown cards directly under a configured root, plus folders containing `SKILL.md` adapters;
-- treat a top-level card's `package_path` directory as supporting resources, not additional skills;
-- check declared resource inventories for missing, changed, unexpected, or non-portable files;
-- display name, description, source path, and SHA-256;
-- record runtime targets as `copy`, `symlink`, or `wrapper` destinations;
-- record harness command templates without executing them;
-- validate the shared manifest before checking targets;
-- run a native, read-only comparison for every configured runtime target;
-- recheck every enabled wrapper target, repair all drift automatically, and run follow-up checks;
-- invalidate outdated results immediately and perform quiet, read-only automatic checks;
-- summarize actual repaired agents, unique changed skills, written files, and recovery paths;
-- copy the adapter check or repair output to the clipboard, either from the **Copy output** button above the output block or from the command palette (`Copy adapter check output`);
-- use English by default, with an in-plugin switch to Simplified Chinese.
+The interface shares a quiet visual rhythm with Desk Lamp and Scriptorium,
+while following the active Obsidian theme. Neither sibling plugin is required.
+English and Simplified Chinese are available in settings.
 
-### Local distribution-deck preview
+> [!NOTE]
+> Source and adapter checks are read-only. Repair is a separate, confirmed
+> action; harness command templates and tool packages are never executed.
 
-An optional line-work distribution deck shows the canonical source and enabled wrapper targets. Hover a node or keyboard-focus an agent in the status list to inspect it; checking and repairing briefly trace the active route. Status comes from structured per-target check results, including the repair follow-up check, not from decorative animation or parsed console output. A passing check means the existing adapter checks passed, not proof of complete byte-for-byte identity or that an agent has loaded or executed the skill. This preview does not broaden the adapter checks themselves.
+## Install
 
-Hide the deck using its eye button, or toggle it in settings; the choice survives reloads. While hidden, the toolbar offers a button to show it again. The figure respects reduced-motion preferences, follows Obsidian theme colors, and does no work at rest. Its original SVG geometry is inspired by Hairline's restrained interaction style; it adds no package, React, remote asset, or telemetry dependency.
+Requires Obsidian 1.7.2 or newer and runs on desktop.
 
-The local preview uses one coordinated layout for the toolbar, connections, counters, diagnostics, search, and skill library. Wide panels place the map beside target status; narrow panels stack them. The Settings button and configuration counters open this plugin's settings directly. The Chinese page title is 技能接线台; the English title remains Skill Switchboard.
+For a manual install, download `main.js`, `manifest.json`, and `styles.css`
+from [Releases](https://github.com/ouatis/obsidian-skill-switchboard/releases)
+and place them in `<vault>/.obsidian/plugins/skill-switchboard/`. Then enable
+Skill Switchboard under **Settings → Community plugins**. For unreleased
+versions, add `ouatis/obsidian-skill-switchboard` as a source in
+[BRAT](https://github.com/thesephist/brats).
 
-The interface shares a quiet visual rhythm with Desk Lamp and Scriptorium: thin rules, 12px panels, 8px controls, and restrained 160ms transitions. Fonts, surfaces, accent colors, and state colors still come from the active Obsidian theme; neither sibling product is required. These presentation rules do not change checks, repair confirmation, target layout, or saved settings.
+## Features
 
-SVG figures use linked native titles for accessible names, so hovering the map does not enter Obsidian's HTML-only tooltip handler. Native HTML buttons keep both their accessible labels and keyboard focus behavior.
+- Index skills from selected vault or desktop roots and choose one canonical
+  source for distribution.
+- Inspect configured `copy`, `symlink`, and `wrapper` targets on an interactive
+  map, with per-target checks and diagnostic output.
+- Check wrappers, metadata, commands, reference files, paths, duplicates, and
+  declared package resources without running agents or harness commands.
+- Run quiet read-only checks automatically or refresh them from the command
+  palette. Automatic checks never repair files.
+- Repair enabled wrapper targets after confirmation, then run follow-up checks.
+- Copy the latest check output from the view or command palette.
 
-Paths are stored as configuration, so keep them portable when the vault will be used on more than one machine. Vault roots use paths relative to the vault. External roots and runtime targets should use `~` for the current user's home, such as `~/.codex/skills`, `~/.config/opencode/skills`, or `~/.gemini/config/skills`. Absolute paths remain supported for machine-specific setups. A Windows absolute path is not silently interpreted on macOS or Linux; replace it with a `~` path on the destination machine.
+## Paths and packages
 
-Only configured roots and runtime targets are scanned. The native implementation checks wrapper, metadata, reference-package, command, stale-term, duplicate, and retired-alias consistency. One-click repair writes native wrappers, metadata, commands, and Hermes reference packages directly, after resolving every target outside the vault. Files that will be overwritten or removed are backed up outside the vault under `~/.skill-switchboard/repair-backups/<vault-id>/`; each backup includes a `backup-index.json` with the original and recovery paths. These backups are local to the machine and are not synced with the vault. Existing backups under `.skill-switchboard-repair-backups/` are left in place and remain usable; the plugin does not automatically delete backups. The plugin has no Python runtime dependency.
+Use paths relative to the vault for vault roots. Use `~` paths for external
+roots and runtime targets, such as `~/.codex/skills`; absolute paths are also
+supported for machine-specific setups. Replace a Windows absolute path when
+moving the vault to macOS or Linux.
 
-Choose a canonical source from the configured roots under **Distribution source**. The adapter manifest is configurable; leaving it blank uses `skills-manifest.json` beside that source directory. New installations default to a `skills` root. Existing installations infer their already configured source without moving it. Runtime folders are targets/adapters, not additional sources. Generated wrappers name the chosen vault-relative path when available and the resolved local path on that machine. External sources are also supported explicitly.
+A skill can keep supporting files in its source root with `package_path`, or
+refer to a machine-local toolkit with `package_id`. Add `package_manifest` to
+point to a schema-v1 inventory whose `files` entries contain package-relative
+`{ path, sha256 }` records. Missing, changed, or unexpected files block
+repair; without an inventory, resources are reported as unverified. A package
+ID maps to a path in `~/.skill-switchboard/packages.json` on each machine. The
+plugin does not download, update, or execute packages.
 
-For an existing JARDIN setup, keep `00-MEMORTE/shared/skills` as the source and its existing sibling manifest. This is configuration, not a path built into the plugin. The map, checks, generated wrappers, and repair all use the same selected source.
+## Checks and repair
 
-### Supporting tool packages
+Only configured roots and targets are inspected. Automatic checks run on open,
+after source or settings changes, and every five minutes. They never write
+adapter files.
 
-A top-level skill card may declare `package_path: packages/toolkit`. The path is relative to the configured skill root, must stay within that root, and excludes only that exact directory and its descendants from skill discovery. Its original `SKILL.md`, examples, and documentation remain ordinary resource files. The same rule applies to vault and desktop roots; undeclared skill directories continue to be discovered normally.
+Repair validates source resources first and requires confirmation. It writes
+only enabled wrapper targets resolved outside the vault. Files replaced or
+removed are backed up outside the vault under
+`~/.skill-switchboard/repair-backups/<vault-id>/`; each backup includes a
+`backup-index.json` with recovery paths. Backups are local to the machine and
+are never deleted automatically. Saving an external package path writes only
+the machine-local `~/.skill-switchboard/packages.json` registry.
 
-Use a normal, visible directory for resources that should travel through Obsidian Sync. The plugin does not download, unpack, copy, or execute the toolkit and does not control Obsidian Sync. Hidden upstream files remain subject to Obsidian's sync exclusions.
+The hidden `.skill-switchboard-status.json` at the vault root records the
+installed version, build ID, and latest check status/output. It helps diagnose
+what Obsidian loaded; it does not prove another device synced files or an agent
+loaded a skill. The plugin makes no network requests and collects no telemetry.
 
-For a completeness check, add `package_manifest: packages/toolkit.json` to the card (relative to the source root). Its JSON shape is:
+## Commands
 
-```json
-{
-  "schema_version": 1,
-  "files": [
-    { "path": "SKILL.md", "sha256": "<64 hexadecimal SHA-256 characters>" }
-  ]
-}
-```
-
-Paths in the inventory are relative to the package directory. Include its entrypoint (`SKILL.md`, or a `package_entry` override) and all required runtime files. Checks are read-only: missing/changed/unexpected files are errors; resources without an inventory are explicitly unverified, not proven complete. Inventories are maintained with approved source updates, never regenerated by repair to hide a discrepancy. Paths escaping the source/package are rejected. Missing resources block adapter repair; restoring or updating an upstream toolkit is a separate operation.
-
-The interface separates agent-entry checks, local resource integrity, and other-device verification. Local success never proves that another device downloaded files or that an agent loaded a skill. Required hidden paths receive a sync-risk warning.
-
-#### Machine-local external packages
-
-To keep a toolkit outside the vault without moving its shared skill card, declare `package_id: drawing-toolkit` instead of `package_path`. Keep `package_manifest` relative to the shared source as before. Using both path and ID is rejected.
-
-Under **External tool packages**, save that ID's directory on this computer. This explicit action writes only `~/.skill-switchboard/packages.json`, not the vault or synced plugin settings:
-
-```json
-{
-  "schema_version": 1,
-  "packages": { "drawing-toolkit": "~/tools/drawing-toolkit" }
-}
-```
-
-Agents can read the same registry to find the original toolkit entrypoint and resolve its relative instructions. The shared card should identify the package ID and this registry rather than embed one machine's absolute path. Missing mappings or files block resource readiness and adapter repair. The toolkit must be outside the vault and shared source, and entry/inventory file paths cannot escape their roots. Checks never create a registry, download files, or update the toolkit. The only external write added here is the user-requested path registration.
-
-External packages are explicitly labeled local-only: neither the toolkit nor this registry travels through Obsidian Sync. Each other computer needs its own installation and path registration. Saving a path invalidates old checks immediately; edits made outside the plugin are discovered on the next manual or periodic check.
-
-Both older and newer Obsidian settings render the source, target, harness, and external-package editors. Native controls use the same persistence and readiness-invalidation route; language choices are saved and the tab is rebuilt in that language.
-
-### Automatic checks and repair records
-
-Automatic checking is enabled by default. It runs quietly on opening, after source/manifest/settings changes, and every five minutes. Source changes invalidate previous green states immediately; a result that finishes after another change is discarded and followed by a fresh check. Automatic checks never repair runtime files. You can disable them in settings and check manually. Runtime-folder changes outside the vault are discovered on the next check, not claimed as continuously watched.
-
-The plugin keeps a hidden `.skill-switchboard-status.json` diagnostic file at the vault root. `pluginVersion` identifies the installed plugin version, while `buildId` distinguishes builds that share that version: GitHub builds include the short commit ID, and each local build includes its build time, including every development watch rebuild. This makes it possible to compare the code Obsidian loaded with the bundle copied into the plugin folder. `currentCheck.state` distinguishes `stale`, `running`, `passed`, and `failed`; changes and plugin reloads mark an old result stale instead of presenting it as current. `lastCheck` remains the most recent completed read-only check, and its `output` contains the failure text even when a check throws unexpectedly. Resource failures identify the affected skill and issue; machine-local absolute package paths are omitted. Status writes are serialized and replaced atomically, so an interrupted write does not leave a partial JSON file. This file reports local check state only; it does not prove another device synced the source or that an agent loaded it.
-
-One-click repair still requires confirmation. It validates source resources before writing, records changed skills/files and recovery paths, and rechecks each changed target. The summary counts structured write records, not log text; partial failures remain visible. Old repair results are labeled as history rather than current readiness.
-
-### Adapter manifest
-
-The schema remains version 1. `skills` contains named cards and per-runtime `adapters`; `shared_file` may be a top-level filename or a path prefixed with the chosen vault-relative source. Optional `adapter_defaults` provide metadata inherited by enabled adapters, for example `{"hermes":{"category":"team"}}`. The generic Hermes default is `shared`; existing installations can preserve their earlier directory explicitly in the manifest. Targets with zero declared adapter skills are not marked successful.
-
-Optional `validation_policy` defines installation-specific `retired_names`, `forbidden_literals`, and `reject_example_absolute_path`. A `default` object can be overridden for each runtime. None of those rules are personal defaults embedded in the plugin. Without a policy, native checks still validate configured wrappers, metadata, references, commands, paths, and duplicate names.
+- **Open switchboard**
+- **Refresh skill index**
+- **Copy adapter check output**
 
 ## Development
 
 ```bash
 npm install
+npm run dev
 npm run build
-npm run test:scanner
-npm run test:readiness
-npm run test:lifecycle
-npm run test:adapter
-npm run test:native
-npm run test:distribution
-npm run test:ui
-npm run test:release-validation
+npm run lint
 ```
 
-`test:adapter` uses a fake sync provider to cover the check/repair orchestration without a vault, so it also runs in CI. The production build writes `main.js` to the project root. For local testing, copy `main.js`, `manifest.json`, and `styles.css` into:
-
-```text
-<vault>/.obsidian/plugins/skill-switchboard/
-```
-
-The native tests build isolated generic vaults and temporary runtime targets; no personal vault is needed for CI. For live read-only checks, pass the intended vault explicitly: `npm run test:native -- --live /absolute/path/to/vault`. The readiness and lifecycle suites cover resource corruption, portable sources, late-result rejection, silent background checks, and structured repair totals. The plugin has no Python runtime dependency. After installing a build, reload the plugin in Obsidian and inspect errors with the Obsidian CLI.
+Run the automated `test:*` scripts in `package.json` for the scanner,
+readiness, repair, status, native adapter, distribution, UI, and release
+checks. CI runs these suites on Node.js 20, 22, and 24, plus path checks on
+Linux, macOS, and Windows. The production build creates `main.js`; copy it,
+`manifest.json`, and `styles.css` to the plugin folder above to test in Obsidian.
