@@ -45,3 +45,15 @@ export function isAbsolutePath(value: string): boolean {
 	if (path.sep === '/') return value.startsWith('/');
 	return /^[A-Za-z]:[\\/]/.test(value) || /^\\\\/.test(value);
 }
+
+export function isInside(root: string, target: string): boolean {
+	const relative = path.relative(
+		isAbsolutePath(root) ? root : path.resolve(root),
+		isAbsolutePath(target) ? target : path.resolve(target),
+	);
+	return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
+}
+
+export function pathsOverlap(left: string, right: string): boolean {
+	return isInside(left, right) || isInside(right, left);
+}

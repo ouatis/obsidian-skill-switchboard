@@ -29,7 +29,7 @@ import { resolveSyncSource, settingsCheckKey } from './sync/source';
 import { getVaultChangeImpact } from './sync/vault-change-impact';
 import { localPackageRegistryPath, readLocalPackagePaths, resolveLocalPackagePath, saveLocalPackagePath } from './sync/package-paths';
 import { existingRealPath } from './sync/filesystem';
-import { isInside } from './sync/manifest';
+import { pathsOverlap } from './utils/paths';
 
 /** Fallback wait when the setting holds an unusable value. */
 const INDEX_DEBOUNCE_MS = 500;
@@ -233,8 +233,8 @@ export default class SkillSwitchboardPlugin extends Plugin {
 				existingRealPath(source),
 				existingRealPath(resolveLocalPackagePath(directory)),
 			]);
-			if (isInside(realVault, realDirectory) || isInside(realSource, realDirectory)) {
-				throw new Error('External tool packages must stay outside the vault and canonical source.');
+			if (pathsOverlap(realVault, realDirectory) || pathsOverlap(realSource, realDirectory)) {
+				throw new Error('External tool packages must not overlap the vault or canonical source.');
 			}
 		}
 		this.localPackagePaths = await saveLocalPackagePath(id, directory, this.packageRegistryPath);

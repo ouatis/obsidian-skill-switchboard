@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import type { SyncManifestSnapshot } from './manifest';
 import { scalarFrontmatter } from '../utils/frontmatter';
+import { pathsOverlap } from '../utils/paths';
 import { readLocalPackagePaths, validPackageId } from './package-paths';
 
 export type ResourceIssueCode = 'missing' | 'changed' | 'unexpected' | 'invalid' | 'hidden-path' | 'unverified' | 'unconfigured';
@@ -79,7 +80,9 @@ export async function checkResources(snapshot: SyncManifestSnapshot, registryPat
 					continue;
 				}
 				packageRoot = await fs.realpath(localPaths[packageId]);
-				if (inside(snapshot.vaultPath, packageRoot) || inside(snapshot.sharedRoot, packageRoot)) throw new Error('External packages must stay outside the vault and source');
+				if (pathsOverlap(snapshot.vaultPath, packageRoot) || pathsOverlap(snapshot.sharedRoot, packageRoot)) {
+					throw new Error('External packages must not overlap the vault or canonical source');
+				}
 				result.path = packageRoot;
 			} else packageRoot = await containedRealPath(snapshot.sharedRoot, sourcePath);
 			if (!(await fs.stat(packageRoot)).isDirectory()) throw new Error('Package is not a directory');

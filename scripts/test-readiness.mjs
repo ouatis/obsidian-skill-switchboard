@@ -63,7 +63,7 @@ try{
     await write(path.join(source,'packages','drawing.json'),JSON.stringify({...inventory,files:[inventory.files[0],inventory.files[0]]}));assert.equal((await inspect()).resources.status,'failed');
     await write(path.join(source,'packages','drawing.json'),JSON.stringify(inventory));
     await write(manifestPath,JSON.stringify({...manifest,adapter_defaults:{hermes:{category:'team'}}}));checked=await inspect();assert.equal(checked.snapshot.skills[0].adapters.hermes.category,'team');
-    const external=path.join(tempRoot,'external-source');await fs.cp(source,external,{recursive:true});
+    const external=path.join(tempRoot,'external-project','skills');await fs.cp(source,external,{recursive:true});
     const externalManifest=path.join(tempRoot,'external-manifest.json');await write(externalManifest,JSON.stringify({...manifest,skills:[{...manifest.skills[0],shared_file:'drawing.md'}]}));
     checked=await native.inspectManifest(vault,{sharedRoot:external,manifestPath:externalManifest});assert.equal(checked.status,'passed');assert.equal(checked.snapshot.sharedPrefix,'');assert.equal(checked.resources.status,'passed');
     // External toolkits retain a shared card + fixed inventory, but paths are device-local.
@@ -81,6 +81,15 @@ try{
     await localPackages.saveLocalPackagePath('drawing',externalToolkit,registryPath);
     assert.equal((await localPackages.readLocalPackagePaths(registryPath)).drawing,externalToolkit);
     checked=await externalInspect();assert.equal(checked.resources.status,'passed');assert.equal(checked.resources.packages[0].location,'external');assert.equal(checked.resources.packages[0].path,await fs.realpath(externalToolkit));assert.equal(checked.resources.packages[0].verifiedFiles,2);
+    await write(path.join(external,'drawing.md'),externalCard);
+    const externalSourceLocation={sharedRoot:external,manifestPath:externalManifest,packageRegistryPath:registryPath};
+    for(const overlappingRoot of [path.dirname(external),tempRoot]){
+        await localPackages.saveLocalPackagePath('drawing',overlappingRoot,registryPath);
+        const overlapCheck=await native.inspectManifest(vault,externalSourceLocation);
+        assert.equal(overlapCheck.resources.status,'failed','an external package may not contain its vault or canonical source');
+        assert.equal(overlapCheck.resources.packages[0].files,0,'overlapping package roots are rejected before walking files');
+    }
+    await localPackages.saveLocalPackagePath('drawing',externalToolkit,registryPath);
     await fs.unlink(path.join(externalToolkit,'kit.mjs'));checked=await externalInspect();assert.equal(checked.resources.status,'failed');
     const externalProvider=new NativeSyncProvider(()=>externalLocation);
     const externalRefusal=await externalProvider.repairRuntime(vault,'codex',path.join(tempRoot,'external-never-written'));assert.equal(externalRefusal.status,'failed');assert.equal(await fs.access(path.join(tempRoot,'external-never-written')).then(()=>true,()=>false),false);

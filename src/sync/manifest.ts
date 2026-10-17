@@ -1,12 +1,13 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { isAbsolutePath, resolveConfiguredPath } from '../utils/paths';
+import { isInside, pathsOverlap, resolveConfiguredPath } from '../utils/paths';
 import type { ManifestLocation } from './source';
 import { checkResources, type ResourceCheck } from './resources';
 import { RUNTIME_NAMES, type RuntimeName } from '../types';
 import type { AdapterCheckResult } from './result';
 
 export const RUNTIMES: RuntimeName[] = [...RUNTIME_NAMES];
+export { isInside, pathsOverlap };
 export type AdapterMetadata = Record<string, unknown>;
 export interface RuntimeValidationPolicy { retiredNames: string[]; forbiddenLiterals: string[]; rejectExampleAbsolutePath: boolean }
 
@@ -112,18 +113,6 @@ export function adapterFor(skill: ManifestSkill, runtime: RuntimeName): AdapterM
 	}
 	const value = skill.adapters[runtime];
 	return value === true ? {} : isRecord(value) ? value : null;
-}
-
-export function isInside(root: string, target: string): boolean {
-	const relative = path.relative(
-		isAbsolutePath(root) ? root : path.resolve(root),
-		isAbsolutePath(target) ? target : path.resolve(target),
-	);
-	return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
-}
-
-export function pathsOverlap(left: string, right: string): boolean {
-	return isInside(left, right) || isInside(right, left);
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

@@ -8,38 +8,36 @@ _一个技能源，连接 Agent，状态清楚。_
 
 </div>
 
-Skill Switchboard 是一款 Obsidian 桌面插件，用来索引 Agent Skills，并检查一个权威源如何接入各个 Agent 目录。
+Skill Switchboard 是一款 Obsidian 桌面插件，用于索引 Agent Skills，并检查一个权威源如何连接各个 Agent 目录。
 
-安静的界面与 Desk Lamp、Scriptorium 共享视觉节奏，同时跟随 Obsidian 主题；使用本插件不需要安装另外两款产品。设置中提供英文和简体中文。
+安静的面板和细线与 Desk Lamp、Scriptorium 共享视觉节奏，界面仍跟随 Obsidian 主题；使用本插件不需要安装另外两款产品。设置中提供英文和简体中文。
 
 > [!NOTE]
-> 检查只读。修复需要单独确认；插件不会执行 harness 命令或工具包。
+> 检查只读，修复需要确认。插件不会运行 Agent、harness 命令或工具包。
 
 ## 安装
 
 需要 Obsidian 1.7.2 或更新版本，并运行于桌面端。
 
-手动安装：有正式版本可用时，从[发布页面](https://github.com/ouatis/obsidian-skill-switchboard/releases)下载 `main.js`、`manifest.json` 和 `styles.css`，放入 `<vault>/.obsidian/plugins/skill-switchboard/`，再到 **设置 → 第三方插件** 中启用。测试尚未发布的版本，请按下方开发步骤操作。
+手动安装：从[发布页面](https://github.com/ouatis/obsidian-skill-switchboard/releases)下载 `main.js`、`manifest.json` 和 `styles.css`，放入 `<vault>/.obsidian/plugins/skill-switchboard/`，再到 **设置 → 第三方插件** 中启用。测试未发布版本，请按下方开发步骤操作。
 
 ## 特性
 
 - 从选定的 vault 或桌面目录索引技能，并指定一个权威源。
 - 在交互式接线图中查看 `copy`、`symlink` 和 `wrapper` 目标。
-- 检查元数据、命令、引用文件、重复项、路径和 package 资源；不会运行 Agent 或 harness 命令。
-- 打开接线台、来源或设置变更后，以及每五分钟自动进行只读检查；也可从命令面板手动刷新。检查不会写入适配器文件。
-- 确认后修复已启用的 wrapper 目标，并复制检查输出用于诊断。
+- 检查元数据、命令、引用、重复项、路径和 package 资源；不会运行 Agent 或 harness 命令。
+- 打开接线台、来源变更后，以及每五分钟自动进行只读检查；也可从命令面板刷新。
+- 确认后修复已启用的 wrapper 目标，并复制检查输出用于排查。
 
-## 路径与 package
+## 路径与安全
 
-库内的根目录使用相对库的路径；外部根目录和目标建议使用 `~` 路径，方便在多台机器间复用。也支持用于特定机器配置的绝对路径。
+笔记库内的根目录使用相对路径；外部根目录和目标使用 `~` 路径，便于跨设备复用。也支持单机绝对路径。
 
-技能可用 `package_path` 声明源目录中的配套文件，也可用 `package_id` 引用本机工具包。`package_manifest` 可提供 schema v1 清单，列出 package 内文件及 SHA-256 哈希。文件缺失、变更或多出时会阻止修复；没有清单时，资源会标为未经验证。每台机器在 `~/.skill-switchboard/packages.json` 中单独映射 package ID 和本地路径。插件不会下载或更新工具包。
+技能可用 `package_path` 声明配套文件，也可用 `package_id` 引用本机工具包。可选的 schema-v1 `package_manifest` 会列出文件及 SHA-256 哈希；文件缺失、变更或多出时会阻止修复。没有清单时，package 资源标为未经验证。每台机器在 `~/.skill-switchboard/packages.json` 中单独映射 package ID 和本地路径；插件不会下载或更新工具包。
 
-## 检查与修复
+插件只检查已配置的根目录和目标。修复前会验证来源资源并要求确认，只写入 vault 以外已启用的 wrapper 目标。被替换或移除的文件会备份到 `~/.skill-switchboard/repair-backups/<vault-id>/`，由你决定何时删除；每份备份都带有记录恢复路径的 `backup-index.json`。保存外部 package 路径时，只会更新本机 package registry。
 
-插件只检查已配置的根目录和目标。修复前会验证来源资源并要求确认，只写入 vault 以外已启用的 wrapper 目标。被替换或移除的文件会备份到 `~/.skill-switchboard/repair-backups/<vault-id>/`，每份备份附带包含恢复路径的 `backup-index.json`；插件不会自动删除备份。保存外部 package 路径时，只会更新本机 package registry。
-
-库根目录下的隐藏文件 `.skill-switchboard-status.json` 记录本次安装的版本、构建 ID、技能数量，以及最近的检查和修复输出。文件元数据不包含库、来源或目标路径，但诊断输出可能包含本机 manifest 或备份路径，分享前请先检查。它不能证明其他设备已同步文件或 Agent 已加载技能。插件不联网，也不收集遥测。
+Vault 根目录下的隐藏文件 `.skill-switchboard-status.json` 记录本次安装的版本、构建 ID、技能数量，以及最近的检查和修复输出。文件元数据不含 vault、来源或目标路径，但诊断输出可能包含本机 manifest 或备份路径，分享前请先检查。它不能确认其他设备已同步文件或 Agent 已加载技能。插件不联网，也不收集遥测。
 
 ## 命令
 
@@ -56,6 +54,6 @@ npm run build
 npm run lint
 ```
 
-在 `package.json` 中运行 `test:*` 和 `validate:release` 脚本。CI 使用 Node.js 20、22、24，并在 Linux、macOS 和 Windows 上检查路径行为。要在 Obsidian 中测试，请将 `main.js`、`manifest.json` 和 `styles.css` 复制到上面的插件目录，然后重载 Obsidian。
+在 `package.json` 中运行 `test:*` 脚本；`test:ui:live` 还需要 Obsidian CLI 和测试库。发布校验需要传入完全匹配的 release tag。CI 使用 Node.js 20、22、24，并在 Linux、macOS 和 Windows 上检查路径行为。要在 Obsidian 中测试，请将 `main.js`、`manifest.json` 和 `styles.css` 复制到上面的插件目录，然后重载应用。
 
 作者：[@ouatis](https://github.com/ouatis)。
