@@ -1,12 +1,13 @@
 import { ItemView, Notice, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
 import type SkillSwitchboardPlugin from '../main';
-import { IndexedSkill, RootKind } from '../types';
+import { IndexedSkill } from '../types';
 import { getStrings, Strings } from '../i18n';
 import { copyTextToClipboard } from '../utils/clipboard';
 import { renderAdapterStatus } from './adapter-status';
 import { DistributionBoard } from './distribution-board';
 import { distributionNodes } from './distribution-state';
 import { openPluginSettings } from './open-settings';
+import { renderSkillCard } from './skill-card';
 
 export const VIEW_TYPE_SKILL_SWITCHBOARD = 'skill-switchboard-view';
 
@@ -274,7 +275,7 @@ export class SkillSwitchboardView extends ItemView {
 				heading.createEl('strong', { text: rootLabel });
 				heading.createSpan({ text: String(items.length), cls: 'skill-switchboard-badge' });
 			}
-			for (const skill of items) this.renderSkill(container, skill, strings);
+			for (const skill of items) renderSkillCard(container, skill, strings, () => { void this.openSkill(skill); });
 		}
 	}
 
@@ -286,36 +287,6 @@ export class SkillSwitchboardView extends ItemView {
 		}
 		const copied = await copyTextToClipboard(output);
 		new Notice(copied ? strings.outputCopied : strings.copyFailed);
-	}
-
-	/** Name and description carry the meaning; path and hash are diagnostics. */
-	private renderSkill(container: HTMLElement, skill: IndexedSkill, strings: Strings): void {
-		const card = container.createDiv('skill-switchboard-card');
-		const opensInObsidian = skill.rootKind === 'vault';
-		card.addClass('is-actionable');
-		const action = card.createEl('button', { cls: 'skill-switchboard-card-action' });
-		action.setAttribute('type', 'button');
-		const actionLabel = opensInObsidian ? strings.openSource : strings.copySourcePath;
-		action.setAttribute('aria-label', `${actionLabel}: ${skill.name}`);
-		action.setAttribute('title', actionLabel);
-		action.addEventListener('click', () => void this.openSkill(skill));
-
-		const heading = action.createSpan('skill-switchboard-card-heading');
-		heading.createEl('strong', { text: skill.name });
-		if (skill.rootKind !== 'vault') {
-			heading.createSpan({ text: rootKindLabel(skill.rootKind, strings), cls: 'skill-switchboard-badge' });
-		}
-
-		action.createSpan({
-			text: skill.description || strings.noDescription,
-			cls: 'skill-switchboard-description',
-		});
-
-		const details = card.createEl('details', { cls: 'skill-switchboard-details' });
-		details.createEl('summary', { text: strings.technicalDetails, cls: 'skill-switchboard-check-label' });
-		const body = details.createDiv('skill-switchboard-card-meta');
-		body.createDiv({ text: `${strings.sourcePath} ${skill.path}`, cls: 'skill-switchboard-path' });
-		body.createDiv({ text: `${strings.sha256} ${skill.sha256.slice(0, 12)}…`, cls: 'skill-switchboard-hash' });
 	}
 
 	/**
@@ -338,10 +309,6 @@ export class SkillSwitchboardView extends ItemView {
 		}
 		await this.app.workspace.getLeaf(false).openFile(file);
 	}
-}
-
-function rootKindLabel(kind: RootKind, strings: Strings): string {
-	return kind === 'external' ? strings.externalRoot : strings.vaultRelative;
 }
 
 function actionButton(parent: HTMLElement, label: string, icon: string, extraClass = ''): HTMLButtonElement {
