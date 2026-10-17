@@ -18,6 +18,8 @@
 		"test:distribution": "node scripts/test-distribution.mjs",
 		"test:ui": "node scripts/test-ui.mjs",
 		"test:ui:live": "node scripts/test-ui-live.mjs",
+		"validate:release": "node scripts/validate-release.mjs",
+		"test:release-validation": "node scripts/test-release-validation.mjs",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
 		"lint": "eslint ."
 	},

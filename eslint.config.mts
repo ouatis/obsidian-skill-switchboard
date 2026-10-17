@@ -34,7 +34,12 @@ export default defineConfig(
 			},
 			parserOptions: {
 				projectService: {
-					allowDefaultProject: ['eslint.config.mts', 'manifest.json'],
+					allowDefaultProject: [
+						'eslint.config.mts',
+						'manifest.json',
+						'scripts/test-release-validation.mjs',
+						'scripts/validate-release.mjs',
+					],
 				},
 				tsconfigRootDir: import.meta.dirname,
 				extraFileExtensions: ['.json'],
@@ -42,6 +47,12 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		files: ['scripts/test-release-validation.mjs', 'scripts/validate-release.mjs'],
+		languageOptions: {
+			globals: globals.node,
+		},
+	},
 	{
 		// The clipboard fallback deliberately keeps the deprecated document.execCommand
 		// as the only path that works when navigator.clipboard is unavailable inside

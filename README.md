@@ -107,6 +107,7 @@ npm run test:adapter
 npm run test:native
 npm run test:distribution
 npm run test:ui
+npm run test:release-validation
 ```
 
 `test:adapter` uses a fake sync provider to cover the check/repair orchestration without a vault, so it also runs in CI. The production build writes `main.js` to the project root. For local testing, copy `main.js`, `manifest.json`, and `styles.css` into:
