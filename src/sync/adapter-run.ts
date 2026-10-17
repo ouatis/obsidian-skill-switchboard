@@ -4,6 +4,8 @@ import type { RuntimeName, RuntimeTarget } from '../types';
 import type { AdapterCheckResult } from './result';
 import type { ManifestCheckResult, SyncProvider, SyncRuntimeCheckResult, SyncManifestSnapshot, SyncRepairResult } from '../sync-provider';
 import type { ResourceCheck, PackageCheck } from './resources';
+import { isInside, pathsOverlap } from './manifest';
+import { existingRealPath } from './filesystem';
 import { resolveConfiguredPath } from '../utils/paths';
 
 /** A runtime target that is eligible for drift repair. */
@@ -117,14 +119,15 @@ export async function collectTargetChecks(
 			});
 			continue;
 		}
-		if (isTargetInsideVault(vaultPath, resolvedTarget)) {
+		const pathFailure = await targetPathFailure(vaultPath, resolvedTarget, snapshot);
+		if (pathFailure) {
 			record({
 				target,
 				targetPath: resolvedTarget,
 				repairable: false,
 				result: {
 					status: 'failed',
-					output: `Repair target must be outside the vault: ${resolvedTarget}`,
+					output: pathFailure,
 					exitCode: 1,
 				},
 			});
@@ -355,11 +358,24 @@ export function displayTargetName(target: RepairTarget): string {
 }
 
 export function isTargetInsideVault(vaultPath: string, targetPath: string): boolean {
-	const relativeTarget = path.relative(path.resolve(vaultPath), targetPath);
-	return (
-		relativeTarget === '' ||
-		(!relativeTarget.startsWith(`..${path.sep}`) && relativeTarget !== '..' && !path.isAbsolute(relativeTarget))
-	);
+	return isInside(vaultPath, targetPath);
+}
+
+async function targetPathFailure(
+	vaultPath: string,
+	targetPath: string,
+	snapshot?: SyncManifestSnapshot,
+): Promise<string | null> {
+	const [vault, target, source] = await Promise.all([
+		existingRealPath(snapshot?.vaultPath ?? vaultPath),
+		existingRealPath(targetPath),
+		snapshot?.sharedRoot ? existingRealPath(snapshot.sharedRoot) : Promise.resolve(undefined),
+	]);
+	if (isInside(vault, target)) return `Repair target must be outside the vault: ${target}`;
+	if (source && pathsOverlap(source, target)) {
+		return `Repair target must not overlap the canonical skill source: ${target}`;
+	}
+	return null;
 }
 
 export function desktopPathFailure(): AdapterCheckResult {

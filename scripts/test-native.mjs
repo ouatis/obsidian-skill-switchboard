@@ -77,6 +77,63 @@ try {
 	const manifest = await native.inspectManifest(vault, location);
 	assert.equal(manifest.status, 'passed', manifest.output);
 	assert.ok(manifest.snapshot, 'native manifest snapshot should exist');
+	const overlapSource = path.join(tempRoot, 'external-canonical-skills');
+	await fs.mkdir(path.join(overlapSource, 'references'), { recursive: true });
+	const overlapSkills = ['drafting', 'review'].map((name) => ({ name, shared_file: `${name}.md`, adapters: {
+		codex: { display_name: name, short_description: 'Fixture skill', default_prompt: `Use $${name}` },
+		hermes: {}, workbuddy: true, opencode: {}, antigravity: true, dsh: {},
+	} }));
+	for (const skill of overlapSkills) await fs.writeFile(path.join(overlapSource, `${skill.name}.md`), `---\nname: ${skill.name}\ndescription: Fixture skill.\n---\n\n# ${skill.name}\n\nFixture skill. Read [support](references/support.md).\n`);
+	await fs.writeFile(path.join(overlapSource, 'references', 'support.md'), '# Support\n\nFixture reference.\n');
+	const overlapManifestPath = path.join(tempRoot, 'external-manifest.json');
+	await fs.writeFile(overlapManifestPath, JSON.stringify({ schema_version: 1, total_skills: overlapSkills.length, skills: overlapSkills }));
+	const overlapManifest = await native.inspectManifest(vault, {
+		sharedRoot: overlapSource,
+		manifestPath: overlapManifestPath,
+	});
+	assert.equal(overlapManifest.status, 'passed', overlapManifest.output);
+	assert.ok(overlapManifest.snapshot, 'external canonical source snapshot should exist');
+	const overlapSourceHash = await hashTree(overlapSource);
+	for (const overlappingTarget of [overlapSource, path.join(overlapSource, 'nested'), path.dirname(overlapSource)]) {
+		const check = await native.checkRuntimeNative(vault, 'codex', overlappingTarget, overlapManifest.snapshot);
+		assert.equal(check.kind, 'error', `overlapping target check: ${overlappingTarget}`);
+		assert.match(check.output, /overlaps the canonical skill source/);
+		const repairResult = await repair.repairRuntimeNative(vault, 'codex', overlappingTarget, overlapManifest.snapshot);
+		assert.equal(repairResult.status, 'failed', `overlapping target repair: ${overlappingTarget}`);
+		assert.match(repairResult.output, /overlaps the canonical skill source/);
+		assert.equal(await hashTree(overlapSource), overlapSourceHash, 'source remains unchanged when a target overlaps it');
+	}
+	if (process.platform !== 'win32') {
+		const overlapAlias = path.join(tempRoot, 'external-skills-alias');
+		await fs.symlink(overlapSource, overlapAlias);
+		const aliasCheck = await native.checkRuntimeNative(vault, 'codex', overlapAlias, overlapManifest.snapshot);
+		assert.equal(aliasCheck.kind, 'error');
+		assert.match(aliasCheck.output, /overlaps the canonical skill source/);
+		const aliasRepair = await repair.repairRuntimeNative(vault, 'codex', overlapAlias, overlapManifest.snapshot);
+		assert.equal(aliasRepair.status, 'failed');
+		assert.equal(await hashTree(overlapSource), overlapSourceHash, 'symlink aliases cannot redirect repair into the source');
+	}
+	const commandCheck = await native.checkRuntimeNative(vault, 'opencode', targets.opencode, overlapManifest.snapshot, {
+		opencodeCommandsDir: overlapSource,
+	});
+	assert.equal(commandCheck.kind, 'error');
+	assert.match(commandCheck.output, /command directory that overlaps the canonical skill source/);
+	const commandRepair = await repair.repairRuntimeNative(vault, 'opencode', targets.opencode, overlapManifest.snapshot, {
+		opencodeCommandsDir: overlapSource,
+	});
+	assert.equal(commandRepair.status, 'failed');
+	assert.match(commandRepair.output, /overlaps the canonical skill source/);
+	const backupTarget = path.join(tempRoot, 'backup-overlap-target');
+	const backupWrapper = path.join(backupTarget, 'drafting', 'SKILL.md');
+	await fs.mkdir(path.dirname(backupWrapper), { recursive: true });
+	await fs.writeFile(backupWrapper, 'drifted wrapper');
+	const backupRepair = await repair.repairRuntimeNative(vault, 'codex', backupTarget, overlapManifest.snapshot, {
+		backupRoot: overlapSource,
+	});
+	assert.equal(backupRepair.status, 'failed');
+	assert.match(backupRepair.output, /overlaps the canonical skill source/);
+	assert.equal(await fs.readFile(backupWrapper, 'utf8'), 'drifted wrapper', 'refusing an overlapping backup path preserves the target');
+	assert.equal(await hashTree(overlapSource), overlapSourceHash, 'backup redirection cannot write into the source');
 	const outsideRoot = path.join(tempRoot, 'outside-skills');
 	await fs.mkdir(outsideRoot, { recursive: true });
 	const escapedRoot = await native.inspectManifest(vault, {

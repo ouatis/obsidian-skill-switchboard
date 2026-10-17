@@ -122,6 +122,10 @@ export function isInside(root: string, target: string): boolean {
 	return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
 }
 
+export function pathsOverlap(left: string, right: string): boolean {
+	return isInside(left, right) || isInside(right, left);
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -6,6 +6,7 @@ import type { RuntimeName } from '../types';
 import {
 	adapterFor,
 	isInside,
+	pathsOverlap,
 	type ManifestSkill,
 	type SyncManifestSnapshot,
 } from './manifest';
@@ -28,8 +29,9 @@ import {
 	relativeDisplay,
 	staleProblems,
 	walkFiles,
+	existingRealPath,
 } from './filesystem';
-import { isAbsolutePath, resolveConfiguredPath } from '../utils/paths';
+import { resolveConfiguredPath } from '../utils/paths';
 
 export type NativeCheckKind = 'clean' | 'drift' | 'error';
 
@@ -52,10 +54,25 @@ export async function checkRuntimeNative(
 	options: NativeCheckOptions = {},
 ): Promise<NativeCheckResult> {
 	try {
-		const resolvedVault = path.resolve(vaultPath);
-		const resolvedTarget = await existingTargetPath(resolveConfiguredPath(targetPath, resolvedVault));
+		const resolvedVault = path.resolve(snapshot.vaultPath || vaultPath);
+		const resolvedTarget = await existingRealPath(resolveConfiguredPath(targetPath, resolvedVault));
 		if (isInside(resolvedVault, resolvedTarget)) {
 			return errorResult(`Native check refused a target inside the vault: ${resolvedTarget}`);
+		}
+		if (pathsOverlap(snapshot.sharedRoot, resolvedTarget)) {
+			return errorResult(`Native check refused a target that overlaps the canonical skill source: ${resolvedTarget}`);
+		}
+
+		const effectiveOptions = runtime === 'opencode'
+			? { ...options, opencodeCommandsDir: await existingRealPath(resolveOpenCodeCommandsDir(options)) }
+			: options;
+		if (runtime === 'opencode' && effectiveOptions.opencodeCommandsDir) {
+			if (isInside(resolvedVault, effectiveOptions.opencodeCommandsDir)) {
+				return errorResult(`Native check refused an OpenCode command directory inside the vault: ${effectiveOptions.opencodeCommandsDir}`);
+			}
+			if (pathsOverlap(snapshot.sharedRoot, effectiveOptions.opencodeCommandsDir)) {
+				return errorResult(`Native check refused an OpenCode command directory that overlaps the canonical skill source: ${effectiveOptions.opencodeCommandsDir}`);
+			}
 		}
 
 		const skills = loadRuntimeSkills(snapshot, runtime);
@@ -68,7 +85,7 @@ export async function checkRuntimeNative(
 		}
 
 		for (const skill of skills) {
-			problems.push(...await checkSkill(snapshot, runtime, resolvedTarget, skill, options));
+			problems.push(...await checkSkill(snapshot, runtime, resolvedTarget, skill, effectiveOptions));
 		}
 
 		if (runtime === 'hermes') {
@@ -142,14 +159,7 @@ async function checkSkill(
 	if (runtime === 'opencode') {
 		if (!(await pathExists(wrapperPath))) result.push(`Missing wrapper: ${wrapperPath}`);
 		else if (await readText(wrapperPath) !== wrapperFor(skill, runtime, snapshot)) result.push(`Skill wrapper content drift: ${skill.name}`);
-		const commandRoot = options.opencodeCommandsDir
-			? resolveConfiguredPath(options.opencodeCommandsDir)
-			: path.join(
-				process.env.OPENCODE_CONFIG
-					? resolveConfiguredPath(process.env.OPENCODE_CONFIG)
-					: path.join(os.homedir(), '.config', 'opencode'),
-				'commands',
-			);
+		const commandRoot = options.opencodeCommandsDir ?? resolveOpenCodeCommandsDir(options);
 		const commandPath = path.join(commandRoot, `${skill.name}.md`);
 		if (!(await pathExists(commandPath))) result.push(`Missing command: ${commandPath}`);
 		else if (await readText(commandPath) !== commandFor(skill)) result.push(`Command content drift: ${skill.name}`);
@@ -223,25 +233,15 @@ async function resolveSkillDir(candidate: string): Promise<string> {
 	}
 }
 
-async function existingTargetPath(targetPath: string): Promise<string> {
-	const candidate = isAbsolutePath(targetPath) ? targetPath : path.resolve(targetPath);
-	try {
-		return await fs.realpath(candidate);
-	} catch {
-		let current = candidate;
-		const suffix: string[] = [];
-		while (true) {
-			try {
-				const real = await fs.realpath(current);
-				return path.resolve(real, ...suffix.reverse());
-			} catch {
-				const parent = path.dirname(current);
-				if (parent === current) return candidate;
-				suffix.push(path.basename(current));
-				current = parent;
-			}
-		}
-	}
+function resolveOpenCodeCommandsDir(options: NativeCheckOptions): string {
+	return options.opencodeCommandsDir
+		? resolveConfiguredPath(options.opencodeCommandsDir)
+		: path.join(
+			process.env.OPENCODE_CONFIG
+				? resolveConfiguredPath(process.env.OPENCODE_CONFIG)
+				: path.join(os.homedir(), '.config', 'opencode'),
+			'commands',
+		);
 }
 
 

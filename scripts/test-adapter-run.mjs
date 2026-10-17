@@ -115,6 +115,49 @@ try {
 		assert.ok(outcome.repair.output.includes('must be outside the vault'));
 	}
 
+	// External targets may not equal, contain, or sit inside the canonical source.
+	{
+		const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ss-source-overlap-'));
+		const vault = path.join(root, 'vault');
+		const source = path.join(root, 'canonical-skills');
+		await fs.mkdir(vault, { recursive: true });
+		await fs.mkdir(source, { recursive: true });
+		let checked = 0;
+		const provider = {
+			inspectManifest: async () => ({
+				status: 'passed', output: '', exitCode: 0,
+				snapshot: { vaultPath: vault, sharedRoot: source },
+			}),
+			checkRuntime: async () => {
+				checked += 1;
+				return passed();
+			},
+			repairRuntime: async () => passed(),
+		};
+		const overlappingPaths = [source, path.join(source, 'nested'), root];
+		const checks = await run.collectTargetChecks({
+			provider,
+			settings: { targets: overlappingPaths.map((targetPath, index) => target({ id: `overlap-${index}`, path: targetPath })) },
+		}, vault, { vaultPath: vault, sharedRoot: source });
+		assert.equal(checked, 0, 'overlapping targets are rejected before invoking the provider');
+		assert.equal(checks.length, overlappingPaths.length);
+		for (const check of checks) {
+			assert.equal(check.repairable, false);
+			assert.match(check.result.output, /must not overlap the canonical skill source/);
+		}
+		if (process.platform !== 'win32') {
+			const alias = path.join(root, 'source-alias');
+			await fs.symlink(source, alias);
+			const aliasChecks = await run.collectTargetChecks({
+				provider,
+				settings: { targets: [target({ path: alias })] },
+			}, vault, { vaultPath: vault, sharedRoot: source });
+			assert.equal(aliasChecks[0].repairable, false);
+			assert.match(aliasChecks[0].result.output, /must not overlap the canonical skill source/);
+			assert.equal(checked, 0, 'symlink aliases are rejected before invoking the provider');
+		}
+	}
+
 	// Drifted targets are repaired and re-checked; blocked ones add to failedCount.
 	{
 		const calls = [];

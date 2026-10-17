@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { AdapterCheckResult } from './result';
 import type { RuntimeName } from '../types';
-import { isInside, type SyncManifestSnapshot } from './manifest';
+import { isInside, pathsOverlap, type SyncManifestSnapshot } from './manifest';
 import {
 	agentMetadataFor,
 	commandFor,
@@ -58,18 +58,18 @@ export async function repairRuntimeNative(
 			options.backupRoot,
 			options.backupHomeDir,
 		);
-		const resolvedTarget = await state.assertOutsideVault(configuredTarget);
+		const resolvedTarget = await state.assertSafeWritePath(configuredTarget);
 		const skills = loadRuntimeSkills(snapshot, runtime);
 		if (skills.length === 0) return await state.failureResult(`No skills enable the ${runtime} adapter in the configured manifest.`);
 		const commandRoot = runtime === 'opencode'
 			? resolveConfiguredPath(options.opencodeCommandsDir ?? defaultOpenCodeCommandsDir(), snapshot.vaultPath)
 			: undefined;
-		if (commandRoot) await state.assertOutsideVault(commandRoot);
+		if (commandRoot) await state.assertSafeWritePath(commandRoot);
 
 		for (const skill of skills) {
 			const categoryRoot = runtime === 'hermes' ? path.join(resolvedTarget, skill.category) : resolvedTarget;
 			const skillDir = await existingRealPath(path.join(categoryRoot, skill.name));
-			await state.assertOutsideVault(skillDir);
+			await state.assertSafeWritePath(skillDir);
 			const wrapperPath = runtime === 'dsh'
 				? path.join(resolvedTarget, `${skill.name}.md`)
 				: path.join(skillDir, 'SKILL.md');
@@ -112,19 +112,23 @@ class RepairState {
 		this.backupRoot = backupRoot;
 	}
 
-	async assertOutsideVault(candidate: string): Promise<string> {
-		const [vault, resolved] = await Promise.all([
+	async assertSafeWritePath(candidate: string): Promise<string> {
+		const [vault, source, resolved] = await Promise.all([
 			existingRealPath(this.vaultPath),
+			existingRealPath(this.sharedRoot),
 			existingRealPath(candidate),
 		]);
 		if (isInside(vault, resolved)) {
 			throw new Error(`Native repair refused a target inside the vault: ${resolved}`);
 		}
+		if (pathsOverlap(source, resolved)) {
+			throw new Error(`Native repair refused a target that overlaps the canonical skill source: ${resolved}`);
+		}
 		return resolved;
 	}
 
 	async syncText(filePath: string, expected: string, skill: string, kind: RepairChange['kind']): Promise<void> {
-		await this.assertOutsideVault(filePath);
+		await this.assertSafeWritePath(filePath);
 		const exists = await pathExists(filePath);
 		if (exists && await readText(filePath) === expected) return;
 		await this.backupExisting(filePath);
@@ -152,13 +156,13 @@ class RepairState {
 		}
 		if (!changed) return;
 
-		await this.assertOutsideVault(referencesDir);
+		await this.assertSafeWritePath(referencesDir);
 		await this.backupExisting(referencesDir);
 		await fs.rm(referencesDir, { recursive: true, force: true });
 		this.replacedDirectories += 1;
 		this.changes.push({ skill, path: referencesDir, kind: 'references', action: 'updated' });
 		for (const item of expected) {
-			await this.assertOutsideVault(item.target);
+			await this.assertSafeWritePath(item.target);
 			await fs.mkdir(path.dirname(item.target), { recursive: true });
 			await fs.copyFile(item.source, item.target);
 			this.writtenFiles += 1;
@@ -184,9 +188,9 @@ class RepairState {
 				`${stamp}-${this.runtime}-${randomUUID().slice(0, 8)}`,
 			);
 		}
-		await this.assertOutsideVault(this.backupRoot);
+		await this.assertSafeWritePath(this.backupRoot);
 		await fs.mkdir(this.backupRoot, { recursive: true });
-		this.backupRoot = await this.assertOutsideVault(await fs.realpath(this.backupRoot));
+		this.backupRoot = await this.assertSafeWritePath(await fs.realpath(this.backupRoot));
 		const backupName = `${String(this.backupNumber).padStart(4, '0')}-${path.basename(source) || 'root'}`;
 		this.backupNumber += 1;
 		const destination = path.join(this.backupRoot, backupName);
@@ -225,7 +229,7 @@ class RepairState {
 
 	private async writeBackupIndex(): Promise<void> {
 		if (!this.backupRoot || this.backupIndex.length === 0) return;
-		await this.assertOutsideVault(this.backupRoot);
+		await this.assertSafeWritePath(this.backupRoot);
 		await fs.writeFile(
 			path.join(this.backupRoot, 'backup-index.json'),
 			JSON.stringify({ runtime: this.runtime, target: this.targetPath, entries: this.backupIndex }, null, 2),
