@@ -5,7 +5,7 @@ const [cli, vault] = process.argv.slice(2);
 if (!cli || !vault) throw new Error('Usage: node scripts/test-ui-live.mjs <obsidian-cli> <vault>');
 const evaluate = (expression) => {
 	const stdout = execFileSync(cli, [`vault=${vault}`, 'eval', `code=(async()=>JSON.stringify(await (${expression})))()`], {
-		encoding: 'utf8', windowsHide: true, timeout: 20000, maxBuffer: 2 * 1024 * 1024,
+		encoding: 'utf8', windowsHide: true, timeout: 20000, killSignal: 'SIGKILL', maxBuffer: 2 * 1024 * 1024,
 	});
 	return JSON.parse(stdout.trim().replace(/^=>\s*/, ''));
 };
@@ -43,7 +43,7 @@ try {
 			for (const offset of [-2, 2]) {
 				execFileSync(cli, [`vault=${vault}`, 'dev:cdp', 'method=Input.dispatchMouseEvent',
 					`params=${JSON.stringify({ type: 'mouseMoved', x: point.x + offset, y: point.y })}`],
-				{ encoding: 'utf8', windowsHide: true, timeout: 20000, maxBuffer: 1024 * 1024 });
+					{ encoding: 'utf8', windowsHide: true, timeout: 20000, killSignal: 'SIGKILL', maxBuffer: 1024 * 1024 });
 			}
 			evaluate(`new Promise(resolve=>setTimeout(()=>resolve(true),800))`);
 			assert.ok(inView('return v.tooltipRegressionMoves;') > beforeMoves, `${selector}: hover must reach this view`);
@@ -199,7 +199,7 @@ try {
 				if (type === 'keyDown' && key.text) params.text = key.text;
 				execFileSync(cli, [`vault=${vault}`, 'dev:cdp', 'method=Input.dispatchKeyEvent',
 					`params=${JSON.stringify(params)}`],
-				{ encoding: 'utf8', windowsHide: true, timeout: 20000, maxBuffer: 1024 * 1024 });
+					{ encoding: 'utf8', windowsHide: true, timeout: 20000, killSignal: 'SIGKILL', maxBuffer: 1024 * 1024 });
 			}
 			await evaluate(`new Promise(resolve=>setTimeout(()=>resolve(true),20))`);
 		}
