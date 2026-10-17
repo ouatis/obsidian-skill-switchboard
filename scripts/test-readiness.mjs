@@ -88,6 +88,8 @@ try{
     await write(path.join(source,'drawing.md'),externalCard.replace('package_id: drawing','package_id: drawing\npackage_path: packages/drawing'));assert.equal((await externalInspect()).resources.status,'failed','dual declarations are rejected');
     await write(path.join(source,'drawing.md'),externalCard);
     await localPackages.saveLocalPackagePath('drawing',source,registryPath);assert.equal((await externalInspect()).resources.status,'failed','an external package may not resolve into the vault');
+    const sourceAlias=path.join(tempRoot,'source-alias');await fs.symlink(source,sourceAlias,'dir');
+    await localPackages.saveLocalPackagePath('drawing',sourceAlias,registryPath);checked=await externalInspect();assert.equal(checked.resources.status,'failed','an external package symlink may not resolve into the vault');
     for(const value of ['relative/drawing','../outside','https://example.com/toolkit','\0'])await assert.rejects(()=>localPackages.saveLocalPackagePath('drawing',value,registryPath));
     await assert.rejects(()=>localPackages.saveLocalPackagePath('../drawing',externalToolkit,registryPath));
     await localPackages.saveLocalPackagePath('drawing','',registryPath);assert.equal((await localPackages.readLocalPackagePaths(registryPath)).drawing,undefined);assert((await localPackages.readLocalPackagePaths(registryPath)).other);
@@ -98,7 +100,7 @@ try{
     const detail=(id,skills,count)=>({targetId:id,label:id,runtime:'codex',repair:{native:{writtenFiles:count,replacedDirectories:0,changedSkills:skills,changes:[]}}});
     assert.deepEqual(repairTotals({details:[detail('a',['x','y'],2),detail('b',['y','z'],3)],repairedCount:2}),{targets:2,skills:3,files:5});
     assert.deepEqual(repairTotals({details:[{repair:{}}],repairedCount:1}),{targets:1,skills:null,files:null});
-    console.log('Readiness checks passed: configurable sources, portable wrappers, inventories, corruption/write refusal, machine-local external packages, missing mappings, invalid registries/paths, adapter defaults, stale-result rejection, and structured repair totals.');
+    console.log('Readiness checks passed: configurable sources, portable wrappers, inventories, corruption/write refusal, machine-local external packages, symlink confinement, missing mappings, invalid registries/paths, adapter defaults, stale-result rejection, and structured repair totals.');
 }finally{
     assert.equal(path.dirname(await fs.realpath(tempRoot)),await fs.realpath(os.tmpdir()));assert(path.basename(tempRoot).startsWith('skill-switchboard-readiness-'));
     await fs.rm(tempRoot,{recursive:true,force:true});

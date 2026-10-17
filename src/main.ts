@@ -28,6 +28,7 @@ import { CheckFreshness } from './sync/freshness';
 import { resolveSyncSource, settingsCheckKey } from './sync/source';
 import { getVaultChangeImpact } from './sync/vault-change-impact';
 import { localPackageRegistryPath, readLocalPackagePaths, resolveLocalPackagePath, saveLocalPackagePath } from './sync/package-paths';
+import { existingRealPath } from './sync/filesystem';
 import { isInside } from './sync/manifest';
 
 /** Fallback wait when the setting holds an unusable value. */
@@ -239,7 +240,17 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	async saveExternalPackagePath(id: string, directory: string): Promise<void> {
 		if (!this.index.skills.some((skill) => skill.frontmatter.package_id === id)) throw new Error('Package is not declared by an indexed skill.');
 		const vaultPath = this.getVaultBasePath();
-		if (directory.trim() && vaultPath && isInside(vaultPath, resolveLocalPackagePath(directory))) throw new Error('External tool packages must be outside the vault.');
+		if (directory.trim() && vaultPath) {
+			const source = resolveSyncSource(vaultPath, this.settings).sharedRoot;
+			const [realVault, realSource, realDirectory] = await Promise.all([
+				existingRealPath(vaultPath),
+				existingRealPath(source),
+				existingRealPath(resolveLocalPackagePath(directory)),
+			]);
+			if (isInside(realVault, realDirectory) || isInside(realSource, realDirectory)) {
+				throw new Error('External tool packages must stay outside the vault and canonical source.');
+			}
+		}
 		this.localPackagePaths = await saveLocalPackagePath(id, directory, this.packageRegistryPath);
 		this.localPackagePathsError = '';
 		this.invalidateChecks();

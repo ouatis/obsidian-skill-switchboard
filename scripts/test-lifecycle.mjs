@@ -80,6 +80,16 @@ try{
     const registry=JSON.parse(await fs.readFile(plugin.packageRegistryPath,'utf8'));assert.equal(registry.packages.drawing,path.join(tempRoot,'toolkit').replaceAll(path.sep,'/'));
     await assert.rejects(()=>plugin.saveExternalPackagePath('unknown',path.join(tempRoot,'toolkit')));
     await assert.rejects(()=>plugin.saveExternalPackagePath('drawing',path.join(vaultPath,'toolkit')));
+    const vaultToolkit=path.join(vaultPath,'vault-toolkit'),vaultAlias=path.join(tempRoot,'vault-toolkit-link');
+    await fs.mkdir(vaultToolkit);await fs.symlink(vaultToolkit,vaultAlias,'dir');
+    await assert.rejects(()=>plugin.saveExternalPackagePath('drawing',vaultAlias),/outside the vault and canonical source/,'a symlink into the vault is rejected before saving');
+    const externalSource=path.join(tempRoot,'external-source');
+    const sourceAlias=path.join(tempRoot,'external-source-link');
+    await fs.mkdir(externalSource);await fs.symlink(externalSource,sourceAlias,'dir');
+    plugin.settings.roots[0].kind='external';plugin.settings.roots[0].path=externalSource;
+    await assert.rejects(()=>plugin.saveExternalPackagePath('drawing',sourceAlias),/outside the vault and canonical source/,'a symlink into the canonical source is rejected before saving');
+    assert.equal(JSON.parse(await fs.readFile(plugin.packageRegistryPath,'utf8')).packages.drawing,registry.packages.drawing,'rejected symlink paths leave the local registry unchanged');
+    plugin.settings.roots[0].kind='vault';plugin.settings.roots[0].path='team/skills';
     fire();await settle();
     plugin.settings.syncManifestPath='configuration/new.json';await plugin.saveSettings();assert.equal(plugin.checksStale,true,'settings changes invalidate immediately');fire();await settle();
     globalThis.fixtureModalConfirm=false;await plugin.repairAllAdapters();assert.equal(plugin.adapterRepairRunning,false,'canceling confirmation releases the repair lock');assert.equal(writes,0,'canceling confirmation never writes runtime files');
@@ -104,7 +114,7 @@ try{
     assert.equal(plugin.index.skills[0]?.path,'other/skills/new.md','a stale scan cannot overwrite the newer root index');app.vault.read=originalRead;
     plugin.settings.autoScan=true;app.vault.emit('modify',{path:'other/skills/new.md'});assert.equal(timers.size,1,'a final rescan is pending');
     plugin.onunload();assert.equal(timers.size,0,'unload cancels queued checks and scans');assert.equal(writes,0,'background checking never repairs');
-    console.log('Lifecycle checks passed: settings and local-path privacy, quiet checks, stale-result rejection, trailing scan debounce, scan coalescing, root-change refresh, stale-scan rejection, repair confirmation and recovery, read-only recheck, and timer cleanup.');
+    console.log('Lifecycle checks passed: settings privacy and real-path package confinement, quiet checks, stale-result rejection, trailing scan debounce, scan coalescing, root-change refresh, stale-scan rejection, repair confirmation and recovery, read-only recheck, and timer cleanup.');
 }finally{
     plugin?.onunload();timers.clear();
     const statusWrites=globalThis.window?.[Symbol.for('ouatis.skill-switchboard.status-write-queues')];
