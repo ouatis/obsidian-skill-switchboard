@@ -4,6 +4,8 @@
 
 _One skill source. Connected agents. Clear status._
 
+[简体中文](./README.zh-CN.md)
+
 </div>
 
 An Obsidian desktop plugin for indexing Agent Skills across selected roots and
