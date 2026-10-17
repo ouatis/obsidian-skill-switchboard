@@ -87,6 +87,7 @@ export const EN: Strings = {
 	localPathSaveFailed: 'Could not save the local path',
 	settings: 'Settings',
 	settingsNotice: 'Open settings → community plugins → skill switchboard',
+	settingsRecovered: 'Some saved settings were invalid and have been ignored. Review the source, target, and harness settings.',
 	skills: 'Skills',
 	roots: 'Roots',
 	targets: 'Targets',

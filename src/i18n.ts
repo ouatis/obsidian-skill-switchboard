@@ -90,6 +90,7 @@ export interface Strings {
 	localPathSaveFailed: string;
 	settings: string;
 	settingsNotice: string;
+	settingsRecovered: string;
 	skills: string;
 	roots: string;
 	targets: string;

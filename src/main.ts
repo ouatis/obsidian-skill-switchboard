@@ -196,7 +196,9 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = normalizeSettings(await this.loadData());
+		const normalized = normalizeSettings(await this.loadData());
+		this.settings = normalized.settings;
+		if (normalized.recovered) new Notice(getStrings(this.settings.language).settingsRecovered);
 		this.configurationKey = settingsCheckKey(this.settings);
 		this.rootsKey = JSON.stringify(this.settings.roots);
 	}

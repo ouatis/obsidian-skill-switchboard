@@ -87,6 +87,7 @@ export const ZH_CN: Strings = {
 	localPathSaveFailed: '本机路径保存失败',
 	settings: '设置',
 	settingsNotice: '请打开“设置 → 第三方插件 → Skill Switchboard”',
+	settingsRecovered: '部分已保存设置格式无效，已忽略对应条目。请检查技能来源、运行目标和 Harness 设置。',
 	skills: '技能',
 	roots: '来源目录',
 	targets: '运行时目标',

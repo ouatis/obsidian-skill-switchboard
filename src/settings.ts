@@ -55,25 +55,35 @@ function cloneRecords<T extends { id: string }>(records: readonly T[]): T[] {
 	return records.map((record) => ({ ...record }));
 }
 
+interface NormalizedRecords<T> {
+	items: T[];
+	recovered: boolean;
+}
+
 function normalizeRecords<T extends { id: string }>(
 	value: unknown,
 	fallback: readonly T[],
 	normalize: (candidate: unknown) => T | null,
-): T[] {
+): NormalizedRecords<T> {
 	const source = Array.isArray(value) ? value : fallback;
 	const ids = new Set<string>();
-	const records: T[] = [];
+	const items: T[] = [];
+	let recovered = value !== undefined && !Array.isArray(value);
 	for (const candidate of source) {
 		const record = normalize(candidate);
-		if (!record || ids.has(record.id)) continue;
+		if (!record || ids.has(record.id)) {
+			recovered = true;
+			continue;
+		}
 		ids.add(record.id);
-		records.push(record);
+		items.push(record);
 	}
 	// Preserve an intentional empty list, but recover to defaults if every saved
 	// entry is malformed so one bad row cannot leave the editor unusable.
-	return Array.isArray(value) && value.length > 0 && records.length === 0
-		? cloneRecords(fallback)
-		: records;
+	if (Array.isArray(value) && value.length > 0 && items.length === 0) {
+		return { items: cloneRecords(fallback), recovered: true };
+	}
+	return { items, recovered };
 }
 
 function normalizeRoot(value: unknown): SkillRoot | null {
@@ -105,19 +115,35 @@ function normalizeHarness(value: unknown): HarnessDefinition | null {
 	return { ...value, id: value.id, label: value.label, command: value.command, enabled: value.enabled };
 }
 
+export interface SettingsNormalization {
+	settings: SkillSwitchboardSettings;
+	recovered: boolean;
+}
+
 /** Validate persisted Obsidian data before settings are consumed by the UI or scan loop. */
-export function normalizeSettings(value: unknown): SkillSwitchboardSettings {
+export function normalizeSettings(value: unknown): SettingsNormalization {
 	const data = isRecord(value) ? value : {};
 	const roots = normalizeRecords(data.roots, DEFAULT_SETTINGS.roots, normalizeRoot);
 	const targets = normalizeRecords(data.targets, DEFAULT_SETTINGS.targets, normalizeTarget);
 	const harnesses = normalizeRecords(data.harnesses, DEFAULT_SETTINGS.harnesses, normalizeHarness);
-	const firstEnabledRoot = roots.find((root) => root.enabled && root.path.trim())?.id ?? '';
-	return {
+	const firstEnabledRoot = roots.items.find((root) => root.enabled && root.path.trim())?.id ?? '';
+	const hasInvalidValue = (key: keyof SkillSwitchboardSettings, valid: (candidate: unknown) => boolean): boolean =>
+		Object.prototype.hasOwnProperty.call(data, key) && !valid(data[key]);
+	const recovered = (value !== null && value !== undefined && !isRecord(value)) ||
+		roots.recovered || targets.recovered || harnesses.recovered ||
+		hasInvalidValue('language', (candidate) => candidate === 'en' || candidate === 'zh-CN') ||
+		hasInvalidValue('autoScan', (candidate) => typeof candidate === 'boolean') ||
+		hasInvalidValue('scanDelayMs', (candidate) => typeof candidate === 'number' && Number.isFinite(candidate) && candidate >= 0) ||
+		hasInvalidValue('showDistributionBoard', (candidate) => typeof candidate === 'boolean') ||
+		hasInvalidValue('syncRootId', (candidate) => typeof candidate === 'string') ||
+		hasInvalidValue('syncManifestPath', (candidate) => typeof candidate === 'string') ||
+		hasInvalidValue('autoCheck', (candidate) => typeof candidate === 'boolean');
+	const settings: SkillSwitchboardSettings = {
 		...data,
 		...DEFAULT_SETTINGS,
-		roots,
-		targets,
-		harnesses,
+		roots: roots.items,
+		targets: targets.items,
+		harnesses: harnesses.items,
 		language: data.language === 'zh-CN' ? 'zh-CN' : DEFAULT_SETTINGS.language,
 		autoScan: typeof data.autoScan === 'boolean' ? data.autoScan : DEFAULT_SETTINGS.autoScan,
 		scanDelayMs: typeof data.scanDelayMs === 'number' && Number.isFinite(data.scanDelayMs) && data.scanDelayMs >= 0
@@ -128,6 +154,7 @@ export function normalizeSettings(value: unknown): SkillSwitchboardSettings {
 		syncManifestPath: typeof data.syncManifestPath === 'string' ? data.syncManifestPath : DEFAULT_SETTINGS.syncManifestPath,
 		autoCheck: typeof data.autoCheck === 'boolean' ? data.autoCheck : DEFAULT_SETTINGS.autoCheck,
 	};
+	return { settings, recovered };
 }
 
 export class SkillSwitchboardSettingTab extends PluginSettingTab {

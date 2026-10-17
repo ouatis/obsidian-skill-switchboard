@@ -19,11 +19,12 @@ globalThis.window={setTimeout:(fn,delay=0)=>{const id=++timerId;timers.set(id,{f
 let plugin;
 const stub=`export class Plugin{constructor(app){this.app=app;this.manifest={version:'fixture'};this.intervals=[];}async loadData(){return this.app.saved;}async saveData(data){this.app.saved=structuredClone(data);}registerView(){}addRibbonIcon(){}addSettingTab(tab){this.settingTab=tab;}addCommand(){}registerEvent(){}registerInterval(id){this.intervals.push(id);}}
 export class PluginSettingTab{constructor(app,plugin){this.app=app;this.plugin=plugin;}}
-export class ItemView{} export class Modal{constructor(){if(globalThis.fixtureModalThrow)throw new Error('fixture modal failure');this.buttons=[];this.titleEl={setText(){}};this.contentEl={createEl(){return{};},createDiv:()=>({createEl:()=>{const button={listeners:{},addEventListener(event,callback){this.listeners[event]=callback;}};this.buttons.push(button);return button;}})};}open(){const button=globalThis.fixtureModalConfirm?this.buttons.at(-1):this.buttons[0];button?.listeners.click?.();}close(){this.onClose?.();}} export class Notice{constructor(){globalThis.fixtureNotices++;}}
+export class ItemView{} export class Modal{constructor(){if(globalThis.fixtureModalThrow)throw new Error('fixture modal failure');this.buttons=[];this.titleEl={setText(){}};this.contentEl={createEl(){return{};},createDiv:()=>({createEl:()=>{const button={listeners:{},addEventListener(event,callback){this.listeners[event]=callback;}};this.buttons.push(button);return button;}})};}open(){const button=globalThis.fixtureModalConfirm?this.buttons.at(-1):this.buttons[0];button?.listeners.click?.();}close(){this.onClose?.();}} export class Notice{constructor(message){globalThis.fixtureNotices++;globalThis.fixtureNoticeMessages.push(message);}}
 export class Setting{} export class TFile{} export const setIcon=()=>{};export const requireApiVersion=()=>false;`;
 const eventHub=()=>{const callbacks=new Map();return{on(name,callback){const list=callbacks.get(name)||[];list.push(callback);callbacks.set(name,list);return{};},emit(name,...args){for(const callback of callbacks.get(name)||[])callback(...args);}};};
 const waitForStatus=async predicate=>{for(let i=0;i<100;i++){try{const value=JSON.parse(await fs.readFile(statusPath,'utf8'));if(predicate(value))return value;}catch{}await new Promise(resolve=>setTimeout(resolve,5));}throw new Error('Timed out waiting for diagnostic status update.');};
 globalThis.fixtureNotices=0;
+globalThis.fixtureNoticeMessages=[];
 globalThis.fixtureModalConfirm=false;
 globalThis.fixtureModalThrow=false;
 try{
@@ -47,12 +48,17 @@ try{
     assert.equal(settingsFixture.settings.language,'en');assert.equal(settingsFixture.settings.autoScan,false);assert.equal(settingsFixture.settings.autoCheck,true);
     assert.equal(settingsFixture.settings.showDistributionBoard,true);assert.equal(settingsFixture.settings.scanDelayMs,500);
     assert.equal(settingsFixture.settings.syncRootId,'recovered');assert.equal(settingsFixture.settings.syncManifestPath,'');
-    settingsFixture.app.saved={roots:{invalid:true},targets:'invalid',harnesses:null};
+    assert.equal(globalThis.fixtureNotices,1);assert.match(globalThis.fixtureNoticeMessages.at(-1),/Some saved settings were invalid/,'settings recovery is visible in the selected language');
+    settingsFixture.app.saved={roots:{invalid:true},targets:'invalid',harnesses:null,language:'zh-CN'};
     await settingsFixture.loadSettings();
     assert.deepEqual(settingsFixture.settings.roots,[{id:'vault-skills',label:'Vault skills',path:'skills',kind:'vault',enabled:true}],'non-array data falls back to a usable default root instead of crashing startup');
     assert.deepEqual(settingsFixture.settings.targets,[]);assert.deepEqual(settingsFixture.settings.harnesses,[]);
+    assert.equal(globalThis.fixtureNotices,2);assert.match(globalThis.fixtureNoticeMessages.at(-1),/部分已保存设置格式无效/,'settings recovery notice is translated');
     settingsFixture.app.saved={roots:[],targets:[],harnesses:[],syncRootId:''};
     await settingsFixture.loadSettings();assert.deepEqual(settingsFixture.settings.roots,[],'an intentional empty source list stays empty');
+    assert.equal(globalThis.fixtureNotices,2,'a valid empty configuration does not trigger a recovery notice');
+    settingsFixture.app.saved=null;await settingsFixture.loadSettings();assert.equal(globalThis.fixtureNotices,2,'a fresh install with no saved data is not reported as corrupt');
+    globalThis.fixtureNotices=0;globalThis.fixtureNoticeMessages=[];
     const vaultEvents=eventHub(),workspaceEvents=eventHub();let content='---\nname: test\ndescription: Fixture\n---\n# Test\n',vaultScans=0;
     const root={id:'team',kind:'vault',label:'Team',path:'team/skills',enabled:true};
     const target={id:'agent',runtime:'codex',mode:'wrapper',enabled:true,path:path.join(tempRoot,'runtime'),label:'Agent'};
