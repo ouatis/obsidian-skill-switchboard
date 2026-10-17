@@ -1,6 +1,6 @@
 import { Notice, Plugin } from 'obsidian';
 import {
-	DEFAULT_SETTINGS,
+	normalizeSettings,
 	SkillSwitchboardSettings,
 	SkillSwitchboardSettingTab,
 } from './settings';
@@ -196,23 +196,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		const data = (await this.loadData()) as Partial<SkillSwitchboardSettings> | null;
-		this.settings = {
-			...DEFAULT_SETTINGS,
-			...data,
-			roots: data?.roots ?? DEFAULT_SETTINGS.roots,
-			targets: data?.targets ?? DEFAULT_SETTINGS.targets,
-			harnesses: data?.harnesses ?? DEFAULT_SETTINGS.harnesses,
-			language: data?.language === 'zh-CN' ? 'zh-CN' : DEFAULT_SETTINGS.language,
-			syncRootId: data?.syncRootId ?? (data?.roots ?? DEFAULT_SETTINGS.roots).find((root) => root.enabled && root.path.trim())?.id ?? '',
-			syncManifestPath: typeof data?.syncManifestPath === 'string' ? data.syncManifestPath : '',
-			autoCheck: typeof data?.autoCheck === 'boolean' ? data.autoCheck : DEFAULT_SETTINGS.autoCheck,
-		};
-		// scanIntervalMinutes was the old polling interval; the debounce is in
-		// milliseconds now, so a legacy value cannot be carried over as-is.
-		if (this.settings.scanDelayMs === undefined) {
-			this.settings.scanDelayMs = DEFAULT_SETTINGS.scanDelayMs;
-		}
+		this.settings = normalizeSettings(await this.loadData());
 		this.configurationKey = settingsCheckKey(this.settings);
 		this.rootsKey = JSON.stringify(this.settings.roots);
 	}

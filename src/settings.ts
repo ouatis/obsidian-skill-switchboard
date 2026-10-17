@@ -2,7 +2,7 @@ import { App, PluginSettingTab, Setting, requireApiVersion } from 'obsidian';
 import type { SettingDefinitionItem } from 'obsidian';
 import type SkillSwitchboardPlugin from './main';
 import { getStrings, Language } from './i18n';
-import { HarnessDefinition, RuntimeTarget, SkillRoot } from './types';
+import { RUNTIME_NAMES, HarnessDefinition, RuntimeTarget, SkillRoot } from './types';
 import {
 	renderExternalPackagesSection,
 	renderHarnessesSection,
@@ -44,6 +44,91 @@ export const DEFAULT_SETTINGS: SkillSwitchboardSettings = {
 	syncManifestPath: '',
 	autoCheck: true,
 };
+
+const RUNTIME_NAME_SET: ReadonlySet<string> = new Set(RUNTIME_NAMES);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function cloneRecords<T extends { id: string }>(records: readonly T[]): T[] {
+	return records.map((record) => ({ ...record }));
+}
+
+function normalizeRecords<T extends { id: string }>(
+	value: unknown,
+	fallback: readonly T[],
+	normalize: (candidate: unknown) => T | null,
+): T[] {
+	const source = Array.isArray(value) ? value : fallback;
+	const ids = new Set<string>();
+	const records: T[] = [];
+	for (const candidate of source) {
+		const record = normalize(candidate);
+		if (!record || ids.has(record.id)) continue;
+		ids.add(record.id);
+		records.push(record);
+	}
+	// Preserve an intentional empty list, but recover to defaults if every saved
+	// entry is malformed so one bad row cannot leave the editor unusable.
+	return Array.isArray(value) && value.length > 0 && records.length === 0
+		? cloneRecords(fallback)
+		: records;
+}
+
+function normalizeRoot(value: unknown): SkillRoot | null {
+	if (!isRecord(value)) return null;
+	if (typeof value.id !== 'string' || !value.id.trim() || typeof value.label !== 'string' || typeof value.path !== 'string') return null;
+	if ((value.kind !== 'vault' && value.kind !== 'external') || typeof value.enabled !== 'boolean') return null;
+	return { ...value, id: value.id, label: value.label, path: value.path, kind: value.kind, enabled: value.enabled };
+}
+
+function normalizeTarget(value: unknown): RuntimeTarget | null {
+	if (!isRecord(value)) return null;
+	if (typeof value.id !== 'string' || !value.id.trim() || typeof value.label !== 'string' || typeof value.path !== 'string') return null;
+	if ((value.mode !== 'copy' && value.mode !== 'symlink' && value.mode !== 'wrapper') || typeof value.enabled !== 'boolean') return null;
+	if (value.runtime !== undefined && (typeof value.runtime !== 'string' || !RUNTIME_NAME_SET.has(value.runtime))) return null;
+	return {
+		...value,
+		id: value.id,
+		label: value.label,
+		path: value.path,
+		mode: value.mode,
+		enabled: value.enabled,
+		...(typeof value.runtime === 'string' ? { runtime: value.runtime as RuntimeTarget['runtime'] } : {}),
+	};
+}
+
+function normalizeHarness(value: unknown): HarnessDefinition | null {
+	if (!isRecord(value)) return null;
+	if (typeof value.id !== 'string' || !value.id.trim() || typeof value.label !== 'string' || typeof value.command !== 'string' || typeof value.enabled !== 'boolean') return null;
+	return { ...value, id: value.id, label: value.label, command: value.command, enabled: value.enabled };
+}
+
+/** Validate persisted Obsidian data before settings are consumed by the UI or scan loop. */
+export function normalizeSettings(value: unknown): SkillSwitchboardSettings {
+	const data = isRecord(value) ? value : {};
+	const roots = normalizeRecords(data.roots, DEFAULT_SETTINGS.roots, normalizeRoot);
+	const targets = normalizeRecords(data.targets, DEFAULT_SETTINGS.targets, normalizeTarget);
+	const harnesses = normalizeRecords(data.harnesses, DEFAULT_SETTINGS.harnesses, normalizeHarness);
+	const firstEnabledRoot = roots.find((root) => root.enabled && root.path.trim())?.id ?? '';
+	return {
+		...data,
+		...DEFAULT_SETTINGS,
+		roots,
+		targets,
+		harnesses,
+		language: data.language === 'zh-CN' ? 'zh-CN' : DEFAULT_SETTINGS.language,
+		autoScan: typeof data.autoScan === 'boolean' ? data.autoScan : DEFAULT_SETTINGS.autoScan,
+		scanDelayMs: typeof data.scanDelayMs === 'number' && Number.isFinite(data.scanDelayMs) && data.scanDelayMs >= 0
+			? data.scanDelayMs
+			: DEFAULT_SETTINGS.scanDelayMs,
+		showDistributionBoard: typeof data.showDistributionBoard === 'boolean' ? data.showDistributionBoard : DEFAULT_SETTINGS.showDistributionBoard,
+		syncRootId: typeof data.syncRootId === 'string' ? data.syncRootId : firstEnabledRoot,
+		syncManifestPath: typeof data.syncManifestPath === 'string' ? data.syncManifestPath : DEFAULT_SETTINGS.syncManifestPath,
+		autoCheck: typeof data.autoCheck === 'boolean' ? data.autoCheck : DEFAULT_SETTINGS.autoCheck,
+	};
+}
 
 export class SkillSwitchboardSettingTab extends PluginSettingTab {
 	plugin: SkillSwitchboardPlugin;

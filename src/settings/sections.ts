@@ -1,7 +1,7 @@
 import { Notice, Setting } from 'obsidian';
 import type SkillSwitchboardPlugin from '../main';
 import type { Strings } from '../i18n';
-import type { RuntimeTarget, SkillRoot, SyncMode } from '../types';
+import { RUNTIME_NAMES, type RuntimeTarget, type SkillRoot, type SyncMode } from '../types';
 
 function newId(prefix: string): string {
 	return `${prefix}-${Date.now().toString(36)}`;
@@ -152,7 +152,7 @@ export function renderTargetsSection(
 		);
 		setting.addDropdown((dropdown) => {
 			dropdown.addOption('', strings.chooseAgent);
-			for (const runtime of ['codex', 'hermes', 'workbuddy', 'opencode', 'antigravity', 'dsh'] as const) dropdown.addOption(runtime, runtime);
+			for (const runtime of RUNTIME_NAMES) dropdown.addOption(runtime, runtime);
 			dropdown.setValue(target.runtime ?? '').onChange(async (value) => {
 				target.runtime = value ? value as RuntimeTarget['runtime'] : undefined;
 				await plugin.saveSettings();

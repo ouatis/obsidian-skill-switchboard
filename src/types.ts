@@ -2,13 +2,9 @@ export type RootKind = 'vault' | 'external';
 
 export type SyncMode = 'copy' | 'symlink' | 'wrapper';
 
-export type RuntimeName =
-	| 'codex'
-	| 'hermes'
-	| 'workbuddy'
-	| 'opencode'
-	| 'antigravity'
-	| 'dsh';
+export const RUNTIME_NAMES = ['codex', 'hermes', 'workbuddy', 'opencode', 'antigravity', 'dsh'] as const;
+
+export type RuntimeName = typeof RUNTIME_NAMES[number];
 
 export interface SkillRoot {
 	id: string;

@@ -3,10 +3,10 @@ import path from 'node:path';
 import { isAbsolutePath, resolveConfiguredPath } from '../utils/paths';
 import type { ManifestLocation } from './source';
 import { checkResources, type ResourceCheck } from './resources';
-import { RuntimeName } from '../types';
+import { RUNTIME_NAMES, type RuntimeName } from '../types';
 import type { AdapterCheckResult } from './result';
 
-export const RUNTIMES: RuntimeName[] = ['codex', 'hermes', 'workbuddy', 'opencode', 'antigravity', 'dsh'];
+export const RUNTIMES: RuntimeName[] = [...RUNTIME_NAMES];
 export type AdapterMetadata = Record<string, unknown>;
 export interface RuntimeValidationPolicy { retiredNames: string[]; forbiddenLiterals: string[]; rejectExampleAbsolutePath: boolean }
 

@@ -31,6 +31,28 @@ try{
     await esbuild.build({entryPoints:[path.join(repo,'src/main.ts')],bundle:true,platform:'node',format:'cjs',outfile:bundle,logLevel:'silent',plugins:[{name:'obsidian-fixture',setup(build){build.onResolve({filter:/^obsidian$/},()=>({path:'obsidian',namespace:'fixture'}));build.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:stub,loader:'js'}));build.onResolve({filter:/^virtual:skill-switchboard-build-info$/},()=>({path:'build-info',namespace:'fixture-build-info'}));build.onLoad({filter:/.*/,namespace:'fixture-build-info'},()=>({contents:"export const BUILD_ID = 'fixture-build-001';",loader:'js'}));}}]});
     const imported=await import(pathToFileURL(bundle).href);
     const Plugin=imported.default.default??imported.default;
+    const recoveredRoot={id:'recovered',kind:'external',label:'Recovered',path:'~/skills',enabled:true};
+    const recoveredTarget={id:'recovered-target',runtime:'codex',mode:'wrapper',enabled:true,path:'~/.codex/skills',label:'Codex'};
+    const recoveredHarness={id:'recovered-harness',label:'Harness',command:'agent run',enabled:true};
+    const settingsFixture=new Plugin({saved:{
+        roots:[null,{id:42,label:'invalid',path:'bad',kind:'vault',enabled:true},recoveredRoot,recoveredRoot],
+        targets:[{id:'invalid',label:'Invalid',path:'bad',mode:'wrapper',runtime:'unknown',enabled:true},recoveredTarget,recoveredTarget],
+        harnesses:[{id:'invalid',label:'Invalid',command:'run',enabled:'yes'},recoveredHarness],
+        language:'fr',autoScan:'false',autoCheck:0,showDistributionBoard:'false',scanDelayMs:'fast',syncRootId:42,syncManifestPath:[],
+    }});
+    await settingsFixture.loadSettings();
+    assert.deepEqual(settingsFixture.settings.roots,[recoveredRoot],'malformed and duplicate roots are removed while valid paths survive');
+    assert.deepEqual(settingsFixture.settings.targets,[recoveredTarget],'targets with unknown runtimes are rejected before use');
+    assert.deepEqual(settingsFixture.settings.harnesses,[recoveredHarness],'invalid harness entries do not reach settings controls');
+    assert.equal(settingsFixture.settings.language,'en');assert.equal(settingsFixture.settings.autoScan,false);assert.equal(settingsFixture.settings.autoCheck,true);
+    assert.equal(settingsFixture.settings.showDistributionBoard,true);assert.equal(settingsFixture.settings.scanDelayMs,500);
+    assert.equal(settingsFixture.settings.syncRootId,'recovered');assert.equal(settingsFixture.settings.syncManifestPath,'');
+    settingsFixture.app.saved={roots:{invalid:true},targets:'invalid',harnesses:null};
+    await settingsFixture.loadSettings();
+    assert.deepEqual(settingsFixture.settings.roots,[{id:'vault-skills',label:'Vault skills',path:'skills',kind:'vault',enabled:true}],'non-array data falls back to a usable default root instead of crashing startup');
+    assert.deepEqual(settingsFixture.settings.targets,[]);assert.deepEqual(settingsFixture.settings.harnesses,[]);
+    settingsFixture.app.saved={roots:[],targets:[],harnesses:[],syncRootId:''};
+    await settingsFixture.loadSettings();assert.deepEqual(settingsFixture.settings.roots,[],'an intentional empty source list stays empty');
     const vaultEvents=eventHub(),workspaceEvents=eventHub();let content='---\nname: test\ndescription: Fixture\n---\n# Test\n',vaultScans=0;
     const root={id:'team',kind:'vault',label:'Team',path:'team/skills',enabled:true};
     const target={id:'agent',runtime:'codex',mode:'wrapper',enabled:true,path:path.join(tempRoot,'runtime'),label:'Agent'};
@@ -114,7 +136,7 @@ try{
     assert.equal(plugin.index.skills[0]?.path,'other/skills/new.md','a stale scan cannot overwrite the newer root index');app.vault.read=originalRead;
     plugin.settings.autoScan=true;app.vault.emit('modify',{path:'other/skills/new.md'});assert.equal(timers.size,1,'a final rescan is pending');
     plugin.onunload();assert.equal(timers.size,0,'unload cancels queued checks and scans');assert.equal(writes,0,'background checking never repairs');
-    console.log('Lifecycle checks passed: settings privacy and real-path package confinement, quiet checks, stale-result rejection, trailing scan debounce, scan coalescing, root-change refresh, stale-scan rejection, repair confirmation and recovery, read-only recheck, and timer cleanup.');
+    console.log('Lifecycle checks passed: malformed settings recovery, settings privacy, real-path package confinement, quiet checks, stale-result rejection, trailing scan debounce, scan coalescing, root-change refresh, stale-scan rejection, repair confirmation and recovery, read-only recheck, and timer cleanup.');
 }finally{
     plugin?.onunload();timers.clear();
     const statusWrites=globalThis.window?.[Symbol.for('ouatis.skill-switchboard.status-write-queues')];
