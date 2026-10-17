@@ -23,12 +23,11 @@ English and Simplified Chinese are available in settings.
 
 Requires Obsidian 1.7.2 or newer and runs on desktop.
 
-For a manual install, download `main.js`, `manifest.json`, and `styles.css`
-from [Releases](https://github.com/ouatis/obsidian-skill-switchboard/releases)
+For a manual install, use `main.js`, `manifest.json`, and `styles.css` from a
+published [GitHub release](https://github.com/ouatis/obsidian-skill-switchboard/releases)
 and place them in `<vault>/.obsidian/plugins/skill-switchboard/`. Then enable
-Skill Switchboard under **Settings → Community plugins**. For unreleased
-versions, add `ouatis/obsidian-skill-switchboard` as a source in
-[BRAT](https://github.com/thesephist/brats).
+Skill Switchboard under **Settings → Community plugins**. To test a source
+checkout before release, follow the Development steps below.
 
 ## Features
 
@@ -73,9 +72,12 @@ are never deleted automatically. Saving an external package path writes only
 the machine-local `~/.skill-switchboard/packages.json` registry.
 
 The hidden `.skill-switchboard-status.json` at the vault root records the
-installed version, build ID, and latest check status/output. It helps diagnose
-what Obsidian loaded; it does not prove another device synced files or an agent
-loaded a skill. The plugin makes no network requests and collects no telemetry.
+installed version, build ID, skill count, and latest check status/output. Its
+metadata omits vault, source, and target paths. Exact check and repair output
+is retained for diagnosis and may contain local manifest or backup paths, so
+review it before sharing. The file does not prove another device synced files
+or an agent loaded a skill. The plugin makes no network requests and collects
+no telemetry.
 
 ## Commands
 

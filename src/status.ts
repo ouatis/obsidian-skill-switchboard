@@ -6,8 +6,9 @@ import type SkillSwitchboardPlugin from './main';
 
 /**
  * Diagnostic trace written next to the vault (dot-prefixed so Obsidian never indexes it).
- * Without this file there is no way to tell whether the running plugin is the freshly built
- * bundle or an older one still held in memory. Delete it whenever the diagnosis is done.
+ * Keep machine-specific vault, source, and target paths out of its metadata so synced copies
+ * do not carry a redundant snapshot of local configuration. Run outputs remain verbatim for
+ * diagnosis and can include paths. Delete the file whenever the diagnosis is done.
  */
 export const STATUS_FILE = '.skill-switchboard-status.json';
 
@@ -63,19 +64,10 @@ export async function writePluginStatus(plugin: SkillSwitchboardPlugin, extra: S
 				// A missing or malformed diagnostic file must not prevent a fresh status write.
 			}
 			const payload = {
-				schemaVersion: 1,
+				schemaVersion: 2,
 				writtenAt: new Date().toISOString(),
 				pluginVersion: plugin.manifest.version,
 				buildId: BUILD_ID,
-				vaultPath: basePath,
-				roots: plugin.settings.roots.map((root) => ({ label: root.label, path: root.path, enabled: root.enabled })),
-				targets: plugin.settings.targets.map((target) => ({
-					label: target.label,
-					runtime: target.runtime,
-					mode: target.mode,
-					enabled: target.enabled,
-					path: target.path,
-				})),
 				skillCount: plugin.index.skills.length,
 				lastCheck: extra.lastCheck ?? previous.lastCheck,
 				lastRepair: extra.lastRepair ?? previous.lastRepair,
