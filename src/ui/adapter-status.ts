@@ -4,6 +4,7 @@ import type { RepairSummary, TargetCheck } from '../sync/adapter-run';
 import type { AdapterCheckResult } from '../sync/result';
 import type { ManifestCheckResult } from '../sync-provider';
 import { repairTotals } from './repair-summary';
+import { renderInstallPlans } from './install-plan';
 
 export interface AdapterStatusState {
 	checksStale: boolean;
@@ -29,6 +30,15 @@ export function renderAdapterStatus(
 	const repair = state.adapterRepair;
 	const repairRunning = state.adapterRepairRunning;
 	const section = contentEl.createDiv('skill-switchboard-check');
+	if (!state.checksStale) {
+		renderInstallPlans(section, state.targetChecks, strings);
+		const found = state.targetChecks.flatMap((check) => check.result.native?.unmanagedEntries ?? []);
+		if (found.length) {
+			const details = section.createEl('details');
+			details.createEl('summary', { text: `${strings.foundUnmanaged} · ${found.length}` });
+			for (const entry of found) details.createDiv({ text: entry, cls: 'skill-switchboard-path' });
+		}
+	}
 	if (state.checksStale && !checkRunning && !repairRunning) {
 		renderStatusRow(section, state.targetCheckedAt ? strings.checksStale : strings.checkNotYet, 'unknown', 'clock');
 	}
@@ -82,7 +92,6 @@ export function renderAdapterStatus(
 			for (const item of summary.details) {
 				body.createEl('strong', { text: `${item.label} · ${item.repair.native?.changedSkills.join(', ') || (item.followUp?.status === 'passed' ? strings.adapterCheckPassed : strings.repairAllFailed(1))}` });
 				for (const change of item.repair.native?.changes ?? []) body.createDiv({ text: `${strings.changeLabel(change.kind, change.action)} · ${change.path}`, cls: 'skill-switchboard-path' });
-				if (item.repair.native?.backupPath) body.createDiv({ text: `${strings.repairBackup} · ${item.repair.native.backupPath}`, cls: 'skill-switchboard-path' });
 			}
 		}
 		if (repair?.output && !passed) {

@@ -13,12 +13,13 @@ export interface SyncRuntimeCheckResult extends AdapterCheckResult {
 }
 
 export interface SyncRepairResult extends AdapterCheckResult { native?: NativeRepairResult }
+export interface RepairControl { isCurrent?: () => boolean }
 
 export interface SyncProvider {
 	readonly id: string;
 	inspectManifest(vaultPath: string): Promise<ManifestCheckResult>;
 	checkRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot?: SyncManifestSnapshot): Promise<SyncRuntimeCheckResult>;
-	repairRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot?: SyncManifestSnapshot): Promise<SyncRepairResult>;
+	repairRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot?: SyncManifestSnapshot, control?: RepairControl): Promise<SyncRepairResult>;
 }
 
 export class NativeSyncProvider implements SyncProvider {
@@ -41,14 +42,14 @@ export class NativeSyncProvider implements SyncProvider {
 		};
 	}
 
-	async repairRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot?: SyncManifestSnapshot): Promise<SyncRepairResult> {
+	async repairRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot?: SyncManifestSnapshot, control?: RepairControl): Promise<SyncRepairResult> {
 		const manifest = await this.inspectManifest(vaultPath);
 		if (manifest.status === 'failed' || !manifest.snapshot) return manifest;
 		// Re-read the source before writing; never apply a snapshot whose rules changed.
 		if (snapshot && !sameSourceSnapshot(snapshot, manifest.snapshot)) {
 			return { status: 'failed', exitCode: 1, output: 'Source changed during repair. Check again before writing.' };
 		}
-		const native = await repairRuntimeNative(vaultPath, runtime, targetPath, manifest.snapshot);
+		const native = await repairRuntimeNative(vaultPath, runtime, targetPath, manifest.snapshot, control);
 		return { ...native, native };
 	}
 }

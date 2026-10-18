@@ -1,256 +1,46 @@
-import { promises as fs } from 'node:fs';
-import { createHash, randomUUID } from 'node:crypto';
-import os from 'node:os';
-import path from 'node:path';
-import type { AdapterCheckResult } from './result';
 import type { RuntimeName } from '../types';
-import { isInside, pathsOverlap, type SyncManifestSnapshot } from './manifest';
-import {
-	agentMetadataFor,
-	commandFor,
-	loadRuntimeSkills,
-	wrapperFor,
-} from './templates';
-import {
-	existingRealPath,
-	pathExists,
-	readBytes,
-	readText,
-	walkFiles,
-} from './filesystem';
-import { referencedSharedFiles } from './native-check';
-import { resolveConfiguredPath } from '../utils/paths';
-import { blockedResourceSkills, resourceBlockMessage } from './resources';
+import type { AdapterCheckResult } from './result';
+import type { SyncManifestSnapshot } from './manifest';
+import { prepareRuntime } from './native-check';
+import { installPackage, type InstallOptions } from './install-package';
 
+export interface RepairChange { skill: string; path: string; kind: 'package'; action: 'created' | 'updated' }
 export interface NativeRepairResult extends AdapterCheckResult {
 	writtenFiles: number;
 	replacedDirectories: number;
-	backupPath?: string;
 	changedSkills: string[];
 	changes: RepairChange[];
-	/** Healthy entries completed; blocked skill entries were left untouched. */
 	partial?: boolean;
 	blockedSkills?: string[];
 }
+export interface NativeRepairOptions extends InstallOptions { opencodeCommandsDir?: string }
 
-export interface RepairChange { skill: string; path: string; kind: 'wrapper' | 'metadata' | 'command' | 'references'; action: 'created' | 'updated' }
-
-export interface NativeRepairOptions {
-	/** Test-only override; production follows OPENCODE_CONFIG like the Python adapter. */
-	opencodeCommandsDir?: string;
-	/** Test-only override so isolated fixtures never create a backup in the live vault. */
-	backupRoot?: string;
-	/** Test-only home override for exercising the default machine-local backup location. */
-	backupHomeDir?: string;
-}
-
-export async function repairRuntimeNative(
-	vaultPath: string,
-	runtime: RuntimeName,
-	targetPath: string,
-	snapshot: SyncManifestSnapshot,
-	options: NativeRepairOptions = {},
-): Promise<NativeRepairResult> {
-	let state: RepairState | undefined;
+/** One-way distribution. No edited Agent copy is ever promoted to the canonical source. */
+export async function repairRuntimeNative(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot: SyncManifestSnapshot, options: NativeRepairOptions = {}): Promise<NativeRepairResult> {
+	const changes: RepairChange[] = [];
+	const problems: string[] = [];
+	const blockedSkills: string[] = [];
+	let writtenFiles = 0;
 	try {
-		const configuredTarget = resolveConfiguredPath(targetPath, snapshot.vaultPath);
-		state = new RepairState(
-			snapshot.vaultPath,
-			snapshot.sharedRoot,
-			configuredTarget,
-			runtime,
-			options.backupRoot,
-			options.backupHomeDir,
-		);
-		const resolvedTarget = await state.assertSafeWritePath(configuredTarget);
-		const candidates = loadRuntimeSkills(snapshot, runtime);
-		if (candidates.length === 0) return await state.failureResult(`No skills enable the ${runtime} adapter in the configured manifest.`);
-		const blockedSkills = blockedResourceSkills(snapshot.resources, candidates);
-		const blocked = new Set(blockedSkills);
-		const skills = candidates.filter((skill) => !blocked.has(skill.name));
-		const commandRoot = runtime === 'opencode'
-			? resolveConfiguredPath(options.opencodeCommandsDir ?? defaultOpenCodeCommandsDir(), snapshot.vaultPath)
-			: undefined;
-		if (commandRoot) await state.assertSafeWritePath(commandRoot);
-
-		for (const skill of skills) {
-			const categoryRoot = runtime === 'hermes' ? path.join(resolvedTarget, skill.category) : resolvedTarget;
-			const skillDir = await existingRealPath(path.join(categoryRoot, skill.name));
-			await state.assertSafeWritePath(skillDir);
-			const wrapperPath = runtime === 'dsh'
-				? path.join(resolvedTarget, `${skill.name}.md`)
-				: path.join(skillDir, 'SKILL.md');
-			await state.syncText(wrapperPath, wrapperFor(skill, runtime, snapshot), skill.name, 'wrapper');
-
-			if (runtime === 'hermes') {
-				await state.syncHermesReferences(skillDir, await referencedSharedFiles(skill.sharedPath, snapshot.sharedRoot), skill.name);
-			} else if (runtime === 'codex') {
-				await state.syncText(path.join(skillDir, 'agents', 'openai.yaml'), agentMetadataFor(skill), skill.name, 'metadata');
-			} else if (runtime === 'opencode' && commandRoot) {
-				await state.syncText(path.join(commandRoot, `${skill.name}.md`), commandFor(skill), skill.name, 'command');
+		for (const plan of await prepareRuntime(vaultPath, runtime, targetPath, snapshot)) {
+			if (options.isCurrent?.() === false) { problems.push('Repair was cancelled; remaining packages were not changed.'); break; }
+			try {
+				if (!plan.bundle) throw new Error(plan.state.detail);
+				const result = await installPackage(plan.bundle, snapshot.vaultPath, snapshot.sharedRoot, options);
+				if (result.changed) changes.push({ skill: plan.name, path: plan.bundle.directory, kind: 'package', action: plan.state.kind === 'missing' ? 'created' : 'updated' });
+				writtenFiles += result.files;
+				problems.push(...(result.cleanupWarnings ?? []));
+			} catch (error) {
+				blockedSkills.push(plan.name);
+				problems.push(`${plan.name}: ${error instanceof Error ? error.message : String(error)}`);
 			}
 		}
-
-		const result = await state.successResult();
-		return blockedSkills.length ? {
-			...result, status: 'failed', exitCode: 1, partial: true, blockedSkills,
-			output: `${result.output}\n\n${resourceBlockMessage(blockedSkills)}`,
-		} : result;
-	} catch (error) {
-		const message = error instanceof Error ? error.message : String(error);
-		return state
-			? await state.failureResult(message)
-			: { status: 'failed', output: `[native repair] FAIL\n${message}`, exitCode: 1, writtenFiles: 0, replacedDirectories: 0, changedSkills: [], changes: [] };
-	}
-}
-
-class RepairState {
-	private backupRoot?: string;
-	private backupIndex: Array<{ source: string; backup: string }> = [];
-	private backupNumber = 0;
-	writtenFiles = 0;
-	replacedDirectories = 0;
-	changes: RepairChange[] = [];
-
-	constructor(
-		private readonly vaultPath: string,
-		private readonly sharedRoot: string,
-		private readonly targetPath: string,
-		private readonly runtime: RuntimeName,
-		backupRoot?: string,
-		private readonly backupHomeDir = os.homedir(),
-	) {
-		this.backupRoot = backupRoot;
-	}
-
-	async assertSafeWritePath(candidate: string): Promise<string> {
-		const [vault, source, resolved] = await Promise.all([
-			existingRealPath(this.vaultPath),
-			existingRealPath(this.sharedRoot),
-			existingRealPath(candidate),
-		]);
-		if (isInside(vault, resolved)) {
-			throw new Error(`Native repair refused a target inside the vault: ${resolved}`);
-		}
-		if (pathsOverlap(source, resolved)) {
-			throw new Error(`Native repair refused a target that overlaps the canonical skill source: ${resolved}`);
-		}
-		return resolved;
-	}
-
-	async syncText(filePath: string, expected: string, skill: string, kind: RepairChange['kind']): Promise<void> {
-		await this.assertSafeWritePath(filePath);
-		const exists = await pathExists(filePath);
-		if (exists && await readText(filePath) === expected) return;
-		await this.backupExisting(filePath);
-		await fs.mkdir(path.dirname(filePath), { recursive: true });
-		await fs.writeFile(filePath, expected, 'utf8');
-		this.writtenFiles += 1;
-		this.changes.push({ skill, path: filePath, kind, action: exists ? 'updated' : 'created' });
-	}
-
-	async syncHermesReferences(skillDir: string, references: string[], skill: string): Promise<void> {
-		const referencesDir = path.join(skillDir, 'references');
-		const expected = references.map((source) => ({
-			source,
-			target: path.join(skillDir, path.relative(this.vaultSharedRoot, source)),
-		}));
-		const installed = await walkFiles(referencesDir);
-		let changed = installed.length !== expected.length;
-		if (!changed) {
-			for (const item of expected) {
-				if (!(await pathExists(item.target)) || !(await readBytes(item.target)).equals(await readBytes(item.source))) {
-					changed = true;
-					break;
-				}
-			}
-		}
-		if (!changed) return;
-
-		await this.assertSafeWritePath(referencesDir);
-		await this.backupExisting(referencesDir);
-		await fs.rm(referencesDir, { recursive: true, force: true });
-		this.replacedDirectories += 1;
-		this.changes.push({ skill, path: referencesDir, kind: 'references', action: 'updated' });
-		for (const item of expected) {
-			await this.assertSafeWritePath(item.target);
-			await fs.mkdir(path.dirname(item.target), { recursive: true });
-			await fs.copyFile(item.source, item.target);
-			this.writtenFiles += 1;
-		}
-	}
-
-	private get vaultSharedRoot(): string {
-		return this.sharedRoot;
-	}
-
-	private async backupExisting(source: string): Promise<void> {
-		if (!(await pathExists(source))) return;
-		if (!this.backupRoot) {
-			const stamp = new Date().toISOString().replace(/[.:]/g, '-');
-			const vault = await existingRealPath(this.vaultPath);
-			const vaultName = path.basename(vault).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'vault';
-			const vaultId = `${vaultName}-${createHash('sha256').update(vault).digest('hex').slice(0, 12)}`;
-			this.backupRoot = path.join(
-				this.backupHomeDir,
-				'.skill-switchboard',
-				'repair-backups',
-				vaultId,
-				`${stamp}-${this.runtime}-${randomUUID().slice(0, 8)}`,
-			);
-		}
-		await this.assertSafeWritePath(this.backupRoot);
-		await fs.mkdir(this.backupRoot, { recursive: true });
-		this.backupRoot = await this.assertSafeWritePath(await fs.realpath(this.backupRoot));
-		const backupName = `${String(this.backupNumber).padStart(4, '0')}-${path.basename(source) || 'root'}`;
-		this.backupNumber += 1;
-		const destination = path.join(this.backupRoot, backupName);
-		await fs.cp(source, destination, { recursive: true, force: true });
-		this.backupIndex.push({ source, backup: destination });
-	}
-
-	async successResult(): Promise<NativeRepairResult> {
-		await this.writeBackupIndex();
-		const backupNote = this.backupRoot ? ` Backup: ${this.backupRoot}` : '';
-		return {
-			status: 'passed',
-			output: `[native repair] PASS\nWrote ${this.writtenFiles} file(s) and replaced ${this.replacedDirectories} reference director${this.replacedDirectories === 1 ? 'y' : 'ies'}.${backupNote}`,
-			exitCode: 0,
-			writtenFiles: this.writtenFiles,
-			replacedDirectories: this.replacedDirectories,
-			backupPath: this.backupRoot,
-			changedSkills: [...new Set(this.changes.map((change) => change.skill))],
-			changes: this.changes,
-		};
-	}
-
-	async failureResult(message: string): Promise<NativeRepairResult> {
-		await this.writeBackupIndex();
-		return {
-			status: 'failed',
-			output: `[native repair] FAIL\n${message}${this.backupRoot ? `\nBackup: ${this.backupRoot}` : ''}`,
-			exitCode: 1,
-			writtenFiles: this.writtenFiles,
-			replacedDirectories: this.replacedDirectories,
-			backupPath: this.backupRoot,
-			changedSkills: [...new Set(this.changes.map((change) => change.skill))],
-			changes: this.changes,
-		};
-	}
-
-	private async writeBackupIndex(): Promise<void> {
-		if (!this.backupRoot || this.backupIndex.length === 0) return;
-		await this.assertSafeWritePath(this.backupRoot);
-		await fs.writeFile(
-			path.join(this.backupRoot, 'backup-index.json'),
-			JSON.stringify({ runtime: this.runtime, target: this.targetPath, entries: this.backupIndex }, null, 2),
-			'utf8',
-		);
-	}
-}
-
-function defaultOpenCodeCommandsDir(): string {
-	const configured = process.env.OPENCODE_CONFIG;
-	const root = configured ? resolveConfiguredPath(configured) : path.join(os.homedir(), '.config', 'opencode');
-	return path.join(root, 'commands');
+	} catch (error) { problems.push(error instanceof Error ? error.message : String(error)); }
+	return {
+		status: problems.length ? 'failed' : 'passed', exitCode: problems.length ? 1 : 0,
+		output: [`[distribution] ${problems.length ? 'INCOMPLETE' : 'PASS'}`, `Installed ${changes.length} complete skill package(s), ${writtenFiles} file(s).`, ...problems].join('\n'),
+		writtenFiles, replacedDirectories: changes.filter((change) => change.action === 'updated').length, changes,
+		changedSkills: changes.map((change) => change.skill),
+		partial: problems.length > 0 && changes.length > 0, blockedSkills,
+	};
 }

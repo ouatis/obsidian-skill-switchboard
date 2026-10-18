@@ -26,7 +26,7 @@ try {
 	assert.deepEqual(storage.restoredSettings(legacy, null), active, 'legacy connections migrate without activating retired commands');
 	let shared;
 	await storage.persistSettings(active, fileA, async data => { shared = data; }, legacy);
-	assert.deepEqual(JSON.parse(await fs.readFile(path.join(path.dirname(fileA), 'legacy-settings.json'), 'utf8')), legacy, 'the original configuration is preserved before migration');
+	await assert.rejects(fs.access(path.join(path.dirname(fileA), 'legacy-settings.json')), { code: 'ENOENT' }, 'migration does not create history backups');
 	assert.equal(shared.settingsStorageVersion, 2);
 	assert(!JSON.stringify(shared).includes('/device-a'), 'shared preferences never carry local paths or commands');
 	assert.equal(shared.targets, undefined); assert.equal(shared.roots, undefined);
@@ -37,6 +37,12 @@ try {
 	assert.deepEqual(storage.restoredSettings({ ...legacy, targets: [] }, localA).targets, legacy.targets, 'synced legacy data cannot replace this machine’s existing wiring');
 	const deviceB = storage.restoredSettings(shared, await storage.readMachineSettings(fileB));
 	assert.equal(deviceB.targets, undefined, 'another device starts without enabled agents or inherited paths');
+	const forged = { ...shared, autoDistribute: true, autoDistributeScope: 'a'.repeat(64) };
+	assert.equal(storage.restoredSettings(forged, null).autoDistribute, undefined, 'synced write consent cannot activate another machine');
+	assert.equal(storage.restoredSettings({ ...legacy, autoDistribute: true, autoDistributeScope: 'a'.repeat(64) }, null).autoDistribute, undefined, 'legacy synced data cannot migrate write consent');
+	await storage.persistSettings({ ...active, autoDistribute: true, autoDistributeScope: 'b'.repeat(64) }, fileA, async data => { shared = data; });
+	assert.equal(shared.autoDistribute, undefined); assert.equal(shared.autoDistributeScope, undefined);
+	assert.equal(storage.restoredSettings(shared, await storage.readMachineSettings(fileA)).autoDistributeScope, 'b'.repeat(64), 'consent restores only from this machine file');
 	await Promise.all([
 		storage.persistSettings({ ...active, language: 'en', targets: [] }, fileA, async data => { await new Promise(resolve => setTimeout(resolve, 20)); shared = data; }),
 		storage.persistSettings({ ...active, language: 'zh-CN' }, fileA, async data => { shared = data; }),

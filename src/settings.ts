@@ -20,6 +20,9 @@ export interface SkillSwitchboardSettings {
 	syncRootId: string;
 	syncManifestPath: string;
 	autoCheck: boolean;
+	/** Machine-local opt-in, bound to a resolved source/destination scope. */
+	autoDistribute: boolean;
+	autoDistributeScope: string;
 }
 
 export const DEFAULT_SETTINGS: SkillSwitchboardSettings = {
@@ -40,6 +43,8 @@ export const DEFAULT_SETTINGS: SkillSwitchboardSettings = {
 	syncRootId: 'vault-skills',
 	syncManifestPath: '',
 	autoCheck: true,
+	autoDistribute: false,
+	autoDistributeScope: '',
 };
 
 const RUNTIME_NAME_SET: ReadonlySet<string> = new Set(RUNTIME_NAMES);
@@ -100,7 +105,8 @@ function normalizeTarget(value: unknown): RuntimeTarget | null {
 		id: value.id,
 		label: value.label,
 		path: value.path,
-		mode: value.mode,
+		// Legacy modes migrate as configuration only; no filesystem write or takeover.
+		mode: 'copy',
 		enabled: value.enabled,
 		...(typeof value.runtime === 'string' ? { runtime: value.runtime as RuntimeTarget['runtime'] } : {}),
 	};
@@ -140,6 +146,8 @@ export function normalizeSettings(value: unknown): SettingsNormalization {
 		syncRootId: typeof data.syncRootId === 'string' ? data.syncRootId : firstEnabledRoot,
 		syncManifestPath: typeof data.syncManifestPath === 'string' ? data.syncManifestPath : DEFAULT_SETTINGS.syncManifestPath,
 		autoCheck: typeof data.autoCheck === 'boolean' ? data.autoCheck : DEFAULT_SETTINGS.autoCheck,
+		autoDistribute: data.autoDistribute === true && typeof data.autoDistributeScope === 'string' && /^[0-9a-f]{64}$/.test(data.autoDistributeScope),
+		autoDistributeScope: typeof data.autoDistributeScope === 'string' && /^[0-9a-f]{64}$/.test(data.autoDistributeScope) ? data.autoDistributeScope : '',
 	};
 	return { settings, recovered };
 }
@@ -165,6 +173,10 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 		renderImperatively(this);
 	}
 
+	refreshAutomaticState(): void {
+		if (this.containerEl?.isConnected) this.refreshTab();
+	}
+
 	/**
 	 * Obsidian 1.13.0+ does not call display() when definitions are present.
 	 * Register the dynamic editors as custom render rows as well as the simple
@@ -174,6 +186,11 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 		const strings = getStrings(this.plugin.settings.language);
 		return [
 			{ name: strings.overview, desc: strings.overviewDescription },
+			{
+				name: strings.autoDistribute,
+				desc: strings.autoDistributeDescription,
+				control: { type: 'toggle', key: 'autoDistribute', defaultValue: false },
+			},
 			{
 				name: strings.language,
 				desc: strings.languageDescription,
@@ -222,6 +239,11 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 
 	/** Native controls must use the same persistence/invalidation path as old controls. */
 	async setControlValue(key: string, value: unknown): Promise<void> {
+		if (key === 'autoDistribute') {
+			await this.plugin.setAutoDistributionEnabled(value === true);
+			this.refreshTab();
+			return;
+		}
 		if (key === 'language') this.plugin.settings.language = value === 'zh-CN' ? 'zh-CN' : 'en';
 		else if (key === 'autoCheck' || key === 'autoScan' || key === 'showDistributionBoard') {
 			if (typeof value !== 'boolean') throw new Error('Expected a toggle value.');
@@ -256,6 +278,12 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 			text: strings.overviewDescription,
 			cls: 'skill-switchboard-muted',
 		});
+		new Setting(containerEl)
+			.setName(strings.autoDistribute)
+			.setDesc(strings.autoDistributeDescription)
+			.addToggle((toggle) => toggle.setValue(this.plugin.settings.autoDistribute).onChange(async (value) => {
+				toggle.setValue(await this.plugin.setAutoDistributionEnabled(value));
+			}));
 
 		new Setting(containerEl)
 			.setName(strings.language)

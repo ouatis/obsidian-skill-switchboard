@@ -24,6 +24,7 @@ import {
 	getRepairTargets,
 	runRepairAll,
 	type RepairSummary,
+	type AdapterRun,
 } from './sync/adapter-run';
 import { CheckFreshness } from './sync/freshness';
 import { resolveSyncSource, settingsCheckKey } from './sync/source';
@@ -32,6 +33,8 @@ import { localPackageRegistryPath, readLocalPackagePaths, resolveLocalPackagePat
 import { existingRealPath } from './sync/filesystem';
 import { pathsOverlap } from './utils/paths';
 import { machineSettingsPath, readMachineSettings, restoredSettings, hasLegacyConnections, persistSettings } from './settings/storage';
+import { AutomaticDistribution } from './sync/automatic-distribution';
+import { resolveAutomaticScope } from './sync/automatic-scope';
 
 /** Fallback wait when the setting holds an unusable value. */
 const INDEX_DEBOUNCE_MS = 500;
@@ -65,6 +68,24 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	private indexRevision = 0;
 	private configurationKey = '';
 	private latestOutput = '';
+	private consentRevision = 0;
+	private settingsTab?: SkillSwitchboardSettingTab;
+	private readonly automatic = new AutomaticDistribution({
+		enabled: () => !this.disposed && Boolean(this.settings?.autoDistribute),
+		consent: () => this.settings?.autoDistributeScope ?? '',
+		busy: () => this.adapterCheckRunning || this.adapterRepairRunning,
+		scope: () => resolveAutomaticScope(this.getVaultBasePath() ?? '', this.settings),
+		inspect: () => this.syncProvider.inspectManifest(this.getVaultBasePath() ?? ''),
+		requestCheck: () => this.scheduleBackgroundCheck(),
+		revoke: async () => {
+			this.settings.autoDistribute = false; this.settings.autoDistributeScope = '';
+			await this.saveSettings();
+			this.settingsTab?.refreshAutomaticState();
+			new Notice(getStrings(this.settings.language).autoDistributeRevoked);
+		},
+		repair: (snapshot, current) => this.executeRepair(snapshot, current),
+		failure: (output) => notifyWithCopy(getStrings(this.settings.language), getStrings(this.settings.language).autoDistributeFailed, output),
+	});
 	localPackagePaths: Record<string, string> = {};
 	localPackagePathsError = '';
 	get packageRegistryPath(): string { return localPackageRegistryPath(); }
@@ -87,7 +108,8 @@ export default class SkillSwitchboardPlugin extends Plugin {
 
 		registerCommands(this);
 
-		this.addSettingTab(new SkillSwitchboardSettingTab(this.app, this));
+		this.settingsTab = new SkillSwitchboardSettingTab(this.app, this);
+		this.addSettingTab(this.settingsTab);
 
 		this.app.workspace.onLayoutReady(() => {
 			if (this.disposed) return;
@@ -111,6 +133,8 @@ export default class SkillSwitchboardPlugin extends Plugin {
 
 	onunload(): void {
 		this.disposed = true;
+		this.consentRevision++;
+		this.automatic.cancel();
 		this.freshness.invalidate();
 		this.indexRevision++;
 		if (this.checkTimer !== null) window.clearTimeout(this.checkTimer);
@@ -124,6 +148,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	}
 
 	private invalidateChecks(reason = 'Source, settings, or indexed skills changed; run a fresh read-only check.'): void {
+		this.automatic.cancel();
 		this.freshness.invalidate();
 		this.latestOutput = '';
 		this.adapterCheck = null;
@@ -135,12 +160,12 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	}
 
 	private scheduleBackgroundCheck(): void {
-		if (!this.app.workspace.layoutReady || this.disposed || !this.settings.autoCheck || this.adapterCheckRunning || this.adapterRepairRunning) return;
+		if (!this.app.workspace.layoutReady || this.disposed || !(this.settings.autoCheck || this.settings.autoDistribute) || this.adapterCheckRunning || this.adapterRepairRunning) return;
 		if (this.checkTimer !== null) window.clearTimeout(this.checkTimer);
 		const delay = Number.isFinite(this.settings.scanDelayMs) ? Math.max(0, this.settings.scanDelayMs) : INDEX_DEBOUNCE_MS;
 		this.checkTimer = window.setTimeout(() => {
 			this.checkTimer = null;
-			if (!this.disposed && this.settings.autoCheck) void this.checkAdapters(false);
+			if (!this.disposed && (this.settings.autoCheck || this.settings.autoDistribute)) void this.checkAdapters(false, true);
 		}, delay);
 	}
 
@@ -186,7 +211,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 
 	private scheduleRootRefresh(): void {
 		if (!this.rootsRefreshPending) return;
-		if (this.settings.autoCheck && !this.adapterCheckRunning && !this.adapterRepairRunning) {
+		if ((this.settings.autoCheck || this.settings.autoDistribute) && !this.adapterCheckRunning && !this.adapterRepairRunning) {
 			this.clearRootRefresh();
 			return;
 		}
@@ -223,10 +248,41 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		}
 		const key = settingsCheckKey(this.settings);
 		if (key !== this.configurationKey) { this.configurationKey = key; this.invalidateChecks(); }
+		if (this.settings.autoDistribute) await this.automatic.validate();
 		if (!this.machineSettingsPath) throw new Error('Machine settings require a local desktop vault.');
 		await persistSettings(this.settings, this.machineSettingsPath, (data) => this.saveData(data));
 		this.scheduleRootRefresh();
 		this.scheduleBackgroundCheck();
+	}
+
+	/** One explicit grant on this machine; synced preferences can never enable it. */
+	async setAutoDistributionEnabled(enabled: boolean): Promise<boolean> {
+		const request = ++this.consentRevision;
+		this.automatic.reset();
+		this.settings.autoDistribute = false;
+		this.settings.autoDistributeScope = '';
+		const strings = getStrings(this.settings.language);
+		try {
+			await this.saveSettings();
+			if (!enabled) return false;
+			const vault = this.getVaultBasePath();
+			if (!vault) throw new Error('Automatic distribution requires a local desktop vault.');
+			const scope = await resolveAutomaticScope(vault, this.settings);
+			const manifest = await this.syncProvider.inspectManifest(vault);
+			if (!manifest.snapshot) throw new Error(manifest.output);
+			const confirmed = await confirmRepair(this.app, strings, strings.autoDistributeConfirm, scope.details,
+				{ title: strings.autoDistribute, confirm: strings.autoDistributeAllow });
+			if (!confirmed || request !== this.consentRevision || this.disposed) return false;
+			if (this.adapterRepairRunning || (await resolveAutomaticScope(vault, this.settings)).key !== scope.key) throw new Error(strings.autoDistributeRevoked);
+			this.settings.autoDistribute = true;
+			this.settings.autoDistributeScope = scope.key;
+			try { await this.saveSettings(); }
+			catch (error) { this.settings.autoDistribute = false; this.settings.autoDistributeScope = ''; throw error; }
+			return this.settings.autoDistribute;
+		} catch (error) {
+			if (!this.disposed) notifyWithCopy(strings, strings.autoDistributeFailed, error instanceof Error ? error.message : String(error));
+			return false;
+		}
 	}
 
 	async reloadLocalPackagePaths(): Promise<void> {
@@ -294,11 +350,11 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		}
 	}
 
-	private adapterContext(revision: number): AdapterRunContext {
+	private adapterContext(revision: number, current?: () => boolean): AdapterRunContext {
 		return {
 			provider: this.syncProvider,
 			settings: { targets: this.settings.targets.map((target) => ({ ...target })) },
-			isCurrent: () => !this.disposed && this.freshness.isCurrent(revision),
+			isCurrent: () => !this.disposed && this.freshness.isCurrent(revision) && current?.() !== false,
 			onTargetActivity: (activity) => {
 				if (this.disposed || !this.freshness.isCurrent(revision)) return;
 				this.targetActivity = activity;
@@ -313,7 +369,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		};
 	}
 
-	async checkAdapters(showNotice = true): Promise<void> {
+	async checkAdapters(showNotice = true, allowAutomatic = false): Promise<void> {
 		if (this.adapterCheckRunning || this.adapterRepairRunning) return;
 		if (this.checkTimer !== null) { window.clearTimeout(this.checkTimer); this.checkTimer = null; }
 		this.adapterCheckRunning = true;
@@ -323,6 +379,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		const strings = getStrings(this.settings.language);
 		const basePath = this.getVaultBasePath();
 		let revision = this.freshness.capture();
+		let automaticRun: AdapterRun | undefined;
 		try {
 			await this.refreshIndex(false);
 			revision = this.freshness.capture();
@@ -333,6 +390,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			const result = run?.result ?? desktopPathFailure();
 			if (!this.disposed && this.freshness.accept(revision)) {
 				if (run) { this.manifestCheck = run.manifest; this.targetChecks = run.checks; }
+				if (run && allowAutomatic) automaticRun = run;
 				this.adapterCheck = result;
 				this.latestOutput = result.output;
 				this.targetCheckedAt = Date.now();
@@ -357,6 +415,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			this.adapterCheckRunning = false;
 			this.targetActivity = null;
 			if (!this.disposed) { this.renderViews(); if (this.checksStale) this.scheduleBackgroundCheck(); }
+			if (automaticRun && !this.disposed && !this.checksStale) this.automatic.consider(automaticRun);
 		}
 	}
 
@@ -372,6 +431,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 
 	async repairAllAdapters(): Promise<void> {
 		if (this.adapterCheckRunning || this.adapterRepairRunning) return;
+		this.automatic.cancel();
 		const strings = getStrings(this.settings.language);
 		const vaultPath = this.getVaultBasePath();
 		if (!vaultPath) {
@@ -417,6 +477,14 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			return;
 		}
 		if (!confirmed) { this.adapterRepairRunning = false; this.renderViews(); if (this.checksStale) this.scheduleBackgroundCheck(); return; }
+		await this.executeRepair(approvedSnapshot);
+	}
+
+	private async executeRepair(approvedSnapshot?: SyncManifestSnapshot, automaticCurrent?: () => boolean): Promise<RepairSummary | null> {
+		if (automaticCurrent && (this.adapterCheckRunning || this.adapterRepairRunning || !automaticCurrent())) return null;
+		const strings = getStrings(this.settings.language);
+		const vaultPath = this.getVaultBasePath();
+		if (!vaultPath || this.disposed) return null;
 		if (this.checkTimer !== null) { window.clearTimeout(this.checkTimer); this.checkTimer = null; }
 
 		this.adapterRepairRunning = true;
@@ -434,7 +502,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		this.renderViews();
 
 		let summary: RepairSummary;
-		try { summary = await runRepairAll(this.adapterContext(revision), vaultPath, strings, approvedSnapshot); }
+		try { summary = await runRepairAll(this.adapterContext(revision, automaticCurrent), vaultPath, strings, approvedSnapshot); }
 		catch (error) {
 			const output = error instanceof Error ? error.message : String(error);
 			this.targetActivity = null;
@@ -446,19 +514,20 @@ export default class SkillSwitchboardPlugin extends Plugin {
 					lastRepair: runRecord('failed', 1, output),
 					currentCheck: checkState('stale', 'Repair stopped unexpectedly; run a fresh read-only check.'),
 				});
-				notifyWithCopy(strings, strings.repairAllFailed(1), output);
+				if (!automaticCurrent) notifyWithCopy(strings, strings.repairAllFailed(1), output);
 			}
 			if (!this.disposed) {
 				this.renderViews();
 				if (this.checksStale) this.scheduleBackgroundCheck();
 			}
-			return;
+			if (automaticCurrent) throw error;
+			return null;
 		}
 		this.lastRepairSummary = summary;
 		if (this.disposed || !this.freshness.accept(revision)) {
 			this.adapterRepairRunning = false;
 			if (!this.disposed) { this.renderViews(); this.scheduleBackgroundCheck(); }
-			return;
+			return summary;
 		}
 		this.manifestCheck = summary.manifest;
 		this.adapterCheck = summary.checkResult;
@@ -471,13 +540,13 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		if (summary.aborted) {
 			this.adapterRepairRunning = false;
 			this.renderViews();
-			notifyWithCopy(strings, strings.adapterCheckFailed(summary.repair.exitCode), summary.repair.output);
-			return;
+			if (!automaticCurrent) notifyWithCopy(strings, strings.adapterCheckFailed(summary.repair.exitCode), summary.repair.output);
+			return summary;
 		}
 
 		this.adapterRepairRunning = false;
 		this.renderViews();
-		notifyWithCopy(
+		if (!automaticCurrent) notifyWithCopy(
 			strings,
 			summary.failedCount === 0
 				? strings.repairAllPassed(summary.repairedCount)
@@ -487,6 +556,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		await writePluginStatus(this, {
 			lastRepair: runRecord(this.adapterRepair.status, this.adapterRepair.exitCode, this.adapterRepair.output),
 		});
+		return summary;
 	}
 
 	getVaultBasePath(): string | null {

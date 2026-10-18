@@ -16,7 +16,7 @@ const previousDocument=globalThis.document;
 globalThis.document={};
 const timers=new Map();let timerId=0;
 globalThis.window={setTimeout:(fn,delay=0)=>{const id=++timerId;timers.set(id,{fn,delay});return id;},clearTimeout:id=>timers.delete(id),setInterval:()=>++timerId};
-let plugin;
+let plugin, automaticPlugin;
 const stub=`export class Plugin{constructor(app){this.app=app;this.manifest={version:'fixture'};this.intervals=[];}async loadData(){return this.app.saved;}async saveData(data){this.app.saved=structuredClone(data);}registerView(){}addRibbonIcon(){}addSettingTab(tab){this.settingTab=tab;}addCommand(){}registerEvent(){}registerInterval(id){this.intervals.push(id);}}
 export class PluginSettingTab{constructor(app,plugin){this.app=app;this.plugin=plugin;}}
 export class ItemView{} export class Modal{constructor(){if(globalThis.fixtureModalThrow)throw new Error('fixture modal failure');this.buttons=[];this.titleEl={setText(){}};this.contentEl={createEl(){return{};},createDiv:()=>({createEl:()=>{const button={listeners:{},addEventListener(event,callback){this.listeners[event]=callback;}};this.buttons.push(button);return button;}})};}open(){globalThis.fixtureModalOnOpen?.();const button=globalThis.fixtureModalConfirm?this.buttons.at(-1):this.buttons[0];button?.listeners.click?.();}close(){this.onClose?.();}} export class Notice{constructor(message){globalThis.fixtureNotices++;globalThis.fixtureNoticeMessages.push(message);}}
@@ -43,7 +43,7 @@ try{
     }});
     await settingsFixture.loadSettings();
     assert.deepEqual(settingsFixture.settings.roots,[recoveredRoot],'malformed and duplicate roots are removed while valid paths survive');
-    assert.deepEqual(settingsFixture.settings.targets,[recoveredTarget],'targets with unknown runtimes are rejected before use');
+    assert.deepEqual(settingsFixture.settings.targets,[{...recoveredTarget,mode:'copy'}],'targets with unknown runtimes are rejected before use');
     assert.equal(settingsFixture.settings.harnesses,undefined,'retired harness records never reach active settings');
     assert.equal(settingsFixture.settings.language,'en');assert.equal(settingsFixture.settings.autoScan,false);assert.equal(settingsFixture.settings.autoCheck,true);
     assert.equal(settingsFixture.settings.showDistributionBoard,true);assert.equal(settingsFixture.settings.scanDelayMs,500);
@@ -61,7 +61,7 @@ try{
     globalThis.fixtureNotices=0;globalThis.fixtureNoticeMessages=[];
     const vaultEvents=eventHub(),workspaceEvents=eventHub();let content='---\nname: test\ndescription: Fixture\n---\n# Test\n',vaultScans=0;
     const root={id:'team',kind:'vault',label:'Team',path:'team/skills',enabled:true};
-    const target={id:'agent',runtime:'codex',mode:'wrapper',enabled:true,path:path.join(tempRoot,'runtime'),label:'Agent'};
+    const target={id:'agent',runtime:'codex',mode:'copy',enabled:true,path:path.join(tempRoot,'runtime'),label:'Agent'};
     const app={saved:{roots:[root],targets:[target],harnesses:[],language:'zh-CN',autoScan:false,autoCheck:false,scanDelayMs:500,showDistributionBoard:true},vault:{...vaultEvents,getMarkdownFiles:()=>{vaultScans++;return[{path:'team/skills/test.md',name:'test.md'},{path:'other/skills/new.md',name:'new.md'}];},read:async()=>content,adapter:{getBasePath:()=>vaultPath}},workspace:{...workspaceEvents,layoutReady:true,getLeavesOfType:()=>[],onLayoutReady:callback=>callback()}};
     plugin=new Plugin(app);Object.defineProperty(plugin,'machineSettingsPath',{get:()=>path.join(tempRoot,'machine','settings.json')});
     await plugin.onload();assert.equal(plugin.settings.syncRootId,'team');assert.equal(plugin.settings.language,'zh-CN');assert.deepEqual(plugin.settings.roots,[root]);
@@ -113,11 +113,11 @@ try{
     await assert.rejects(()=>plugin.saveExternalPackagePath('drawing',path.join(vaultPath,'toolkit')));
     await assert.rejects(()=>plugin.saveExternalPackagePath('drawing',tempRoot),/must not overlap the vault or canonical source/,'a package root containing the vault is rejected before saving');
     const vaultToolkit=path.join(vaultPath,'vault-toolkit'),vaultAlias=path.join(tempRoot,'vault-toolkit-link');
-    await fs.mkdir(vaultToolkit);await fs.symlink(vaultToolkit,vaultAlias,'dir');
+    await fs.mkdir(vaultToolkit);await fs.symlink(vaultToolkit,vaultAlias,process.platform==='win32'?'junction':'dir');
     await assert.rejects(()=>plugin.saveExternalPackagePath('drawing',vaultAlias),/must not overlap the vault or canonical source/,'a symlink into the vault is rejected before saving');
     const externalSource=path.join(tempRoot,'external-project','skills');
     const sourceAlias=path.join(tempRoot,'external-source-link');
-    await fs.mkdir(externalSource,{recursive:true});await fs.symlink(externalSource,sourceAlias,'dir');
+    await fs.mkdir(externalSource,{recursive:true});await fs.symlink(externalSource,sourceAlias,process.platform==='win32'?'junction':'dir');
     plugin.settings.roots[0].kind='external';plugin.settings.roots[0].path=externalSource;
     await assert.rejects(()=>plugin.saveExternalPackagePath('drawing',path.dirname(externalSource)),/must not overlap the vault or canonical source/,'a package root containing an external canonical source is rejected before saving');
     await assert.rejects(()=>plugin.saveExternalPackagePath('drawing',sourceAlias),/must not overlap the vault or canonical source/,'a symlink into the canonical source is rejected before saving');
@@ -152,9 +152,49 @@ try{
     assert.equal(plugin.index.skills[0]?.path,'other/skills/new.md','a stale scan cannot overwrite the newer root index');app.vault.read=originalRead;
     plugin.settings.autoScan=true;app.vault.emit('modify',{path:'other/skills/new.md'});assert.equal(timers.size,1,'a final rescan is pending');
     plugin.onunload();assert.equal(timers.size,0,'unload cancels queued checks and scans');assert.equal(writes,0,'background checking never repairs');
+    // Actual native engine + plugin lifecycle, using only this isolated temporary vault.
+    const automaticVault=path.join(tempRoot,'automatic-vault'),automaticSource=path.join(automaticVault,'skills/drawing/SKILL.md'),automaticTarget=path.join(tempRoot,'automatic-agent');
+    await fs.mkdir(path.dirname(automaticSource),{recursive:true});
+    const automaticText='---\nname: drawing\ndescription: Draw diagrams.\n---\n# Drawing\nFull instructions.\n';
+    await fs.writeFile(automaticSource,automaticText);
+    const automaticEvents=eventHub();
+    const automaticApp={saved:{language:'en',autoCheck:false,autoScan:false,roots:[{id:'source',kind:'vault',label:'Source',path:'skills',enabled:true}],syncRootId:'source',targets:[{id:'codex',runtime:'codex',mode:'copy',enabled:true,path:automaticTarget,label:'Codex'}]},
+        vault:{...automaticEvents,getMarkdownFiles:()=>[{path:'skills/drawing/SKILL.md',name:'SKILL.md'}],read:()=>fs.readFile(automaticSource,'utf8'),adapter:{getBasePath:()=>automaticVault}},workspace:{...eventHub(),layoutReady:true,getLeavesOfType:()=>[],onLayoutReady:fn=>fn()}};
+    const makeAutomaticPlugin=()=>{const p=new Plugin(automaticApp);Object.defineProperty(p,'machineSettingsPath',{get:()=>path.join(tempRoot,'automatic-machine/settings.json')});Object.defineProperty(p,'packageRegistryPath',{get:()=>path.join(tempRoot,'automatic-packages.json')});return p;};
+    const waitAutomatic=async predicate=>{for(let i=0;i<300&&!predicate();i++)await new Promise(resolve=>setTimeout(resolve,5));assert(predicate(),'automatic lifecycle did not settle');};
+    automaticPlugin=makeAutomaticPlugin();await automaticPlugin.onload();await automaticPlugin.refreshIndex(false);automaticPlugin.settingTab.refreshTab=()=>{};
+    assert.equal(automaticPlugin.settings.autoDistribute,false);
+    globalThis.fixtureModalConfirm=false;await automaticPlugin.settingTab.setControlValue('autoDistribute',true);
+    assert.equal(automaticPlugin.settings.autoDistribute,false,'canceling opt-in leaves automatic writes disabled');
+    globalThis.fixtureModalConfirm=true;await automaticPlugin.settingTab.setControlValue('autoDistribute',true);
+    assert.equal(automaticPlugin.settings.autoDistribute,true);assert.equal(automaticPlugin.settings.autoDistributeScope.length,64);
+    assert.equal(automaticApp.saved.autoDistribute,undefined);assert.equal(automaticApp.saved.autoDistributeScope,undefined,'authorization is never saved to synced preferences');
+    await automaticPlugin.checkAdapters(false);assert.equal(timers.size,0,'a manual read-only check cannot queue automatic writes');
+    await assert.rejects(fs.access(path.join(automaticTarget,'drawing/SKILL.md')),{code:'ENOENT'});
+    const noticesBeforeAutomatic=globalThis.fixtureNotices;
+    await automaticPlugin.checkAdapters(false,true);assert.equal(timers.size,1);assert.equal([...timers.values()][0].delay,2000);fire();
+    await waitAutomatic(()=>automaticPlugin.lastRepairSummary?.repair.status==='passed'&&!automaticPlugin.adapterRepairRunning);
+    assert.equal(await fs.readFile(path.join(automaticTarget,'drawing/SKILL.md'),'utf8'),automaticText);
+    assert.equal(globalThis.fixtureNotices,noticesBeforeAutomatic,'successful background distribution makes no notice');
+    automaticPlugin.lastRepairSummary=null;await fs.appendFile(automaticSource,'Changed source.\n');automaticEvents.emit('modify',{path:'skills/drawing/SKILL.md'});
+    assert.equal(timers.size,1,'automatic distribution schedules checks even if the separate auto-check toggle is off');fire();
+    await waitAutomatic(()=>!automaticPlugin.adapterCheckRunning&&timers.size===1);fire();
+    await waitAutomatic(()=>automaticPlugin.lastRepairSummary?.details[0]?.repair.native?.changedSkills.includes('drawing')&&!automaticPlugin.adapterRepairRunning);
+    assert.match(await fs.readFile(path.join(automaticTarget,'drawing/SKILL.md'),'utf8'),/Changed source/);
+    automaticPlugin.onunload();automaticPlugin=makeAutomaticPlugin();await automaticPlugin.onload();await automaticPlugin.refreshIndex(false);
+    assert.equal(automaticPlugin.settings.autoDistribute,true,'the same machine restores its grant after reload');
+    automaticPlugin.settings.targets[0].path=path.join(tempRoot,'new-automatic-agent');await automaticPlugin.saveSettings();
+    assert.equal(automaticPlugin.settings.autoDistribute,false,'connection changes revoke authorization');
+    assert.equal(JSON.parse(await fs.readFile(automaticPlugin.machineSettingsPath,'utf8')).connections.autoDistribute,false);
+    automaticPlugin.settings.targets[0].path=automaticTarget;await automaticPlugin.saveSettings();assert.equal(automaticPlugin.settings.autoDistribute,false,'restoring an old path does not restore its revoked grant');
+    fire();await fs.writeFile(path.join(automaticTarget,'drawing/SKILL.md'),'LOCAL EDIT');
+    assert.equal(await automaticPlugin.setAutoDistributionEnabled(true),true);
+    await automaticPlugin.checkAdapters(false,true);assert.equal(timers.size,1);automaticPlugin.onunload();assert.equal(timers.size,0);
+    assert.equal(await fs.readFile(path.join(automaticTarget,'drawing/SKILL.md'),'utf8'),'LOCAL EDIT','unload cancels pending automatic replacement');
     console.log('Lifecycle checks passed: malformed settings recovery, settings privacy, real-path package confinement, quiet checks, stale-result rejection, trailing scan debounce, scan coalescing, root-change refresh, stale-scan rejection, repair confirmation and recovery, read-only recheck, and timer cleanup.');
+    console.log('Automatic lifecycle passed: cancel/consent, local persistence, manual-check read-only boundary, stable automatic copies, quiet success, source-change scheduling, path revocation and unload cancellation.');
 }finally{
-    plugin?.onunload();timers.clear();
+    plugin?.onunload();automaticPlugin?.onunload();timers.clear();
     const statusWrites=globalThis.window?.[Symbol.for('ouatis.skill-switchboard.status-write-queues')];
     while(statusWrites?.size)await Promise.allSettled([...statusWrites.values()]);
     globalThis.window=previousWindow;delete globalThis.fixtureNotices;delete globalThis.fixtureModalConfirm;delete globalThis.fixtureModalThrow;

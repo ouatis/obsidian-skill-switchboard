@@ -32,6 +32,7 @@ jobs:
             - run: npm run test:status-queue
             - run: npm run test:native
             - run: npm run test:adapter
+            - run: npm run test:automatic
             - run: npm run test:vault-changes
             - run: npm run test:distribution
             - run: npm run test:ui
@@ -62,6 +63,7 @@ jobs:
             - run: npm run test:status-queue
             - run: npm run test:native
             - run: npm run test:adapter
+            - run: npm run test:automatic
             - run: npm run test:vault-changes
             - run: npm run test:distribution
             - run: npm run test:ui

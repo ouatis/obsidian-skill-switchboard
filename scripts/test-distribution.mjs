@@ -31,7 +31,7 @@ try {
 	assert.equal(nodes({ activity: { targetId: 'codex', phase: 'checking' } })[0].state, 'checking');
 	assert.equal(nodes({ checks: [check], targets: [{ ...target, path: '/different' }] })[0].state, 'unknown');
 	assert.equal(nodes({ checks: [check], targets: [{ ...target, runtime: 'hermes' }] })[0].state, 'unknown');
-	assert.equal(nodes({ targets: [{ ...target, enabled: false }, { ...target, id: 'copy', mode: 'copy' }] }).length, 0);
+	assert.equal(nodes({ targets: [{ ...target, enabled: false }, { ...target, id: 'unsupported-link', mode: 'symlink' }] }).length, 0);
 	assert.equal(nodes({ targets: [{ ...target, label: '  ' }] })[0].label, 'codex');
 	for (const count of [0, 1, 2, 5, 6, 7, 12]) {
 		const points = deckPositions(count);

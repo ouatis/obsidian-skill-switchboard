@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { SkillSwitchboardSettings } from '../settings';
 
-const CONNECTION_KEYS = ['roots', 'targets', 'syncRootId', 'syncManifestPath'] as const;
+const CONNECTION_KEYS = ['roots', 'targets', 'syncRootId', 'syncManifestPath', 'autoDistribute', 'autoDistributeScope'] as const;
 const PREFERENCE_KEYS = ['language', 'autoScan', 'autoCheck', 'scanDelayMs', 'showDistributionBoard'] as const;
 type ConnectionSettings = Pick<SkillSwitchboardSettings, typeof CONNECTION_KEYS[number]>;
 type SharedSettings = Pick<SkillSwitchboardSettings, typeof PREFERENCE_KEYS[number]> & { settingsStorageVersion: 2 };
@@ -47,6 +47,9 @@ export function restoredSettings(saved: unknown, local: Record<string, unknown> 
 	if (!record(saved) && !local) return saved;
 	const data = record(saved) ? { ...saved } : {};
 	delete data.harnesses;
+	// Write consent is never imported from synced plugin data, even in a legacy file.
+	delete data.autoDistribute;
+	delete data.autoDistributeScope;
 	if (local || data.settingsStorageVersion === 2) {
 		for (const key of CONNECTION_KEYS) delete data[key];
 		if (local) for (const key of CONNECTION_KEYS) if (Object.prototype.hasOwnProperty.call(local, key)) data[key] = local[key];
@@ -67,7 +70,6 @@ export function persistSettings(
 ): Promise<void> {
 	const connections = Object.fromEntries(CONNECTION_KEYS.map((key) => [key, settings[key]])) as ConnectionSettings;
 	const payload = JSON.stringify({ schemaVersion: 1, connections }, null, 2) + '\n';
-	const legacyPayload = legacy === undefined ? null : JSON.stringify(legacy, null, 2) + '\n';
 	const legacyHarnesses = record(legacy) && Object.prototype.hasOwnProperty.call(legacy, 'harnesses')
 		? JSON.stringify(legacy.harnesses) : undefined;
 	const preferences = Object.fromEntries(PREFERENCE_KEYS.map((key) => [key, settings[key]])) as SharedSettings;
@@ -79,10 +81,6 @@ export function persistSettings(
 		if (stored && Object.prototype.hasOwnProperty.call(stored, 'harnesses')) document.connections.harnesses = stored.harnesses;
 		else if (legacyHarnesses !== undefined) document.connections.harnesses = JSON.parse(legacyHarnesses) as unknown;
 		await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
-		if (legacyPayload !== null) {
-			try { await fs.writeFile(path.join(path.dirname(file), 'legacy-settings.json'), legacyPayload, { flag: 'wx', mode: 0o600 }); }
-			catch (error) { if (!record(error) || error.code !== 'EEXIST') throw error; }
-		}
 		const temporary = `${file}.${randomUUID()}.tmp`;
 		try {
 			await fs.writeFile(temporary, JSON.stringify(document, null, 2) + '\n', { flag: 'wx', mode: 0o600 });

@@ -7,6 +7,7 @@ import type { ResourceCheck, PackageCheck } from './resources';
 import { adapterFor, isInside, pathsOverlap, sameSourceSnapshot } from './manifest';
 import { existingRealPath } from './filesystem';
 import { resolveConfiguredPath } from '../utils/paths';
+import { planInstalls } from './install-plan';
 
 /** A runtime target that is eligible for drift repair. */
 export type RepairTarget = RuntimeTarget & { runtime: RuntimeName };
@@ -43,7 +44,7 @@ export interface AdapterRun {
 export function getRepairTargets(targets: RuntimeTarget[]): RepairTarget[] {
 	return targets.filter(
 		(target): target is RepairTarget =>
-			target.enabled && target.mode === 'wrapper' && Boolean(target.runtime && target.path.trim()),
+			target.enabled && (target.mode === 'copy' || target.mode === 'wrapper') && Boolean(target.runtime && target.path.trim()),
 	);
 }
 
@@ -142,10 +143,11 @@ export async function collectTargetChecks(
 			continue;
 		}
 		const result = await context.provider.checkRuntime(vaultPath, target.runtime, target.path, snapshot);
+		const plan = result.native?.installs ? planInstalls(result.native.installs) : null;
 		record({
 			target,
 			targetPath: resolvedTarget,
-			repairable: result.native?.kind !== 'error' && result.native?.kind !== 'blocked',
+			repairable: result.native?.kind !== 'error' && (plan ? result.status === 'passed' || plan.writes > 0 : result.native?.kind !== 'blocked'),
 			result,
 		});
 	}
@@ -246,7 +248,7 @@ export async function runRepairAll(
 }
 
 /**
- * Repairs each drifted wrapper target and re-checks it afterwards. `blockedCount`
+ * Repairs each eligible package target and re-checks it afterwards. `blockedCount`
  * covers failures that were never repairable, so the reported total matches what
  * the user sees in the check result.
  */
@@ -281,7 +283,7 @@ export async function repairDriftedTargets(
 		}
 		const label = displayTargetName(check.target);
 		context.onTargetActivity?.({ targetId: check.target.id, phase: 'repairing' });
-		const repair = await context.provider.repairRuntime(vaultPath, runtime, check.target.path, snapshot);
+		const repair = await context.provider.repairRuntime(vaultPath, runtime, check.target.path, snapshot, { isCurrent: context.isCurrent });
 		const detail: TargetRepairDetail = { targetId: check.target.id, label, runtime, repair };
 		details.push(detail);
 		if (repair.status === 'failed' && !repair.native?.partial) {
@@ -296,16 +298,16 @@ export async function repairDriftedTargets(
 		const followUp = await context.provider.checkRuntime(vaultPath, runtime, check.target.path);
 		detail.followUp = followUp;
 		context.onTargetCheck?.({ ...check, result: followUp, repairFailed: false });
-		if (followUp.status === 'passed') {
+		if (followUp.status === 'passed' && repair.status === 'passed') {
 			repairedCount += 1;
 			repairOutputs.push(
 				`[${label}] REPAIRED\n${repair.output}\n--- follow-up check ---\n${followUp.output}`,
 			);
 		} else {
 			failedCount += 1;
-			firstFailureCode ??= followUp.exitCode;
+			firstFailureCode ??= repair.status === 'failed' ? repair.exitCode : followUp.exitCode;
 			repairOutputs.push(
-				`[${label}] ${repair.native?.partial ? 'PARTIAL (resources blocked)' : 'REPAIR FAILED (follow-up)'}\n${repair.output}\n--- follow-up check ---\n${followUp.output}`,
+				`[${label}] ${repair.native?.partial ? 'PARTIAL (some operations incomplete)' : 'REPAIR FAILED (follow-up)'}\n${repair.output}\n--- follow-up check ---\n${followUp.output}`,
 			);
 		}
 	}

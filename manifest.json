@@ -1,9 +1,9 @@
 {
 	"id": "skill-switchboard",
 	"name": "Skill Switchboard",
-	"version": "0.4.1",
+	"version": "0.6.0",
 	"minAppVersion": "1.7.2",
-	"description": "Index and inspect Agent Skills across configurable roots and runtime targets.",
+	"description": "Maintain skills in Obsidian and distribute complete, managed copies to local agents.",
 	"author": "ouatis",
 	"authorUrl": "https://github.com/ouatis",
 	"isDesktopOnly": true

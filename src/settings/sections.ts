@@ -1,7 +1,7 @@
 import { Notice, Setting } from 'obsidian';
 import type SkillSwitchboardPlugin from '../main';
 import type { Strings } from '../i18n';
-import { RUNTIME_NAMES, type RuntimeTarget, type SkillRoot, type SyncMode } from '../types';
+import { RUNTIME_NAMES, type RuntimeTarget, type SkillRoot } from '../types';
 
 function newId(prefix: string): string {
 	return `${prefix}-${Date.now().toString(36)}`;
@@ -141,17 +141,7 @@ export function renderTargetsSection(
 				await plugin.saveSettings();
 			}),
 		);
-		setting.addDropdown((dropdown) =>
-			dropdown
-				.addOption('copy', strings.copy)
-				.addOption('symlink', strings.symlink)
-				.addOption('wrapper', strings.wrapper)
-				.setValue(target.mode)
-				.onChange(async (value) => {
-					target.mode = value as SyncMode;
-					await plugin.saveSettings();
-				}),
-		);
+		setting.setDesc(strings.completeCopy);
 		setting.addDropdown((dropdown) => {
 			dropdown.addOption('', strings.chooseAgent);
 			for (const runtime of RUNTIME_NAMES) dropdown.addOption(runtime, runtime);
@@ -181,7 +171,7 @@ export function renderTargetsSection(
 				id: newId('target'),
 				label: strings.newTarget,
 				path: '',
-				mode: 'wrapper',
+				mode: 'copy',
 				enabled: true,
 			});
 			await plugin.saveSettings();

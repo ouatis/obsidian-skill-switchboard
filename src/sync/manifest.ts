@@ -5,6 +5,10 @@ import type { ManifestLocation } from './source';
 import { checkResources, type ResourceCheck } from './resources';
 import { RUNTIME_NAMES, type RuntimeName } from '../types';
 import type { AdapterCheckResult } from './result';
+import { captureSkillFiles, discoverSkills } from './source-catalog';
+import type { SourceFile } from './package-files';
+import { scalarFrontmatter } from '../utils/frontmatter';
+import { existingRealPath } from './filesystem';
 
 export const RUNTIMES: RuntimeName[] = [...RUNTIME_NAMES];
 export { isInside, pathsOverlap };
@@ -16,6 +20,8 @@ export interface ManifestSkill {
 	sharedFile: string;
 	sharedPath: string;
 	sharedText: string;
+	files?: SourceFile[];
+	packageError?: string;
 	adapters: Partial<Record<RuntimeName, AdapterMetadata | boolean | null>>;
 }
 
@@ -46,19 +52,25 @@ export function sameSourceSnapshot(left: SyncManifestSnapshot, right: SyncManife
 export async function inspectManifest(vaultPath: string, location?: ManifestLocation): Promise<ManifestCheckResult> {
 	try {
 		const resolvedVault = await fs.realpath(vaultPath);
-		const [manifestPath, sharedRoot] = await Promise.all([
-			fs.realpath(resolveConfiguredPath(location?.manifestPath ?? 'skills-manifest.json', resolvedVault)),
-			fs.realpath(resolveConfiguredPath(location?.sharedRoot ?? 'skills', resolvedVault)),
-		]);
+		const sharedRoot = await fs.realpath(resolveConfiguredPath(location?.sharedRoot ?? 'skills', resolvedVault));
 		if (location?.confineToVault && !isInside(resolvedVault, sharedRoot)) {
 			throw new Error(`Vault skills root resolves outside the vault: ${location.sharedRoot}`);
 		}
+		const configuredManifest = resolveConfiguredPath(location?.manifestPath ?? 'skills-manifest.json', resolvedVault);
+		const manifestPath = await existingRealPath(configuredManifest);
 		if (location?.confineToVault && !isInside(resolvedVault, manifestPath)) {
 			throw new Error(`Vault skills manifest resolves outside the vault: ${location.manifestPath}`);
 		}
+		let value: unknown;
+		try {
+			value = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
+		} catch (error) {
+			if (!isRecord(error) || error.code !== 'ENOENT' || location?.manifestRequired) throw error;
+			const discovered = await discoverSkills(sharedRoot);
+			value = { schema_version: 1, total_skills: discovered.length, skills: discovered };
+		}
 		const relativeRoot = path.relative(resolvedVault, sharedRoot).replaceAll(path.sep, '/');
 		const sharedPrefix = isInside(resolvedVault, sharedRoot) ? `${relativeRoot}/` : '';
-		const value: unknown = JSON.parse(await fs.readFile(manifestPath, 'utf8'));
 		if (!isRecord(value) || !Array.isArray(value.skills)) throw new Error('Manifest must contain a skills array.');
 		if (value.schema_version !== 1) throw new Error('Unsupported manifest schema_version; expected 1.');
 		if (value.skills.length === 0) throw new Error('Manifest contains no skills; a zero-skill check is not success.');
@@ -72,7 +84,7 @@ export async function inspectManifest(vaultPath: string, location?: ManifestLoca
 		const skills: ManifestSkill[] = [];
 		const names = new Set<string>();
 		for (const [index, skill] of value.skills.entries()) {
-			if (!isRecord(skill) || typeof skill.name !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(skill.name)) {
+			if (!isRecord(skill) || typeof skill.name !== 'string' || skill.name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(skill.name)) {
 				throw new Error(`Manifest skill #${index + 1} has an invalid name.`);
 			}
 			if (names.has(skill.name)) throw new Error(`Duplicate skill name: ${skill.name}`);
@@ -80,8 +92,8 @@ export async function inspectManifest(vaultPath: string, location?: ManifestLoca
 			if (typeof skill.shared_file !== 'string') throw new Error(`Missing shared_file: ${skill.name}`);
 			const sharedFile = sharedPrefix && skill.shared_file.startsWith(sharedPrefix)
 				? skill.shared_file.slice(sharedPrefix.length) : skill.shared_file;
-			if (!sharedFile.endsWith('.md') || sharedFile.includes('\\') || sharedFile.includes('/') || sharedFile === '..') {
-				throw new Error(`shared_file must name a top-level canonical Markdown card: ${skill.shared_file}`);
+			if (!sharedFile.endsWith('.md') || sharedFile.includes('\\') || sharedFile.startsWith('/') || sharedFile.split('/').includes('..') || /^[a-z]:/i.test(sharedFile)) {
+				throw new Error(`shared_file must name a relative Markdown skill: ${skill.shared_file}`);
 			}
 			const sharedPath = await fs.realpath(path.join(sharedRoot, sharedFile));
 			if (!isInside(sharedRoot, sharedPath)) throw new Error(`Canonical skill escapes shared root: ${sharedFile}`);
@@ -95,7 +107,13 @@ export async function inspectManifest(vaultPath: string, location?: ManifestLoca
 				adapters[runtime as RuntimeName] = config === false || config === null ? config
 					: { ...(isRecord(defaults[runtime]) ? defaults[runtime] : {}), ...(isRecord(config) ? config : {}) };
 			}
-			skills.push({ name: skill.name, sharedFile, sharedPath, sharedText: await fs.readFile(sharedPath, 'utf8'), adapters });
+			const loaded = { name: skill.name, sharedFile, sharedPath, sharedText: await fs.readFile(sharedPath, 'utf8'), adapters };
+			if (path.basename(sharedPath) === 'SKILL.md') {
+				const metadata = scalarFrontmatter(loaded.sharedText);
+				if (metadata.name !== skill.name || !metadata.description?.trim() || metadata.description.length > 1024) throw new Error(`Invalid name or description in ${sharedFile}.`);
+			}
+			await captureSkillFiles(loaded, sharedRoot);
+			skills.push(loaded);
 		}
 		const snapshot: SyncManifestSnapshot = {
 			path: manifestPath, vaultPath: resolvedVault, sharedRoot, sharedPrefix, skillCount: skills.length, skills,
@@ -112,6 +130,7 @@ export async function inspectManifest(vaultPath: string, location?: ManifestLoca
 
 export function adapterFor(skill: ManifestSkill, runtime: RuntimeName): AdapterMetadata | null {
 	if (runtime === 'antigravity') {
+		if (skill.adapters.antigravity === false || skill.adapters.antigravity === null) return null;
 		// Python uses truthiness here: an empty object falls through to the next adapter.
 		for (const key of ['antigravity', 'opencode', 'codex'] as const) {
 			const value = skill.adapters[key];

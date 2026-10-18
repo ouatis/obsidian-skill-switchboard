@@ -269,6 +269,20 @@
 	margin-top: 6px;
 }
 
+.skill-switchboard-install-plan h3 {
+	font-size: var(--font-ui-small);
+	margin: 0;
+}
+
+.skill-switchboard-plan-item {
+	border-top: 1px solid var(--ssb-border);
+	padding: 8px 0;
+}
+
+.skill-switchboard-plan-item:first-of-type {
+	border-top: 0;
+}
+
 .skill-switchboard-status + .skill-switchboard-status {
 	margin-top: 8px;
 }

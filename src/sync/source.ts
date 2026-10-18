@@ -15,6 +15,7 @@ export interface ManifestLocation {
 	confineToVault?: boolean;
 	/** Optional injection for isolated tests; production uses the home-directory registry. */
 	packageRegistryPath?: string;
+	manifestRequired?: boolean;
 }
 
 /** The selected source drives both indexing and distribution; no vault layout is special. */
@@ -34,6 +35,7 @@ export function resolveSyncSource(vaultPath: string, settings: SyncSourceSetting
 			? resolveConfiguredPath(settings.syncManifestPath, vaultPath)
 			: path.join(path.dirname(sharedRoot), 'skills-manifest.json'),
 		confineToVault: root.kind === 'vault',
+		...(settings.syncManifestPath?.trim() ? { manifestRequired: true } : {}),
 	};
 }
 

@@ -43,7 +43,7 @@ try {
 	const passed = (output = 'ok') => ({ status: 'passed', output, exitCode: 0 });
 	const failed = (output = 'bad', exitCode = 3) => ({ status: 'failed', output, exitCode });
 
-	// getRepairTargets keeps only enabled wrapper targets with a runtime and a path.
+	// getRepairTargets keeps enabled copies and legacy wrapper configurations with a runtime and a path.
 	{
 		const targets = [
 			target(),
@@ -53,7 +53,7 @@ try {
 			target({ id: 'nopath', path: '   ' }),
 		];
 		const kept = run.getRepairTargets(targets);
-		assert.deepEqual(kept.map((item) => item.id), ['t1']);
+		assert.deepEqual(kept.map((item) => item.id), ['t1', 'copy']);
 	}
 
 	// Read-only resource failures name the affected skill and issue without leaking a machine-local path.
@@ -224,6 +224,21 @@ try {
 		assert.equal(outcome.failedCount, 0);
 		assert.equal(outcome.repair.status, 'passed');
 		assert.ok(outcome.repair.output.includes('repaired 1'), 'the summary reports what was repaired');
+	}
+
+	// A clean file check cannot turn an incomplete cleanup into successful repair.
+	{
+		let checks = 0;
+		const provider = {
+			inspectManifest: async () => ({ status: 'passed', output: '', exitCode: 0, snapshot: {} }),
+			checkRuntime: async () => ++checks === 1 ? failed('drift', 1) : passed('matches source'),
+			repairRuntime: async () => ({ ...failed('temporary cleanup failed', 1), native: { partial: true, writtenFiles: 1 } }),
+		};
+		const outcome = await run.runRepairAll({ provider, settings: { targets: [target()] } }, '/vault', strings);
+		assert.equal(outcome.repair.status, 'failed');
+		assert.equal(outcome.failedCount, 1);
+		assert.equal(outcome.repairedCount, 0);
+		assert.match(outcome.repair.output, /cleanup failed/);
 	}
 
 	// No drift and nothing blocked means an up-to-date run.

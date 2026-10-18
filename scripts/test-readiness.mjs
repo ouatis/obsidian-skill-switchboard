@@ -19,7 +19,7 @@ const adapter={codex:{display_name:'Drawing',short_description:'Draw diagrams',d
 const manifest={schema_version:1,total_skills:1,skills:[{name:'drawing',shared_file:'knowledge/team-skills/drawing.md',adapters:adapter}]};
 async function write(file,text){await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,text);}
 try{
-    for(const entry of ['sync/manifest','sync/source','sync/freshness','sync/native-repair','sync/package-paths','sync/adapter-run','ui/repair-plan','ui/repair-summary','sync-provider']){
+    for(const entry of ['sync/manifest','sync/source','sync/freshness','sync/native-repair','sync/package-paths','sync/adapter-run','ui/repair-plan','ui/repair-summary','sync-provider','i18n']){
         await esbuild.build({entryPoints:[path.join(repo,'src',entry+'.ts')],bundle:true,platform:'node',format:'cjs',outfile:path.join(tempRoot,entry.replaceAll('/','-')+'.cjs'),logLevel:'silent'});
     }
     const load=entry=>import(pathToFileURL(path.join(tempRoot,entry.replaceAll('/','-')+'.cjs')).href);
@@ -30,9 +30,10 @@ try{
     const {repairTotals}=await load('ui/repair-summary');
     const {runRepairAll,checkAllTargets}=await load('sync/adapter-run');
     const {repairPlanDetails}=await load('ui/repair-plan');
+    const {getStrings}=await load('i18n');
     const config={roots:[{id:'other',kind:'vault',enabled:true,path:'unrelated'},{id:'team',kind:'vault',enabled:true,path:'knowledge/team-skills'}],syncRootId:'team',syncManifestPath:'config/agent-skills.json',targets:[]};
     const location=sources.resolveSyncSource(vault,config);
-    assert.deepEqual(location,{sharedRoot:source,manifestPath,confineToVault:true});
+    assert.deepEqual(location,{sharedRoot:source,manifestPath,confineToVault:true,manifestRequired:true});
     assert.equal(sources.resolveSyncSource(vault,{...config,syncManifestPath:''}).manifestPath,path.join(vault,'knowledge','skills-manifest.json'));
     assert.throws(()=>sources.resolveSyncSource(vault,{...config,syncRootId:'missing'}),/Choose/);
     assert.throws(()=>sources.resolveSyncSource(vault,{roots:[{id:'bad',kind:'vault',enabled:true,path:'../outside'}],syncRootId:'bad'}),/stay inside/);
@@ -44,9 +45,9 @@ try{
     const inspect=()=>native.inspectManifest(vault,location);
     let checked=await inspect();assert.equal(checked.status,'passed');assert.equal(checked.resources.status,'passed');assert.equal(checked.resources.packages[0].verifiedFiles,2);assert.equal(checked.resources.crossDevice,'unverified');
     const target=path.join(tempRoot,'runtime-codex');
-    const first=await repair.repairRuntimeNative(vault,'codex',target,checked.snapshot,{backupRoot:path.join(tempRoot,'backup')});
-    assert.equal(first.status,'passed');assert.deepEqual(first.changedSkills,['drawing']);assert.equal(first.changes.length,2);
-    const wrapper=await fs.readFile(path.join(target,'drawing','SKILL.md'),'utf8');assert(wrapper.includes('knowledge/team-skills/drawing.md'));assert(!wrapper.includes('00-MEMORTE'));assert(!wrapper.includes('JARDIN'));
+    const first=await repair.repairRuntimeNative(vault,'codex',target,checked.snapshot);
+    assert.equal(first.status,'passed');assert.deepEqual(first.changedSkills,['drawing']);assert.equal(first.changes.length,1);
+    const wrapper=await fs.readFile(path.join(target,'drawing','SKILL.md'),'utf8');assert(wrapper.includes('# Drawing'));assert(!wrapper.includes('Canonical shared rules live at:'));assert(!wrapper.includes('00-MEMORTE'));assert(!wrapper.includes('JARDIN'));
     const second=await repair.repairRuntimeNative(vault,'codex',target,checked.snapshot);assert.equal(second.writtenFiles,0);assert.deepEqual(second.changedSkills,[]);
     const provider=new NativeSyncProvider(()=>location);
     await fs.unlink(path.join(toolkit,'kit.mjs'));
@@ -63,11 +64,12 @@ try{
     assert.equal(partial.aborted,false);assert.equal(partial.failedCount,1);assert.equal(partial.repair.status,'failed','partial repair is never reported as all green');
     assert.equal(partial.details[0].repair.native.partial,true);assert.deepEqual(partial.details[0].repair.native.changedSkills,['safe']);
     assert.equal(partial.details[0].followUp.native.kind,'blocked');
-    const plan=repairPlanDetails([{target:targetConfig,targetPath:partialTarget,result:partial.details[0].followUp,repairable:false}],{repairPlanLine:(label,ready,blocked)=>`${label}: ${ready} ready, ${blocked} blocked`,distributionBlocked:'Blocked skills'});
-    assert.match(plan,/1 ready, 1 blocked/);assert.match(plan,/Blocked skills: drawing/);assert(plan.includes(partialTarget));
+    const plan=repairPlanDetails([{target:targetConfig,targetPath:partialTarget,result:partial.details[0].followUp,repairable:false}],getStrings('en'));
+    assert.match(plan,/1 blocked.*1 match source/);assert.match(plan,/Packaging or installation blocked · drawing/);assert(plan.includes(partialTarget));
+    assert(plan.includes(getStrings('en').installPlanNoWrites),'up-to-date copies are not counted as pending repair');
     assert.equal(await fs.readFile(path.join(partialTarget,'drawing','SKILL.md'),'utf8'),'preserve blocked entry');
     assert.equal(await fs.access(path.join(partialTarget,'drawing','agents')).then(()=>true,()=>false),false,'blocked metadata is not created');
-    assert.match(await fs.readFile(path.join(partialTarget,'safe','SKILL.md'),'utf8'),/safe\.md/);
+    assert.match(await fs.readFile(path.join(partialTarget,'safe','SKILL.md'),'utf8'),/Independent skill/);
     const blockedOnly=await runRepairAll({provider,settings:{targets:[targetConfig]}},vault,repairStrings);
     assert.equal(blockedOnly.details.length,0,'an already-clean healthy subset is not rewritten on repeated repair');
     const approvedBlocked=(await inspect()).snapshot;
@@ -127,7 +129,7 @@ try{
     await write(path.join(source,'drawing.md'),externalCard.replace('package_id: drawing','package_id: drawing\npackage_path: packages/drawing'));assert.equal((await externalInspect()).resources.status,'failed','dual declarations are rejected');
     await write(path.join(source,'drawing.md'),externalCard);
     await localPackages.saveLocalPackagePath('drawing',source,registryPath);assert.equal((await externalInspect()).resources.status,'failed','an external package may not resolve into the vault');
-    const sourceAlias=path.join(tempRoot,'source-alias');await fs.symlink(source,sourceAlias,'dir');
+    const sourceAlias=path.join(tempRoot,'source-alias');await fs.symlink(source,sourceAlias,process.platform==='win32'?'junction':'dir');
     await localPackages.saveLocalPackagePath('drawing',sourceAlias,registryPath);checked=await externalInspect();assert.equal(checked.resources.status,'failed','an external package symlink may not resolve into the vault');
     for(const value of ['relative/drawing','../outside','https://example.com/toolkit','\0'])await assert.rejects(()=>localPackages.saveLocalPackagePath('drawing',value,registryPath));
     await assert.rejects(()=>localPackages.saveLocalPackagePath('../drawing',externalToolkit,registryPath));
@@ -139,7 +141,7 @@ try{
     const detail=(id,skills,count)=>({targetId:id,label:id,runtime:'codex',repair:{native:{writtenFiles:count,replacedDirectories:0,changedSkills:skills,changes:[]}}});
     assert.deepEqual(repairTotals({details:[detail('a',['x','y'],2),detail('b',['y','z'],3)],repairedCount:2}),{targets:2,skills:3,files:5});
     assert.deepEqual(repairTotals({details:[{repair:{}}],repairedCount:1}),{targets:1,skills:null,files:null});
-    console.log('Readiness checks passed: configurable sources, portable wrappers, inventories, corruption/write refusal, machine-local external packages, symlink confinement, missing mappings, invalid registries/paths, adapter defaults, stale-result rejection, and structured repair totals.');
+    console.log('Readiness checks passed: configurable sources, complete copied packages, inventories, corruption/write refusal, machine-local external packages, symlink confinement, missing mappings, invalid registries/paths, adapter defaults, stale-result rejection, and structured repair totals.');
 }finally{
     assert.equal(path.dirname(await fs.realpath(tempRoot)),await fs.realpath(os.tmpdir()));assert(path.basename(tempRoot).startsWith('skill-switchboard-readiness-'));
     await fs.rm(tempRoot,{recursive:true,force:true});

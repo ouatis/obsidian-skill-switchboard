@@ -1,9 +1,18 @@
 import { EN } from './locales/en';
 import { ZH_CN } from './locales/zh-CN';
+import type { InstallAction, InstallCounts } from './sync/install-plan';
 
 export type Language = 'en' | 'zh-CN';
 
 export interface Strings {
+	completeCopy: string;
+	installState: (state: string) => string;
+	foundUnmanaged: string;
+	installPlanTitle: string;
+	installPlanDescription: string;
+	installPlanNoWrites: string;
+	installPlanCounts: (counts: InstallCounts) => string;
+	installAction: (action: InstallAction) => string;
 	openSwitchboard: string;
 	refreshSkillIndex: string;
 	skillIndexRefreshed: (count: number) => string;
@@ -45,7 +54,6 @@ export interface Strings {
 	repairAllAdapters: string;
 	repairAllDescription: string;
 	repairConfirmMessage: string;
-	repairPlanLine: (label: string, eligible: number, blocked: number) => string;
 	confirmRepair: string;
 	cancelRepair: string;
 	repairAllRunning: string;
@@ -71,8 +79,13 @@ export interface Strings {
 	lastRepairResult: string;
 	changeLabel: (kind: string, action: string) => string;
 	repairPartial: (files: number | null, failed: number) => string;
-	repairBackup: string;
 	autoCheck: string;
+	autoDistribute: string;
+	autoDistributeDescription: string;
+	autoDistributeConfirm: string;
+	autoDistributeAllow: string;
+	autoDistributeRevoked: string;
+	autoDistributeFailed: string;
 	autoCheckDescription: string;
 	syncSource: string;
 	localConnectionsDescription: string;
