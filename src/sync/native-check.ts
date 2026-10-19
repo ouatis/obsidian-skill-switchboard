@@ -6,6 +6,7 @@ import { adapterFor, type SyncManifestSnapshot } from './manifest';
 import { skillBundle, type SkillBundle } from './skill-bundle';
 import { inspectInstall, exists, type InstallState } from './install-state';
 import { safeInstallPath } from './install-package';
+import { existingRealPath } from './filesystem';
 import { resolveConfiguredPath } from '../utils/paths';
 import { blockedResourceSkills } from './resources';
 import { cardFiles } from './package-files';
@@ -47,12 +48,23 @@ export async function prepareRuntime(vaultPath: string, runtime: RuntimeName, ta
 async function otherEntries(target: string, managed: Set<string>, runtime: RuntimeName): Promise<string[]> {
 	if (!await exists(target)) return [];
 	const found: string[] = [];
+	// The managed set is built from install directories that went through
+	// safeInstallPath, so those paths are resolved. The scan walks the
+	// configured path, which is not. Wherever a symlink sits between the
+	// two — macOS resolves /var to /private/var — one directory is spelled
+	// two ways and a managed skill is reported as unmanaged. Compare
+	// resolved paths on both sides, and keep reporting the scanned path
+	// unchanged so what the user sees does not depend on this fix.
+	const managedPaths = new Set<string>();
+	for (const entry of managed) {
+		if (entry) managedPaths.add(await existingRealPath(entry));
+	}
 	async function inspect(directory: string, categories: boolean): Promise<void> {
 		for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
 			if (entry.name.startsWith('.')) continue;
 			const full = path.join(directory, entry.name);
 			if (entry.isDirectory() && await exists(path.join(full, 'SKILL.md'))) {
-				if (!managed.has(full)) found.push(full);
+				if (!managedPaths.has(await existingRealPath(full))) found.push(full);
 			} else if (categories && entry.isDirectory()) await inspect(full, false);
 			else if (runtime === 'dsh' && entry.isFile() && entry.name.endsWith('.md')) found.push(full);
 		}

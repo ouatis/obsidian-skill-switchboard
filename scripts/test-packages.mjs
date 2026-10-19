@@ -67,6 +67,18 @@ try {
 	const foreign = await check('codex', foreignTarget, updated.snapshot);
 	assert.equal(foreign.installs[0].state, 'update');
 	assert.equal(foreign.unmanagedEntries.length, 1, 'unlisted skills remain outside the managed scope');
+	// A target reached through a symlink spells one directory two ways: the
+	// managed set is built from resolved install paths, the scan walks the
+	// configured one. macOS resolves /var to /private/var, so every managed
+	// skill there was reported as unmanaged (2 !== 1). The comparison must
+	// not depend on which spelling the path arrived in.
+	if (process.platform !== 'win32') {
+		const linked = path.join(temporary, 'linked');
+		await fs.symlink(foreignTarget, linked, 'dir');
+		const viaLink = await check('codex', linked, updated.snapshot);
+		assert.equal(viaLink.unmanagedEntries.length, 1, 'a symlinked target reports the same unmanaged entries as a direct one');
+		assert.equal(viaLink.unmanagedEntries[0], path.join(linked, 'other'), 'the reported path is the configured one, not the resolved one');
+	}
 	const adopted = await repair('codex', foreignTarget, updated.snapshot);
 	assert.equal(adopted.status, 'passed', adopted.output);
 	assert.equal(await fs.readFile(path.join(foreignTarget, 'drawing/SKILL.md'), 'utf8'), main);
