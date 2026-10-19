@@ -26,7 +26,11 @@ export interface NativeCheckOptions { opencodeCommandsDir?: string }
 export interface PreparedSkill { name: string; bundle?: SkillBundle; state: InstallState }
 
 export async function prepareRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot: SyncManifestSnapshot): Promise<PreparedSkill[]> {
-	const target = await safeInstallPath(resolveConfiguredPath(targetPath, vaultPath), snapshot.vaultPath, snapshot.sharedRoot);
+	// The configured path is what the user wrote; the resolved one is what the
+	// filesystem needs. Both are needed: the resolved path is where files go,
+	// the configured one is what a path reported back to them must look like.
+	const configured = resolveConfiguredPath(targetPath, vaultPath);
+	const target = await safeInstallPath(configured, snapshot.vaultPath, snapshot.sharedRoot);
 	const candidates = snapshot.skills.filter((skill) => adapterFor(skill, runtime) !== null);
 	if (!candidates.length) throw new Error(`No skills enable the ${runtime} adapter in the configured source.`);
 	const blocked = new Set(blockedResourceSkills(snapshot.resources, candidates));
@@ -34,7 +38,7 @@ export async function prepareRuntime(vaultPath: string, runtime: RuntimeName, ta
 	for (const source of candidates) {
 		try {
 			if (blocked.has(source.name)) throw new Error('Package resources are incomplete; existing installation left unchanged.');
-			const bundle = await skillBundle(snapshot, runtime, target, source);
+			const bundle = await skillBundle(snapshot, runtime, target, source, configured);
 			await safeInstallPath(bundle.directory, snapshot.vaultPath, snapshot.sharedRoot);
 			plans.push({ name: source.name, bundle, state: await inspectInstall(bundle) });
 		} catch (error) {

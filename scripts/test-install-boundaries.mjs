@@ -142,6 +142,26 @@ try {
 		assert(result.output.includes(path.join(f.target, residue[0])));
 		assert.match(result.output, /cleanup/i);
 	});
+	await test('a reported leftover keeps the target spelling the user configured', async () => {
+		// The install path is resolved — Windows short names and macOS
+		// symlinked roots both expand — but a path handed back to the user
+		// has to be the one they can open. A target reached through a symlink
+		// is the same place spelled two ways, which is where the two drift
+		// apart.
+		if (process.platform === 'win32') return; // symlink creation needs elevation
+		const f = await fixture();
+		const linked = path.join(f.root, 'agent-link');
+		await fs.symlink(f.target, linked, 'dir');
+		const snapshot = (await f.inspect()).snapshot;
+		const repairThrough = (extra = {}) => engine.repairRuntimeNative(f.vault, 'codex', linked, snapshot, extra);
+		assert.equal((await repairThrough()).status, 'passed');
+		await write(path.join(f.source, 'drawing/assets/new.txt'), 'AUTHORITATIVE');
+		const result = await repairThrough({ beforeCleanup: async () => { throw new Error('simulated cleanup failure'); } });
+		assert.equal(result.status, 'failed');
+		const residue = (await fs.readdir(linked)).filter((name) => name.startsWith('.skill-switchboard-drawing-old-'));
+		assert.equal(residue.length, 1);
+		assert(result.output.includes(path.join(linked, residue[0])), 'the reported path is the configured one, not the resolved one');
+	});
 	await test('revoking an in-flight repair prevents replacement and restores a displaced original', async () => {
 		const f = await fixture(); await write(path.join(f.directory, 'SKILL.md'), 'ORIGINAL');
 		for (const seam of ['beforeCommit', 'afterDisplace']) {
