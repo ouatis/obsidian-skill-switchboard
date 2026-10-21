@@ -1,6 +1,6 @@
 {
 	"name": "skill-switchboard",
-	"version": "0.6.1",
+	"version": "0.6.2",
 	"description": "An Obsidian control surface for Agent Skills, runtimes, and adapters.",
 	"main": "main.js",
 	"type": "module",
