@@ -8,6 +8,8 @@ import { DistributionBoard } from './distribution-board';
 import { distributionNodes } from './distribution-state';
 import { openPluginSettings } from './open-settings';
 import { renderSkillCard } from './skill-card';
+import { renderAttentionSummary } from './attention-summary';
+import { renderSetupGuide } from './setup-guide';
 
 export const VIEW_TYPE_SKILL_SWITCHBOARD = 'skill-switchboard-view';
 
@@ -53,16 +55,6 @@ export class SkillSwitchboardView extends ItemView {
 		const contentEl = this.contentEl.createDiv('skill-switchboard-page');
 
 		this.renderHeader(contentEl, strings);
-		if (this.plugin.settings.showDistributionBoard) {
-			if (this.distributionBoard) contentEl.appendChild(this.distributionBoard.element);
-			else this.distributionBoard = new DistributionBoard(contentEl, this.distributionModel(), () => {
-				void this.plugin.setDistributionBoardVisible(false);
-			});
-			this.updateDistributionBoard();
-		} else {
-			this.distributionBoard?.destroy();
-			this.distributionBoard = null;
-		}
 
 		const summary = contentEl.createDiv('skill-switchboard-summary');
 		const activeRoots = this.plugin.settings.roots.filter((root) => root.enabled && root.path).length;
@@ -75,6 +67,33 @@ export class SkillSwitchboardView extends ItemView {
 		addStat(summary, strings, strings.skills, String(this.plugin.index.skills.length), 'list', goToList);
 		addStat(summary, strings, strings.roots, String(activeRoots), 'settings', () => this.openSettings());
 		addStat(summary, strings, strings.targets, String(enabledTargets), 'settings', () => this.openSettings());
+
+		const selectedRoot = this.plugin.settings.roots.find((root) => root.id === this.plugin.settings.syncRootId)
+			?? (!this.plugin.settings.syncRootId ? this.plugin.settings.roots.find((root) => root.enabled) : undefined);
+		renderSetupGuide(contentEl, strings, {
+			sourceReady: Boolean(selectedRoot?.enabled && selectedRoot.path.trim()),
+			targetsReady: enabledTargets > 0,
+			indexReady: this.plugin.index.scannedAt > 0,
+		}, () => this.openSettings(), () => void this.plugin.refreshIndex(true));
+		renderAttentionSummary(contentEl, strings, {
+			checksStale: this.plugin.checksStale,
+			targetChecks: this.plugin.targetChecks,
+			sourceBlocked: this.plugin.manifestCheck?.status === 'failed',
+			resourcesBlocked: this.plugin.manifestCheck?.resources?.status === 'failed',
+			autoDistribute: this.plugin.settings.autoDistribute,
+			onRepair: () => void this.plugin.repairAllAdapters(),
+		});
+
+		if (this.plugin.settings.showDistributionBoard) {
+			if (this.distributionBoard) contentEl.appendChild(this.distributionBoard.element);
+			else this.distributionBoard = new DistributionBoard(contentEl, this.distributionModel(), () => {
+				void this.plugin.setDistributionBoardVisible(false);
+			});
+			this.updateDistributionBoard();
+		} else {
+			this.distributionBoard?.destroy();
+			this.distributionBoard = null;
+		}
 
 		if (this.plugin.index.errors.length > 0) {
 			const errorBox = contentEl.createDiv('skill-switchboard-errors');
