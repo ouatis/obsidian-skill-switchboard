@@ -6,6 +6,7 @@ import { adapterFor, type SyncManifestSnapshot } from './manifest';
 import { skillBundle, type SkillBundle } from './skill-bundle';
 import { inspectInstall, exists, type InstallState } from './install-state';
 import { safeInstallPath } from './install-package';
+import { existingRealPath } from './filesystem';
 import { resolveConfiguredPath } from '../utils/paths';
 import { blockedResourceSkills } from './resources';
 import { cardFiles } from './package-files';
@@ -25,7 +26,11 @@ export interface NativeCheckOptions { opencodeCommandsDir?: string }
 export interface PreparedSkill { name: string; bundle?: SkillBundle; state: InstallState }
 
 export async function prepareRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot: SyncManifestSnapshot): Promise<PreparedSkill[]> {
-	const target = await safeInstallPath(resolveConfiguredPath(targetPath, vaultPath), snapshot.vaultPath, snapshot.sharedRoot);
+	// The configured path is what the user wrote; the resolved one is what the
+	// filesystem needs. Both are needed: the resolved path is where files go,
+	// the configured one is what a path reported back to them must look like.
+	const configured = resolveConfiguredPath(targetPath, vaultPath);
+	const target = await safeInstallPath(configured, snapshot.vaultPath, snapshot.sharedRoot);
 	const candidates = snapshot.skills.filter((skill) => adapterFor(skill, runtime) !== null);
 	if (!candidates.length) throw new Error(`No skills enable the ${runtime} adapter in the configured source.`);
 	const blocked = new Set(blockedResourceSkills(snapshot.resources, candidates));
@@ -33,7 +38,7 @@ export async function prepareRuntime(vaultPath: string, runtime: RuntimeName, ta
 	for (const source of candidates) {
 		try {
 			if (blocked.has(source.name)) throw new Error('Package resources are incomplete; existing installation left unchanged.');
-			const bundle = await skillBundle(snapshot, runtime, target, source);
+			const bundle = await skillBundle(snapshot, runtime, target, source, configured);
 			await safeInstallPath(bundle.directory, snapshot.vaultPath, snapshot.sharedRoot);
 			plans.push({ name: source.name, bundle, state: await inspectInstall(bundle) });
 		} catch (error) {
@@ -47,12 +52,23 @@ export async function prepareRuntime(vaultPath: string, runtime: RuntimeName, ta
 async function otherEntries(target: string, managed: Set<string>, runtime: RuntimeName): Promise<string[]> {
 	if (!await exists(target)) return [];
 	const found: string[] = [];
+	// The managed set is built from install directories that went through
+	// safeInstallPath, so those paths are resolved. The scan walks the
+	// configured path, which is not. Wherever a symlink sits between the
+	// two — macOS resolves /var to /private/var — one directory is spelled
+	// two ways and a managed skill is reported as unmanaged. Compare
+	// resolved paths on both sides, and keep reporting the scanned path
+	// unchanged so what the user sees does not depend on this fix.
+	const managedPaths = new Set<string>();
+	for (const entry of managed) {
+		if (entry) managedPaths.add(await existingRealPath(entry));
+	}
 	async function inspect(directory: string, categories: boolean): Promise<void> {
 		for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
 			if (entry.name.startsWith('.')) continue;
 			const full = path.join(directory, entry.name);
 			if (entry.isDirectory() && await exists(path.join(full, 'SKILL.md'))) {
-				if (!managed.has(full)) found.push(full);
+				if (!managedPaths.has(await existingRealPath(full))) found.push(full);
 			} else if (categories && entry.isDirectory()) await inspect(full, false);
 			else if (runtime === 'dsh' && entry.isFile() && entry.name.endsWith('.md')) found.push(full);
 		}

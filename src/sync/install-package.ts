@@ -66,14 +66,25 @@ export async function installPackage(bundle: SkillBundle, vault: string, source:
 		const hasDirectory = await exists(bundle.directory);
 		const hasLegacy = Boolean(bundle.legacyFlat && await exists(bundle.legacyFlat));
 		const current = () => options.isCurrent?.() !== false;
+		// The leftover names are derived from the same rule that created them,
+		// so the reported path can be rebuilt from the configured spelling
+		// without parsing a resolved path. The resolved path expands Windows
+		// short names and macOS symlinked roots, which produced a path the
+		// user could not open.
+		let oldName: string | undefined;
+		let oldFlatName: string | undefined;
+		const displayOf = (name: string): string =>
+			bundle.displayParent ? path.join(bundle.displayParent, name) : name;
 		try {
 			if (hasDirectory) {
-				const old = path.join(parent, `.skill-switchboard-${bundle.name}-old-${randomUUID()}`);
+				oldName = `.skill-switchboard-${bundle.name}-old-${randomUUID()}`;
+				const old = path.join(parent, oldName);
 				await retryFileOperation(() => fs.rename(bundle.directory, old), current);
 				displaced = old;
 			}
 			if (hasLegacy && bundle.legacyFlat) {
-				const oldFlat = path.join(parent, `.skill-switchboard-${bundle.name}-flat-${randomUUID()}`);
+				oldFlatName = `.skill-switchboard-${bundle.name}-flat-${randomUUID()}`;
+				const oldFlat = path.join(parent, oldFlatName);
 				await retryFileOperation(() => fs.rename(bundle.legacyFlat!, oldFlat), current);
 				legacyDisplaced = oldFlat;
 			}
@@ -83,12 +94,16 @@ export async function installPackage(bundle: SkillBundle, vault: string, source:
 		catch (error) {
 			const recoveryErrors: string[] = [];
 			if (displaced) {
-				try { await retryFileOperation(() => fs.rename(displaced!, bundle.directory)); displaced = undefined; }
-				catch { recoveryErrors.push(`Original directory preserved at ${displaced}`); }
+				const leftover = displaced;
+				const name = oldName ?? path.basename(leftover);
+				try { await retryFileOperation(() => fs.rename(leftover, bundle.directory)); displaced = undefined; }
+				catch { recoveryErrors.push(`Original directory preserved at ${displayOf(name)}`); }
 			}
 			if (legacyDisplaced && bundle.legacyFlat) {
-				try { await retryFileOperation(() => fs.rename(legacyDisplaced!, bundle.legacyFlat!)); legacyDisplaced = undefined; }
-				catch { recoveryErrors.push(`Legacy entry preserved at ${legacyDisplaced}`); }
+				const leftover = legacyDisplaced;
+				const name = oldFlatName ?? path.basename(leftover);
+				try { await retryFileOperation(() => fs.rename(leftover, bundle.legacyFlat!)); legacyDisplaced = undefined; }
+				catch { recoveryErrors.push(`Legacy entry preserved at ${displayOf(name)}`); }
 			}
 			if (recoveryErrors.length) throw new Error(`Swap failed; automatic restoration could not finish. ${recoveryErrors.join('; ')}.`);
 			throw error;
@@ -105,7 +120,14 @@ export async function installPackage(bundle: SkillBundle, vault: string, source:
 				await retryFileOperation(() => fs.unlink(legacyDisplaced!));
 			}
 		} catch (error) {
-			cleanupWarnings.push(`Canonical copy installed, but temporary old-file cleanup failed: ${error instanceof Error ? error.message : String(error)}. Check ${[displaced, legacyDisplaced].filter(Boolean).join('; ')}.`);
+			// Report the leftovers in the configured spelling of the target, so
+			// the path the user is told to check is one they can open. The
+			// resolved path expands Windows short names and macOS symlinked
+			// roots; the files themselves never move.
+			const leftovers: string[] = [];
+			if (displaced) leftovers.push(displayOf(oldName ?? path.basename(displaced)));
+			if (legacyDisplaced) leftovers.push(displayOf(oldFlatName ?? path.basename(legacyDisplaced)));
+			cleanupWarnings.push(`Canonical copy installed, but temporary old-file cleanup failed: ${error instanceof Error ? error.message : String(error)}. Check ${leftovers.join('; ')}.`);
 		}
 		return { changed: true, files: bundle.files.length, cleanupWarnings };
 	} finally {

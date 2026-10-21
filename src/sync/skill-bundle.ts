@@ -4,10 +4,10 @@ import type { ManifestSkill, SyncManifestSnapshot } from './manifest';
 import { agentMetadataFor, loadRuntimeSkills, yamlQuoted } from './templates';
 import { materialize, type PackageFile, type SourceFile } from './package-files';
 
-export interface SkillBundle { name: string; directory: string; files: PackageFile[]; sourceFiles: SourceFile[]; legacyFlat?: string }
+export interface SkillBundle { name: string; directory: string; files: PackageFile[]; sourceFiles: SourceFile[]; legacyFlat?: string; displayParent?: string }
 
 /** The destination contains the instructions themselves, never a pointer to the source document. */
-export async function skillBundle(snapshot: SyncManifestSnapshot, runtime: RuntimeName, target: string, source: ManifestSkill): Promise<SkillBundle> {
+export async function skillBundle(snapshot: SyncManifestSnapshot, runtime: RuntimeName, target: string, source: ManifestSkill, displayTarget = target): Promise<SkillBundle> {
 	if (source.packageError) throw new Error(source.packageError);
 	if (!source.files?.length) throw new Error(`No complete package snapshot: ${source.name}`);
 	const skill = loadRuntimeSkills({ ...snapshot, skills: [source] }, runtime)[0];
@@ -38,5 +38,10 @@ export async function skillBundle(snapshot: SyncManifestSnapshot, runtime: Runti
 		files: files.sort((a, b) => a.path.localeCompare(b.path)),
 		sourceFiles: source.files,
 		...(runtime === 'dsh' ? { legacyFlat: path.join(target, `${skill.name}.md`) } : {}),
+		// Where the package sits, spelled the way the user spelled it. The
+		// resolved target is what the filesystem needs — Windows short names
+		// and macOS symlinked temp roots both expand — but a path reported
+		// back to the user has to be one they can open.
+		displayParent: path.join(displayTarget, ...(runtime === 'hermes' ? [skill.category] : [])),
 	};
 }
