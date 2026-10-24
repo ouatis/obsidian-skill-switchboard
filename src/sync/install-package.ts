@@ -8,9 +8,12 @@ import { existingRealPath } from './filesystem';
 import { isInside, pathsOverlap } from '../utils/paths';
 import { snapshotSkillFiles } from './source-catalog';
 import { retryFileOperation } from './file-retry';
+import { createTargetSnapshot } from './target-snapshot';
 
 export interface InstallOptions {
 	isCurrent?: () => boolean;
+	/** When set, the displaced target tree is copied here before the swap succeeds. */
+	snapshotDirectory?: string;
 	/** Test seam: inject a failure after preparation without changing the real filesystem API. */
 	beforeCommit?: () => Promise<void>;
 	afterDisplace?: () => Promise<void>;
@@ -66,6 +69,22 @@ export async function installPackage(bundle: SkillBundle, vault: string, source:
 		const hasDirectory = await exists(bundle.directory);
 		const hasLegacy = Boolean(bundle.legacyFlat && await exists(bundle.legacyFlat));
 		const current = () => options.isCurrent?.() !== false;
+		const earlyWarnings: string[] = [];
+		// Snapshot the tree the swap is about to displace. A failed snapshot is
+		// reported but never blocks distribution; the swap itself still restores
+		// the old tree on any failure.
+		if (hasDirectory && options.snapshotDirectory) {
+			try {
+				await createTargetSnapshot({
+					skill: bundle.name,
+					source: bundle.directory,
+					store: options.snapshotDirectory,
+					fingerprint: initial.fingerprint,
+				});
+			} catch (error) {
+				earlyWarnings.push(`Target snapshot could not be created; distribution continued without one: ${error instanceof Error ? error.message : String(error)}.`);
+			}
+		}
 		// The leftover names are derived from the same rule that created them,
 		// so the reported path can be rebuilt from the configured spelling
 		// without parsing a resolved path. The resolved path expands Windows
@@ -129,7 +148,7 @@ export async function installPackage(bundle: SkillBundle, vault: string, source:
 			if (legacyDisplaced) leftovers.push(displayOf(oldFlatName ?? path.basename(legacyDisplaced)));
 			cleanupWarnings.push(`Canonical copy installed, but temporary old-file cleanup failed: ${error instanceof Error ? error.message : String(error)}. Check ${leftovers.join('; ')}.`);
 		}
-		return { changed: true, files: bundle.files.length, cleanupWarnings };
+		return { changed: true, files: bundle.files.length, cleanupWarnings: [...earlyWarnings, ...cleanupWarnings] };
 	} finally {
 		try {
 			if (staging && await exists(staging)) {

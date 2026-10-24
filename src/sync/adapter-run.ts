@@ -33,6 +33,8 @@ export interface AdapterRunContext {
 	onTargetActivity?: (activity: TargetActivity) => void;
 	onTargetCheck?: (check: TargetCheck) => void;
 	isCurrent?: () => boolean;
+	/** When set, each displaced target tree is snapshotted here before repair writes. */
+	snapshotDirectory?: string;
 }
 
 export interface AdapterRun {
@@ -283,7 +285,7 @@ export async function repairDriftedTargets(
 		}
 		const label = displayTargetName(check.target);
 		context.onTargetActivity?.({ targetId: check.target.id, phase: 'repairing' });
-		const repair = await context.provider.repairRuntime(vaultPath, runtime, check.target.path, snapshot, { isCurrent: context.isCurrent });
+		const repair = await context.provider.repairRuntime(vaultPath, runtime, check.target.path, snapshot, { isCurrent: context.isCurrent, snapshotDirectory: context.snapshotDirectory });
 		const detail: TargetRepairDetail = { targetId: check.target.id, label, runtime, repair };
 		details.push(detail);
 		if (repair.status === 'failed' && !repair.native?.partial) {

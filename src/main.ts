@@ -1,4 +1,5 @@
 import { Notice, Plugin } from 'obsidian';
+import path from 'node:path';
 import {
 	normalizeSettings,
 	SkillSwitchboardSettings,
@@ -355,6 +356,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			provider: this.syncProvider,
 			settings: { targets: this.settings.targets.map((target) => ({ ...target })) },
 			isCurrent: () => !this.disposed && this.freshness.isCurrent(revision) && current?.() !== false,
+			snapshotDirectory: this.snapshotStore(),
 			onTargetActivity: (activity) => {
 				if (this.disposed || !this.freshness.isCurrent(revision)) return;
 				this.targetActivity = activity;
@@ -367,6 +369,12 @@ export default class SkillSwitchboardPlugin extends Plugin {
 				this.updateDistributionViews();
 			},
 		};
+	}
+
+	/** Before/after copies of displaced target trees live inside the plugin directory. */
+	snapshotStore(): string {
+		// manifest is always set in Obsidian; the fallback keeps fixture plugins usable.
+		return path.join(this.getVaultBasePath() ?? '', this.manifest?.dir ?? '', 'snapshots');
 	}
 
 	async checkAdapters(showNotice = true, allowAutomatic = false): Promise<void> {

@@ -13,7 +13,7 @@ export interface SyncRuntimeCheckResult extends AdapterCheckResult {
 }
 
 export interface SyncRepairResult extends AdapterCheckResult { native?: NativeRepairResult }
-export interface RepairControl { isCurrent?: () => boolean }
+export interface RepairControl { isCurrent?: () => boolean; snapshotDirectory?: string }
 
 export interface SyncProvider {
 	readonly id: string;

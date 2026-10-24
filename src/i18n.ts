@@ -72,6 +72,13 @@ export interface Strings {
 	moreLines: (count: number) => string;
 	noOutputToCopy: string;
 	copyCheckOutput: string;
+	restoreLastSnapshot: string;
+	restoreNone: string;
+	restoreTitle: string;
+	restoreConfirm: string;
+	restoreConfirmMessage: (skill: string, target: string) => string;
+	restoreDone: (skill: string, files: number) => string;
+	restoreFailed: (error: string) => string;
 	repairAllAdapters: string;
 	repairAllDescription: string;
 	repairConfirmMessage: string;
