@@ -23,20 +23,9 @@ jobs:
                   node-version: ${{ matrix.node-version }}
                   cache: 'npm'
             - run: npm ci
+            - run: npm run audit:deps
             - run: npm run build --if-present
-            - run: npm run test:scanner
-            - run: npm run test:readiness
-            - run: npm run test:lifecycle
-            - run: npm run test:machine-settings
-            - run: npm run test:build-id
-            - run: npm run test:status-queue
-            - run: npm run test:native
-            - run: npm run test:adapter
-            - run: npm run test:automatic
-            - run: npm run test:vault-changes
-            - run: npm run test:distribution
-            - run: npm run test:ui
-            - run: npm run test:release-validation
+            - run: npm test
             - run: npm run lint
 
     path-portability:
@@ -54,17 +43,6 @@ jobs:
                   node-version: 22.x
                   cache: 'npm'
             - run: npm ci
+            - run: npm run audit:deps
             - run: npm run build
-            - run: npm run test:scanner
-            - run: npm run test:readiness
-            - run: npm run test:lifecycle
-            - run: npm run test:machine-settings
-            - run: npm run test:build-id
-            - run: npm run test:status-queue
-            - run: npm run test:native
-            - run: npm run test:adapter
-            - run: npm run test:automatic
-            - run: npm run test:vault-changes
-            - run: npm run test:distribution
-            - run: npm run test:ui
-            - run: npm run test:release-validation
+            - run: npm test

@@ -24,10 +24,14 @@ jobs:
             - name: Validate release tag and version metadata
               run: node scripts/validate-release.mjs "$GITHUB_REF_NAME"
 
-            - name: Build plugin
+            - name: Test and audit before publishing
               run: |
                   npm ci
-                  npm run build
+                  npm run audit:deps
+                  npm test
+
+            - name: Build plugin
+              run: npm run build
 
             - name: Check for optional styles
               id: styles
