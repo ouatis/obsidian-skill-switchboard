@@ -30,6 +30,7 @@ export default defineConfig(
 		'scripts/test-distribution.mjs',
 		'scripts/test-ui.mjs',
 		'scripts/test-ui-live.mjs',
+		'scripts/run-tests.mjs',
 		'scripts/capture-distribution.mjs',
 		'tsconfig.json',
 	]),
