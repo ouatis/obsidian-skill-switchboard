@@ -6,15 +6,24 @@ _Maintain skills in Obsidian. Distribute complete local copies._
 
 [简体中文](./README.zh-CN.md)
 
+<p>
+  <img src="https://img.shields.io/github/v/release/ouatis/obsidian-skill-switchboard?style=flat-square&label=version&color=c24e18" alt="Latest release">
+  <img src="https://img.shields.io/github/downloads/ouatis/obsidian-skill-switchboard/total?style=flat-square&logo=obsidian&logoColor=white&label=downloads&color=6d665d" alt="Downloads">
+  <img src="https://img.shields.io/github/license/ouatis/obsidian-skill-switchboard?style=flat-square&label=license&color=406e40" alt="MIT License">
+</p>
+
 </div>
+
+![Skill Switchboard: one source sheet wired to three target sheets, one connection pending. Concept illustration, not a plugin screenshot.](img/cover.svg)
 
 An Obsidian desktop plugin for keeping one canonical skill source in a synced
 vault and distributing complete packages to this computer's agents. Your existing
 vault sync carries the source between computers; Switchboard handles local files.
 It provides no cloud service, makes no network requests and collects no telemetry.
 
-Quiet panels and thin rules share a visual rhythm with Desk Lamp and Scriptorium.
-The interface follows your Obsidian theme. English and Simplified Chinese are available.
+Quiet panels and thin rules share a visual rhythm with Desk Lamp, Scriptorium
+and Collate. The interface follows your Obsidian theme. English and Simplified
+Chinese are available.
 
 ## Install
 

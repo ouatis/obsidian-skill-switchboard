@@ -1,16 +1,24 @@
 <div align="center">
 
-# Skill Switchboard
+# Skill Switchboard · 技能接线台
 
 _在 Obsidian 维护技能，向本机 Agent 分发完整副本。_
 
 [English](./README.md)
 
+<p>
+  <img src="https://img.shields.io/github/v/release/ouatis/obsidian-skill-switchboard?style=flat-square&label=version&color=c24e18" alt="Latest release">
+  <img src="https://img.shields.io/github/downloads/ouatis/obsidian-skill-switchboard/total?style=flat-square&logo=obsidian&logoColor=white&label=downloads&color=6d665d" alt="Downloads">
+  <img src="https://img.shields.io/github/license/ouatis/obsidian-skill-switchboard?style=flat-square&label=license&color=406e40" alt="MIT License">
+</p>
+
 </div>
+
+![技能接线台：一张源稿纸接线到三张目标稿纸，其中一路尚未接通。概念插画，非插件截图。](img/cover.svg)
 
 技能接线台是一款 Obsidian 桌面插件。在同步库中维护一份权威技能源，由已有的库同步方案带到其他电脑；接线台在各机检查并分发完整技能包。插件不另建云同步服务，不联网，也不收集遥测。
 
-界面沿用与 Desk Lamp、Scriptorium 协调的安静面板和细线，跟随 Obsidian 主题，提供英文和简体中文。
+界面沿用与 Desk Lamp、Scriptorium、Collate（比稿）协调的安静面板和细线，跟随 Obsidian 主题，提供英文和简体中文。
 
 ## 安装
 
