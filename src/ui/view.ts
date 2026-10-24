@@ -56,25 +56,11 @@ export class SkillSwitchboardView extends ItemView {
 
 		this.renderHeader(contentEl, strings);
 
-		const summary = contentEl.createDiv('skill-switchboard-summary');
-		const activeRoots = this.plugin.settings.roots.filter((root) => root.enabled && root.path).length;
+		const enabledRoots = this.plugin.settings.roots.filter((root) => root.enabled && root.path).length;
 		const enabledTargets = this.plugin.settings.targets.filter((target) => target.enabled).length;
-		const goToList = () => {
-			contentEl.querySelector('.skill-switchboard-search')?.scrollIntoView({
-				behavior: contentEl.win.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start',
-			});
-		};
-		addStat(summary, strings, strings.skills, String(this.plugin.index.skills.length), 'list', goToList);
-		addStat(summary, strings, strings.roots, String(activeRoots), 'settings', () => this.openSettings());
-		addStat(summary, strings, strings.targets, String(enabledTargets), 'settings', () => this.openSettings());
-
 		const selectedRoot = this.plugin.settings.roots.find((root) => root.id === this.plugin.settings.syncRootId)
 			?? (!this.plugin.settings.syncRootId ? this.plugin.settings.roots.find((root) => root.enabled) : undefined);
-		renderSetupGuide(contentEl, strings, {
-			sourceReady: Boolean(selectedRoot?.enabled && selectedRoot.path.trim()),
-			targetsReady: enabledTargets > 0,
-			indexReady: this.plugin.index.scannedAt > 0,
-		}, () => this.openSettings(), () => void this.plugin.refreshIndex(true));
+		// One status line at the top: attention, read-only counts and automation.
 		renderAttentionSummary(contentEl, strings, {
 			checksStale: this.plugin.checksStale,
 			targetChecks: this.plugin.targetChecks,
@@ -82,7 +68,19 @@ export class SkillSwitchboardView extends ItemView {
 			resourcesBlocked: this.plugin.manifestCheck?.resources?.status === 'failed',
 			autoDistribute: this.plugin.settings.autoDistribute,
 			onRepair: () => void this.plugin.repairAllAdapters(),
+			stats: {
+				skills: this.plugin.index.skills.length,
+				roots: enabledRoots,
+				targets: enabledTargets,
+			},
+			scannedAt: this.plugin.index.scannedAt,
+			checkedAt: this.plugin.targetCheckedAt,
 		});
+		renderSetupGuide(contentEl, strings, {
+			sourceReady: Boolean(selectedRoot?.enabled && selectedRoot.path.trim()),
+			targetsReady: enabledTargets > 0,
+			indexReady: this.plugin.index.scannedAt > 0,
+		}, () => this.openSettings(), () => void this.plugin.refreshIndex(true));
 
 		if (this.plugin.settings.showDistributionBoard) {
 			if (this.distributionBoard) contentEl.appendChild(this.distributionBoard.element);
@@ -101,23 +99,23 @@ export class SkillSwitchboardView extends ItemView {
 			for (const error of this.plugin.index.errors) errorBox.createDiv({ text: error });
 		}
 
-		renderAdapterStatus(contentEl, this.plugin, strings, (output) => this.copyOutput(output));
-
 		if (this.plugin.index.skills.length === 0) {
 			const empty = contentEl.createDiv('skill-switchboard-empty');
 			empty.createEl('h3', { text: strings.noSkillsTitle });
 			empty.createEl('p', { text: strings.noSkillsDescription });
-			return;
+		} else {
+			const library = contentEl.createDiv('skill-switchboard-library-header');
+			library.createEl('h2', { text: strings.skillLibrary });
+			library.createSpan({ text: strings.readOnlyScan, cls: 'skill-switchboard-library-note' });
+			this.renderSearchBox(contentEl, strings);
+			this.renderSkillGroups(contentEl, strings);
 		}
 
-		const library = contentEl.createDiv('skill-switchboard-library-header');
-		library.createEl('h2', { text: strings.skillLibrary });
-		library.createSpan({ text: strings.readOnlyScan, cls: 'skill-switchboard-library-note' });
-		this.renderSearchBox(contentEl, strings);
-		this.renderSkillGroups(contentEl, strings);
-
-		const footer = contentEl.createDiv('skill-switchboard-footer');
-		footer.setText(`${strings.readOnlyScan} · ${new Date(this.plugin.index.scannedAt).toLocaleString()}`);
+		// Diagnostic evidence sits behind a disclosure: it is for troubleshooting,
+		// not part of the everyday read, so it never pushes the library down.
+		const evidence = contentEl.createEl('details', { cls: 'ssb-evidence' });
+		evidence.createEl('summary', { text: strings.evidenceSummary });
+		renderAdapterStatus(evidence, this.plugin, strings, (output) => this.copyOutput(output));
 	}
 
 	updateDistributionBoard(): void {
@@ -334,29 +332,4 @@ function actionButton(parent: HTMLElement, label: string, icon: string, extraCla
 	setIcon(button.createSpan('skill-switchboard-button-icon'), icon);
 	button.createSpan({ text: label });
 	return button;
-}
-
-/**
- * The counts double as navigation: the skill count points at the list, while
- * roots and targets live in settings and say so.
- */
-function addStat(
-	container: HTMLElement,
-	strings: Strings,
-	label: string,
-	value: string,
-	target: 'list' | 'settings',
-	onClick: () => void,
-): void {
-	const stat = container.createEl('button', { cls: 'skill-switchboard-stat is-clickable' });
-	stat.setAttribute('aria-label', `${label}: ${value} · ${target === 'list' ? strings.jumpToList : strings.manageInSettings}`);
-	stat.createSpan({ text: value, cls: 'skill-switchboard-stat-value' });
-	stat.createSpan({ text: label, cls: 'skill-switchboard-stat-label' });
-	const hint = stat.createSpan({
-		text: target === 'list' ? strings.jumpToList : strings.manageInSettings,
-		cls: 'skill-switchboard-stat-hint',
-	});
-
-	stat.addEventListener('click', onClick);
-	hint.setAttribute('aria-hidden', 'true');
 }

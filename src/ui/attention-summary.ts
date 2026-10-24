@@ -10,6 +10,10 @@ export interface AttentionSummaryOptions {
 	resourcesBlocked: boolean;
 	autoDistribute: boolean;
 	onRepair: () => void;
+	/** Read-only counts folded into the status line (the former stat cards). */
+	stats: { skills: number; roots: number; targets: number };
+	scannedAt: number;
+	checkedAt: number;
 }
 
 export interface AttentionCounts extends InstallCounts {
@@ -33,15 +37,15 @@ export function attentionCounts(checks: readonly TargetCheck[]): AttentionCounts
 	return counts;
 }
 
-/** A compact answer to the only question users need after opening the board: what needs attention? */
+/**
+ * The one status line at the top of the view: what needs attention, the
+ * read-only counts, and the automation state. Replaces the former stat cards,
+ * attention heading and footer timestamp.
+ */
 export function renderAttentionSummary(container: HTMLElement, strings: Strings, options: AttentionSummaryOptions): void {
 	const section = container.createDiv('ssb-attention');
-	const heading = section.createDiv('ssb-attention-heading');
-	const title = heading.createDiv('ssb-attention-title');
-	setIcon(title.createSpan('ssb-attention-icon'), options.checksStale ? 'clock-3' : 'scan-line');
-	title.createEl('h2', { text: strings.attentionTitle });
+	const line = section.createDiv('ssb-attention-body');
 
-	const body = section.createDiv('ssb-attention-body');
 	const counts = attentionCounts(options.targetChecks);
 	const blocked = counts.blocked + counts.failedTargets;
 	const sourceBlocked = options.sourceBlocked || options.resourcesBlocked;
@@ -64,30 +68,47 @@ export function renderAttentionSummary(container: HTMLElement, strings: Strings,
 		status = 'passed';
 		message = strings.attentionAllClear;
 	}
-	body.addClass(`is-${status}`);
-	body.createDiv({ text: message, cls: 'ssb-attention-message' });
+	line.addClass(`is-${status}`);
+
+	const pill = line.createSpan('ssb-attention-pill');
+	pill.addClass(`is-${status}`);
+	pill.createSpan('ssb-attention-dot');
+	pill.createSpan({ text: message, cls: 'ssb-attention-message' });
+
+	const stats = line.createSpan('ssb-attention-stats');
+	stats.setText(
+		`${options.stats.skills} ${strings.skills} · ${options.stats.roots} ${strings.roots} · ${options.stats.targets} ${strings.targets}`,
+	);
 
 	if (!options.checksStale && options.targetChecks.length) {
-		const metrics = body.createDiv('ssb-attention-metrics');
+		const metrics = line.createSpan('ssb-attention-metrics');
 		attentionMetric(metrics, counts.install, strings.attentionInstall, 'download');
 		attentionMetric(metrics, counts.update, strings.attentionOverwrite, 'replace');
 		attentionMetric(metrics, blocked, strings.attentionBlocked, 'alert-triangle');
 	}
+
+	const actions = line.createDiv('ssb-attention-actions');
+	const automation = actions.createSpan('ssb-attention-automation');
+	setIcon(automation.createSpan('ssb-attention-automation-icon'), options.autoDistribute ? 'zap' : 'pause');
+	automation.createSpan({ text: options.autoDistribute ? strings.attentionAutoOn : strings.attentionAutoOff });
 	if (writes && !options.checksStale) {
-		const repair = body.createEl('button', { cls: 'ssb-attention-repair' });
+		const repair = actions.createEl('button', { cls: 'ssb-attention-repair' });
 		repair.setAttribute('type', 'button');
+		repair.setAttribute('aria-label', strings.repairAllAdapters);
 		setIcon(repair.createSpan('ssb-attention-repair-icon'), 'wrench');
 		repair.createSpan({ text: strings.repairAllAdapters });
 		repair.addEventListener('click', options.onRepair);
 	}
 
-	const automation = section.createDiv('ssb-attention-automation');
-	setIcon(automation.createSpan('ssb-attention-automation-icon'), options.autoDistribute ? 'zap' : 'pause');
-	automation.createSpan({ text: options.autoDistribute ? strings.attentionAutoOn : strings.attentionAutoOff });
+	const meta = section.createDiv('ssb-attention-meta');
+	const parts = [strings.readOnlyScan, `${strings.indexedAtLabel} ${new Date(options.scannedAt).toLocaleString()}`];
+	if (options.checkedAt) parts.push(`${strings.checkedAtLabel} ${new Date(options.checkedAt).toLocaleString()}`);
+	meta.setText(parts.join(' · '));
 }
 
 function attentionMetric(container: HTMLElement, value: number, label: string, icon: string): void {
 	const metric = container.createDiv('ssb-attention-metric');
+	metric.setAttribute('aria-label', `${label}: ${value}`);
 	setIcon(metric.createSpan('ssb-attention-metric-icon'), icon);
 	metric.createSpan({ text: String(value), cls: 'ssb-attention-metric-value' });
 	metric.createSpan({ text: label, cls: 'ssb-attention-metric-label' });

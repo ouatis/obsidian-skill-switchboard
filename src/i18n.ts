@@ -142,6 +142,9 @@ export interface Strings {
 	noSkillsTitle: string;
 	noSkillsDescription: string;
 	readOnlyScan: string;
+	evidenceSummary: string;
+	indexedAtLabel: string;
+	checkedAtLabel: string;
 	noDescription: string;
 	technicalDetails: string;
 	sourcePath: string;
