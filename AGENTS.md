@@ -85,6 +85,22 @@ npm run build
     ```
 - Reload Obsidian and enable the plugin in **Settings → Community plugins**.
 
+## Verification & snapshots
+
+- `npm run verify` is the single gate: `audit:deps` → `lint` → `npm test` → `build`.
+- `npm test` runs `scripts/run-tests.mjs`, which discovers every `scripts/test-*.mjs` in sorted order
+  and fails fast; `test-ui-live.mjs` and `test-package-ui-live.mjs` are excluded (they need a real
+  Obsidian CLI + vault) and remain manual steps.
+- CI (`lint.yml`) runs audit + build + `npm test` + lint across the Node matrix and a three-OS
+  portability job; `release.yml` audits and tests before building a tagged release.
+- Repair and distribution writes go through `installPackage`, which snapshots the displaced target
+  tree into `<plugin dir>/snapshots/<skill>/<timestamp>/` before the swap succeeds (5 newest per
+  skill, manifest records skill/target/fingerprint/files). Snapshot failures are reported as
+  `cleanupWarnings` and never block distribution; swap failures still restore the old tree.
+- `Skill Switchboard: Restore the latest skill snapshot` copies the newest snapshot back to its
+  recorded target after confirmation. The UI copy in both locales states the snapshot contract;
+  keep it in sync when changing retention or restore behavior.
+
 ## Commands & settings
 
 - Any user-facing commands should be added via `this.addCommand(...)`.
