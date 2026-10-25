@@ -5,7 +5,7 @@ export function svgElement<K extends keyof SVGElementTagNameMap>(
 	tag: K,
 	attributes: Record<string, string> = {},
 ): SVGElementTagNameMap[K] {
-	const element = parent.ownerDocument.createElementNS('http://www.w3.org/2000/svg', tag);
+	const element = (parent as Element & { createSvg: (tag: K) => SVGElementTagNameMap[K] }).createSvg(tag);
 	for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value);
 	parent.appendChild(element);
 	return element;

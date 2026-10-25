@@ -20,6 +20,9 @@ An Obsidian desktop plugin for keeping one canonical skill source in a synced
 vault and distributing complete packages to this computer's agents. Your existing
 vault sync carries the source between computers; Switchboard handles local files.
 It provides no cloud service, makes no network requests and collects no telemetry.
+All reads and writes stay inside the folders you configure — the skill source in
+your vault, your agent target folders, and the plugin's own folder for snapshots
+and status; nothing else on disk is touched.
 
 Quiet panels and thin rules share a visual rhythm with Desk Lamp, Scriptorium
 and Collate. The interface follows your Obsidian theme. English and Simplified

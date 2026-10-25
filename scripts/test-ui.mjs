@@ -21,6 +21,7 @@ try {
 		tag, namespace, ownerDocument: document, attributes: new Map(), children: [],
 		setAttribute(name, value) { this.attributes.set(name, value); },
 		appendChild(child) { this.children.push(child); },
+		createSvg(childTag) { return element(childTag); },
 	});
 	const ids = new Set();
 	for (const tag of ['svg', 'g', 'g', 'svg']) {

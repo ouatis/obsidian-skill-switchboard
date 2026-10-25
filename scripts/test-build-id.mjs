@@ -60,3 +60,30 @@ try {
 	await context.dispose();
 	await fs.rm(tempRoot, { recursive: true, force: true });
 }
+
+// Deterministic production identity: same revision → byte-identical bundles.
+const detRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'skill-switchboard-build-id-det-'));
+const detEntry = path.join(detRoot, 'entry.mjs');
+await fs.writeFile(
+	detEntry,
+	"import { BUILD_ID } from 'virtual:skill-switchboard-build-info';\nconsole.log(BUILD_ID);\n",
+	'utf8',
+);
+const detBuild = () => esbuild.build({
+	entryPoints: [detEntry],
+	bundle: true,
+	format: 'esm',
+	outfile: path.join(detRoot, 'bundle.mjs'),
+	plugins: [buildIdentityPlugin('fixture', { deterministic: true })],
+	logLevel: 'silent',
+});
+await detBuild();
+const detFirst = await fs.readFile(path.join(detRoot, 'bundle.mjs'), 'utf8');
+await detBuild();
+const detSecond = await fs.readFile(path.join(detRoot, 'bundle.mjs'), 'utf8');
+assert.equal(detSecond, detFirst, 'deterministic builds with the same revision are byte-identical');
+assert.ok(detFirst.includes('"fixture"'), 'deterministic BUILD_ID is the revision alone, with no timestamp');
+assert.doesNotMatch(detFirst, /\d{4}-\d{2}-\d{2}T/, 'deterministic BUILD_ID embeds no build time');
+await fs.rm(detRoot, { recursive: true, force: true });
+console.log('Deterministic build identity checks passed: production builds are reproducible.');
+
