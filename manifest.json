@@ -3,7 +3,7 @@
 	"name": "Skill Switchboard",
 	"version": "0.6.4",
 	"minAppVersion": "1.7.2",
-	"description": "Maintain skills in Obsidian and distribute complete, managed copies to local agents.",
+	"description": "Maintain skills in a synced vault and distribute complete, managed copies to local agents.",
 	"author": "SigiL",
 	"authorUrl": "https://github.com/ouatis",
 	"isDesktopOnly": true
