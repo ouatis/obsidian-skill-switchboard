@@ -73,6 +73,9 @@ export interface Strings {
 	noOutputToCopy: string;
 	copyCheckOutput: string;
 	restoreLastSnapshot: string;
+	snapshotsSection: string;
+	snapshotsDescription: string;
+	snapshotsLatest: (skill: string, target: string, files: number, time: string) => string;
 	restoreNone: string;
 	restoreTitle: string;
 	restoreConfirm: string;

@@ -6,9 +6,11 @@ import { RUNTIME_NAMES, RuntimeTarget, SkillRoot } from './types';
 import {
 	renderExternalPackagesSection,
 	renderRootsSection,
+	renderSnapshotsSection,
 	renderSyncSourceSection,
 	renderTargetsSection,
 } from './settings/sections';
+import { restoreLatestSnapshot } from './ui/snapshots';
 
 export interface SkillSwitchboardSettings {
 	roots: SkillRoot[];
@@ -226,6 +228,11 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 				control: { type: 'toggle', key: 'showDistributionBoard', defaultValue: DEFAULT_SETTINGS.showDistributionBoard },
 			},
 			{
+				name: strings.snapshotsSection,
+				desc: strings.snapshotsDescription,
+				action: () => void restoreLatestSnapshot(this.plugin),
+			},
+			{
 				name: strings.scanAutomatically,
 				desc: strings.scanAutomaticallyDescription,
 				control: { type: 'toggle', key: 'autoScan', defaultValue: DEFAULT_SETTINGS.autoScan },
@@ -381,6 +388,7 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 		this.renderSyncSource(containerEl, strings);
 		this.renderExternalPackages(containerEl, strings);
 		this.renderTargets(containerEl, strings);
+		this.renderSnapshots(containerEl, strings);
 	}
 
 	private renderRoots(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
@@ -397,6 +405,10 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 
 	private renderTargets(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
 		renderTargetsSection(this.plugin, containerEl, strings, () => this.refreshTab());
+	}
+
+	private renderSnapshots(containerEl: HTMLElement, strings: ReturnType<typeof getStrings>): void {
+		renderSnapshotsSection(this.plugin, containerEl, strings);
 	}
 }
 

@@ -1,4 +1,5 @@
 import { Notice, Setting } from 'obsidian';
+import { latestSnapshotSummary, restoreLatestSnapshot } from '../ui/snapshots';
 import type SkillSwitchboardPlugin from '../main';
 import type { Strings } from '../i18n';
 import { RUNTIME_NAMES, type RuntimeTarget, type SkillRoot } from '../types';
@@ -189,4 +190,34 @@ export function renderTargetsSection(
 			refreshTab();
 		}),
 	);
+}
+
+
+export function renderSnapshotsSection(
+	plugin: SkillSwitchboardPlugin,
+	containerEl: HTMLElement,
+	strings: Strings,
+): void {
+	new Setting(containerEl).setName(strings.snapshotsSection).setHeading();
+	containerEl.createEl('p', {
+		text: strings.snapshotsDescription,
+		cls: 'skill-switchboard-muted',
+	});
+	const row = new Setting(containerEl).setName(strings.snapshotsSection);
+	row.addButton((button) =>
+		button
+			.setButtonText(strings.restoreLastSnapshot)
+			.onClick(() => void restoreLatestSnapshot(plugin)),
+	);
+	void (async () => {
+		const latest = await latestSnapshotSummary(plugin);
+		if (!latest) {
+			row.setDesc(strings.restoreNone);
+			return;
+		}
+		const { skill, target, createdAt, files } = latest.manifest;
+		row.setDesc(
+			strings.snapshotsLatest(skill, target, files.length, new Date(createdAt).toLocaleString()),
+		);
+	})();
 }
