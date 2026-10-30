@@ -7,6 +7,23 @@ import { Strings } from '../i18n';
  * Modal and resolves a promise once the user picks an option.
  */
 export function confirmRepair(app: App, strings: Strings, message: string, details?: string, labels?: { title: string; confirm: string }): Promise<boolean> {
+	return confirmChoice(app, strings, message, details, labels, 'mod-warning');
+}
+
+/** A non-destructive confirmation used before registering detected local paths. */
+export function confirmDetectedTargets(app: App, strings: Strings, details: string): Promise<boolean> {
+	return confirmChoice(app, strings, strings.detectedTargetsConfirmMessage, details,
+		{ title: strings.detectedTargetsConfirmTitle, confirm: strings.addDetectedTargets }, 'mod-cta');
+}
+
+function confirmChoice(
+	app: App,
+	strings: Strings,
+	message: string,
+	details: string | undefined,
+	labels: { title: string; confirm: string } | undefined,
+	confirmClass: string,
+): Promise<boolean> {
 	return new Promise((resolve) => {
 		let settled = false;
 		const finish = (value: boolean) => {
@@ -28,7 +45,7 @@ export function confirmRepair(app: App, strings: Strings, message: string, detai
 
 		const confirm = buttons.createEl('button', {
 			text: labels?.confirm ?? strings.confirmRepair,
-			cls: 'mod-warning',
+			cls: confirmClass,
 		});
 		confirm.addEventListener('click', () => {
 			finish(true);

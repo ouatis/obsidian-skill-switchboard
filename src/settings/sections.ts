@@ -165,6 +165,17 @@ export function renderTargetsSection(
 		);
 	});
 
+	new Setting(containerEl)
+		.setDesc(strings.detectRuntimeTargetsDescription)
+		.addButton((button) => button.setButtonText(strings.detectRuntimeTargets).onClick(async () => {
+			button.setDisabled(true);
+			try {
+				await plugin.detectRuntimeTargets();
+			} finally {
+				button.setDisabled(false);
+			}
+		}));
+
 	new Setting(containerEl).addButton((button) =>
 		button.setButtonText(strings.addRuntimeTarget).onClick(async () => {
 			plugin.settings.targets.push({

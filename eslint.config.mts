@@ -27,6 +27,7 @@ export default defineConfig(
 		'scripts/test-status-write-queue.mjs',
 		'scripts/test-adapter-run.mjs',
 		'scripts/test-vault-change-impact.mjs',
+		'scripts/test-target-discovery.mjs',
 		'scripts/test-distribution.mjs',
 		'scripts/test-ui.mjs',
 		'scripts/test-ui-live.mjs',

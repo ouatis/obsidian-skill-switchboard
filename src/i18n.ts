@@ -194,6 +194,15 @@ export interface Strings {
 	symlink: string;
 	wrapper: string;
 	addRuntimeTarget: string;
+	detectRuntimeTargets: string;
+	detectRuntimeTargetsDescription: string;
+	detectRuntimeTargetsEmpty: string;
+	detectRuntimeTargetsAlreadyConfigured: string;
+	detectRuntimeTargetsFailed: string;
+	detectedTargetsConfirmTitle: string;
+	detectedTargetsConfirmMessage: string;
+	addDetectedTargets: string;
+	detectedTargetsAdded: (count: number) => string;
 	newTarget: string;
 }
 

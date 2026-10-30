@@ -20,6 +20,7 @@
 		"test:adapter": "node scripts/test-adapter-run.mjs",
 		"test:automatic": "node scripts/test-automatic.mjs",
 		"test:vault-changes": "node scripts/test-vault-change-impact.mjs",
+		"test:target-discovery": "node scripts/test-target-discovery.mjs",
 		"test:distribution": "node scripts/test-distribution.mjs",
 		"test:ui": "node scripts/test-ui.mjs",
 		"test:ui:live": "node scripts/test-ui-live.mjs",

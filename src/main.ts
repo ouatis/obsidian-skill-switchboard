@@ -12,7 +12,7 @@ import { notifyWithCopy } from './ui/notice';
 import { checkState, runRecord, writePluginStatus } from './status';
 import { getStrings } from './i18n';
 import { registerCommands } from './commands';
-import { confirmRepair } from './ui/confirm-modal';
+import { confirmDetectedTargets, confirmRepair } from './ui/confirm-modal';
 import { repairPlanDetails } from './ui/repair-plan';
 import type { AdapterCheckResult } from './sync/result';
 import { createSyncProvider, ManifestCheckResult, SyncProvider, type SyncManifestSnapshot } from './sync-provider';
@@ -33,7 +33,8 @@ import { resolveSyncSource, settingsCheckKey } from './sync/source';
 import { getVaultChangeImpact } from './sync/vault-change-impact';
 import { localPackageRegistryPath, readLocalPackagePaths, resolveLocalPackagePath, saveLocalPackagePath } from './sync/package-paths';
 import { existingRealPath } from './sync/filesystem';
-import { pathsOverlap } from './utils/paths';
+import { pathsOverlap, resolveConfiguredPath } from './utils/paths';
+import { discoverRuntimeTargets, type DiscoveredRuntimeTarget } from './sync/target-discovery';
 import { machineSettingsPath, readMachineSettings, restoredSettings, hasLegacyConnections, persistSettings } from './settings/storage';
 import { AutomaticDistribution } from './sync/automatic-distribution';
 import { resolveAutomaticScope } from './sync/automatic-scope';
@@ -290,6 +291,68 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	async reloadLocalPackagePaths(): Promise<void> {
 		try { this.localPackagePaths = await readLocalPackagePaths(this.packageRegistryPath); this.localPackagePathsError = ''; }
 		catch (error) { this.localPackagePaths = {}; this.localPackagePathsError = error instanceof Error ? error.message : String(error); }
+	}
+
+	/** Detect and register standard runtime folders only after an explicit confirmation. */
+	async detectRuntimeTargets(): Promise<void> {
+		const strings = getStrings(this.settings.language);
+		let discovered: DiscoveredRuntimeTarget[];
+		try {
+			discovered = await discoverRuntimeTargets();
+		} catch (error) {
+			new Notice(`${strings.detectRuntimeTargetsFailed}: ${error instanceof Error ? error.message : String(error)}`);
+			return;
+		}
+		if (discovered.length === 0) {
+			new Notice(strings.detectRuntimeTargetsEmpty);
+			return;
+		}
+
+		const vaultPath = this.getVaultBasePath() ?? process.cwd();
+		const normalizedPath = (value: string): string => {
+			const resolved = path.resolve(resolveConfiguredPath(value, vaultPath));
+			return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+		};
+		const registeredPaths = new Set(this.settings.targets.flatMap((target) => {
+			if (!target.path.trim()) return [];
+			try { return [normalizedPath(target.path)]; } catch { return []; }
+		}));
+		const additions = discovered.filter((target) => !registeredPaths.has(normalizedPath(target.path)));
+		if (additions.length === 0) {
+			new Notice(strings.detectRuntimeTargetsAlreadyConfigured);
+			return;
+		}
+
+		const details = additions.map((target) => `${target.label} · ${target.path}`).join('\n');
+		if (!await confirmDetectedTargets(this.app, strings, details)) return;
+
+		const currentPaths = new Set(this.settings.targets.flatMap((target) => {
+			if (!target.path.trim()) return [];
+			try { return [normalizedPath(target.path)]; } catch { return []; }
+		}));
+		const confirmedAdditions = additions.filter((target) => !currentPaths.has(normalizedPath(target.path)));
+		if (confirmedAdditions.length === 0) {
+			new Notice(strings.detectRuntimeTargetsAlreadyConfigured);
+			return;
+		}
+
+		const idPrefix = Date.now().toString(36);
+		this.settings.targets.push(...confirmedAdditions.map((target, index) => ({
+			id: `detected-${idPrefix}-${index.toString(36)}`,
+			label: target.label,
+			path: target.path,
+			runtime: target.runtime,
+			mode: 'copy' as const,
+			enabled: true,
+		})));
+		try {
+			await this.saveSettings();
+			this.settingsTab?.refreshAutomaticState();
+			new Notice(strings.detectedTargetsAdded(confirmedAdditions.length));
+		} catch (error) {
+			this.settings.targets = this.settings.targets.filter((target) => !target.id.startsWith(`detected-${idPrefix}-`));
+			new Notice(`${strings.detectRuntimeTargetsFailed}: ${error instanceof Error ? error.message : String(error)}`);
+		}
 	}
 
 	async saveExternalPackagePath(id: string, directory: string): Promise<void> {
