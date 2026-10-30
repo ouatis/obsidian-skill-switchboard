@@ -119,7 +119,7 @@ export const ZH_CN: Strings = {
 	chooseSource: '选择来源',
 	chooseAgent: '选择 Agent',
 	syncManifest: '适配器清单',
-	syncManifestDescription: '可选。留空时直接发现标准 SKILL.md 目录；若来源旁有 skills-manifest.json 则使用它。手动指定的清单必须存在。',
+	syncManifestDescription: '可选。留空时会在库内自动探测技能目录，并使用其旁边的 skills-manifest.json（若存在）；手动指定的清单必须存在。',
 	syncManifestAuto: '自动发现或使用相邻清单',
 	externalPackages: '外部工具包',
 	externalPackagesDescription: '路径仅保存在本机库外，Agent 共用同一登记文件。工具包只读，不随 Obsidian Sync 同步；无需更改技能来源。',

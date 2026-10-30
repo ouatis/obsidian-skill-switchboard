@@ -29,7 +29,7 @@ import {
 	type AdapterRun,
 } from './sync/adapter-run';
 import { CheckFreshness } from './sync/freshness';
-import { resolveSyncSource, settingsCheckKey } from './sync/source';
+import { resolveSyncSource, resolveSyncSourceForVault, settingsCheckKey } from './sync/source';
 import { getVaultChangeImpact } from './sync/vault-change-impact';
 import { localPackageRegistryPath, readLocalPackagePaths, resolveLocalPackagePath, saveLocalPackagePath } from './sync/package-paths';
 import { existingRealPath } from './sync/filesystem';
@@ -62,6 +62,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	syncProvider: SyncProvider = createSyncProvider();
 	lastRepairSummary: RepairSummary | null = null;
 	private readonly freshness = new CheckFreshness();
+	private autoDiscoveredSource: { sharedRoot: string; manifestPath: string } | null = null;
 	private checkTimer: number | null = null;
 	private rootRefreshTimer: number | null = null;
 	private rootsRefreshPending = false;
@@ -97,7 +98,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	async onload(): Promise<void> {
 		await this.loadSettings();
 		await this.reloadLocalPackagePaths();
-		this.syncProvider = createSyncProvider((vaultPath) => ({ ...resolveSyncSource(vaultPath, this.settings), packageRegistryPath: this.packageRegistryPath }));
+		this.syncProvider = createSyncProvider(async (vaultPath) => ({ ...await resolveSyncSourceForVault(vaultPath, this.settings), packageRegistryPath: this.packageRegistryPath }));
 		const strings = getStrings(this.settings.language);
 
 		this.registerView(
@@ -186,7 +187,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 	 * is small, so the whole scan is repeated rather than patched in place.
 	 */
 	private onVaultChanged(...changedPaths: string[]): void {
-		const impact = getVaultChangeImpact(changedPaths, this.settings, this.getVaultBasePath());
+		const impact = getVaultChangeImpact(changedPaths, this.settings, this.getVaultBasePath(), this.autoDiscoveredSource);
 		if (impact.affectsChecks) { this.invalidateChecks(); this.scheduleBackgroundCheck(); }
 		if (!impact.affectsIndex) return;
 		if (!this.settings.autoScan) { this.clearQueuedScan(); return; }
@@ -360,11 +361,15 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		const vaultPath = this.getVaultBasePath();
 		if (directory.trim() && vaultPath) {
 			const source = resolveSyncSource(vaultPath, this.settings).sharedRoot;
-			const [realVault, realSource, realDirectory] = await Promise.all([
+			const [realVault, realDirectory] = await Promise.all([
 				existingRealPath(vaultPath),
-				existingRealPath(source),
 				existingRealPath(resolveLocalPackagePath(directory)),
 			]);
+			let realSource = source;
+			try { realSource = await existingRealPath(source); }
+			catch (error) {
+				if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
+			}
 			if (pathsOverlap(realVault, realDirectory) || pathsOverlap(realSource, realDirectory)) {
 				throw new Error('External tool packages must not overlap the vault or canonical source.');
 			}
@@ -403,6 +408,22 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		this.rootsRefreshPending = false;
 		const revision = ++this.indexRevision;
 		const roots = this.settings.roots.map((root) => ({ ...root }));
+		const vaultPath = this.getVaultBasePath();
+		this.autoDiscoveredSource = null;
+		if (vaultPath) {
+			try {
+				const source = await resolveSyncSourceForVault(vaultPath, this.settings);
+				if (source.autoDiscovered) this.autoDiscoveredSource = { sharedRoot: source.sharedRoot, manifestPath: source.manifestPath };
+				if (source.autoDiscovered) {
+					const selected = this.settings.roots.find((root) => root.id === this.settings.syncRootId)
+						?? (!this.settings.syncRootId ? this.settings.roots.find((root) => root.enabled && root.path.trim()) : undefined);
+					const indexedRoot = roots.find((root) => root.id === selected?.id);
+					if (indexedRoot) indexedRoot.path = path.relative(vaultPath, source.sharedRoot).replaceAll(path.sep, '/');
+				}
+			} catch {
+				// The source check reports discovery errors; keep the index refresh usable.
+			}
+		}
 		const index = await scanConfiguredRoots(this.app, roots);
 		if (this.disposed || revision !== this.indexRevision) return;
 		this.index = index;

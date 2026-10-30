@@ -124,12 +124,15 @@ export class SkillSwitchboardView extends ItemView {
 
 	private distributionModel() {
 		const plugin = this.plugin;
+		const sourceSnapshot = plugin.manifestCheck?.snapshot;
 		const blocked = plugin.manifestCheck?.status === 'failed'
 			|| (plugin.adapterCheck?.status === 'failed' && plugin.targetChecks.length === 0);
 		return {
 			nodes: distributionNodes({ targets: plugin.settings.targets, checks: plugin.targetChecks, activity: plugin.targetActivity, blocked }),
 			// Use the active sync provider's canonical path, not an unrelated indexing root.
-			sourcePath: plugin.settings.roots.find((root) => root.id === plugin.settings.syncRootId)?.path ?? '',
+			sourcePath: sourceSnapshot
+				? sourceSnapshot.sharedPrefix.replace(/\/$/, '') || sourceSnapshot.sharedRoot
+				: plugin.settings.roots.find((root) => root.id === plugin.settings.syncRootId)?.path ?? '',
 			sourceUnavailable: blocked,
 			checkedAt: plugin.targetCheckedAt,
 			strings: getStrings(plugin.settings.language),

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { SkillSwitchboardSettings } from '../settings';
 import { existingRealPath } from './filesystem';
-import { resolveSyncSource } from './source';
+import { resolveSyncSourceForVault } from './source';
 import { getRepairTargets } from './adapter-run';
 import { isInside, pathsOverlap, resolveConfiguredPath } from '../utils/paths';
 
@@ -18,7 +18,7 @@ export function automaticWiringKey(settings: SkillSwitchboardSettings): string {
 
 export async function resolveAutomaticScope(vaultPath: string, settings: SkillSwitchboardSettings): Promise<AutomaticScope> {
 	const wiring = automaticWiringKey(settings);
-	const location = resolveSyncSource(vaultPath, settings);
+	const location = await resolveSyncSourceForVault(vaultPath, settings);
 	const configured = getRepairTargets(settings.targets).map((target) => ({ ...target })).sort((a, b) => a.id.localeCompare(b.id));
 	if (!configured.length) throw new Error('Configure at least one Agent target before authorizing automatic distribution.');
 	const [vault, source, manifest] = await Promise.all([existingRealPath(vaultPath), existingRealPath(location.sharedRoot), existingRealPath(location.manifestPath)]);

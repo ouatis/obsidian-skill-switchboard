@@ -22,12 +22,14 @@ export interface SyncProvider {
 	repairRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot?: SyncManifestSnapshot, control?: RepairControl): Promise<SyncRepairResult>;
 }
 
+type SyncSourceResolver = (vaultPath: string) => ManifestLocation | Promise<ManifestLocation>;
+
 export class NativeSyncProvider implements SyncProvider {
 	readonly id = 'native';
-	constructor(private readonly source?: (vaultPath: string) => ManifestLocation) {}
+	constructor(private readonly source?: SyncSourceResolver) {}
 
 	async inspectManifest(vaultPath: string): Promise<ManifestCheckResult> {
-		try { return await inspectManifest(vaultPath, this.source?.(vaultPath)); }
+		try { return await inspectManifest(vaultPath, await this.source?.(vaultPath)); }
 		catch (error) { return { status: 'failed', output: error instanceof Error ? error.message : String(error), exitCode: 1, snapshot: null }; }
 	}
 
@@ -54,6 +56,6 @@ export class NativeSyncProvider implements SyncProvider {
 	}
 }
 
-export function createSyncProvider(source?: (vaultPath: string) => ManifestLocation): SyncProvider {
+export function createSyncProvider(source?: SyncSourceResolver): SyncProvider {
 	return new NativeSyncProvider(source);
 }

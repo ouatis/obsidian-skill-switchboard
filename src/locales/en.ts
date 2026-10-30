@@ -119,7 +119,7 @@ export const EN: Strings = {
 	chooseSource: 'Choose a source',
 	chooseAgent: 'Choose an agent',
 	syncManifest: 'Adapter manifest',
-	syncManifestDescription: 'Optional. Leave blank to discover standard SKILL.md directories, or use a sibling skills-manifest.json when present. An explicit path must exist.',
+	syncManifestDescription: 'Optional. Leave blank to auto-detect a skills folder in the vault and use its sibling skills-manifest.json when present; otherwise standard SKILL.md directories are discovered directly. An explicit path must exist.',
 	syncManifestAuto: 'Automatic discovery or sibling manifest',
 	externalPackages: 'External tool packages',
 	externalPackagesDescription: 'Paths are saved only on this computer, outside the vault. Agents use the same registry. Tool packages are read-only and do not travel through Obsidian Sync.',

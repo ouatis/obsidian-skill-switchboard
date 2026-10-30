@@ -9,6 +9,8 @@ export interface VaultChangeImpact {
 	affectsChecks: boolean;
 }
 
+export interface ResolvedVaultSource { sharedRoot: string; manifestPath: string }
+
 /**
  * Decide which cached plugin state a set of vault-relative file changes affects.
  * Invalid source settings leave manifest matching unavailable; the next check
@@ -19,11 +21,12 @@ export function getVaultChangeImpact(
 	changedPaths: string[],
 	settings: SyncSourceSettings,
 	vaultPath: string | null,
+	resolvedSource?: ResolvedVaultSource | null,
 ): VaultChangeImpact {
 	const normalizedRoots = settings.roots
 		.filter((root) => root.enabled && root.kind === 'vault' && root.path.trim())
 		.map((root) => normalizeVaultPath(root.path));
-	const affectsIndex = changedPaths.some((changedPath) =>
+	let affectsIndex = changedPaths.some((changedPath) =>
 		normalizedRoots.some((root) => changedPath === root || changedPath.startsWith(`${root}/`)),
 	);
 	let affectsChecks = affectsIndex;
@@ -31,9 +34,20 @@ export function getVaultChangeImpact(
 		if (vaultPath) {
 			const source = resolveSyncSource(vaultPath, settings);
 			affectsChecks ||= changedPaths.some((changedPath) => path.resolve(vaultPath, changedPath) === source.manifestPath);
+			if (resolvedSource) {
+				affectsChecks ||= changedPaths.some((changedPath) => path.resolve(vaultPath, changedPath) === path.resolve(resolvedSource.manifestPath));
+			}
 		}
 	} catch {
 		// Invalid source configuration is reported by the next check.
+	}
+	if (vaultPath && resolvedSource) {
+		const affectsResolvedSource = changedPaths.some((changedPath) => {
+			const changed = path.resolve(vaultPath, changedPath);
+			return changed === resolvedSource.sharedRoot || changed.startsWith(`${resolvedSource.sharedRoot}${path.sep}`);
+		});
+		affectsIndex ||= affectsResolvedSource;
+		affectsChecks ||= affectsResolvedSource;
 	}
 	return { affectsIndex, affectsChecks };
 }

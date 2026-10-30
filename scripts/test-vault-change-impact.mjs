@@ -43,6 +43,16 @@ try {
 		affectsIndex: false,
 		affectsChecks: true,
 	}, 'the selected manifest invalidates checks without forcing an index scan');
+	const detectedRoot = path.join(vaultPath, '00-MEMORTE', 'shared', 'skills');
+	const detectedSource = { sharedRoot: detectedRoot, manifestPath: path.join(path.dirname(detectedRoot), 'skills-manifest.json') };
+	assert.deepEqual(getVaultChangeImpact(['00-MEMORTE/shared/skills/drawing/SKILL.md'], settings, vaultPath, detectedSource), {
+		affectsIndex: true,
+		affectsChecks: true,
+	}, 'changes under an auto-detected source invalidate its index and checks');
+	assert.deepEqual(getVaultChangeImpact(['00-MEMORTE/shared/skills-manifest.json'], settings, vaultPath, detectedSource), {
+		affectsIndex: false,
+		affectsChecks: true,
+	}, 'the auto-detected sibling manifest invalidates checks without rescanning skills');
 	assert.deepEqual(getVaultChangeImpact(['outside/note.md', 'archive/note.md', 'other/note.md'], settings, vaultPath), {
 		affectsIndex: false,
 		affectsChecks: false,
