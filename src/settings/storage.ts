@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { SkillSwitchboardSettings } from '../settings';
 
 const CONNECTION_KEYS = ['roots', 'targets', 'syncRootId', 'syncManifestPath', 'autoDistribute', 'autoDistributeScope'] as const;
-const PREFERENCE_KEYS = ['language', 'autoScan', 'autoCheck', 'scanDelayMs', 'showDistributionBoard'] as const;
+const PREFERENCE_KEYS = ['language', 'viewLocation', 'autoScan', 'autoCheck', 'scanDelayMs', 'showDistributionBoard'] as const;
 type ConnectionSettings = Pick<SkillSwitchboardSettings, typeof CONNECTION_KEYS[number]>;
 type SharedSettings = Pick<SkillSwitchboardSettings, typeof PREFERENCE_KEYS[number]> & { settingsStorageVersion: 2 };
 

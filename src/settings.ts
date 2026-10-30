@@ -14,6 +14,7 @@ export interface SkillSwitchboardSettings {
 	roots: SkillRoot[];
 	targets: RuntimeTarget[];
 	language: Language;
+	viewLocation: 'center' | 'sidebar';
 	autoScan: boolean;
 	scanDelayMs: number;
 	showDistributionBoard: boolean;
@@ -37,6 +38,7 @@ export const DEFAULT_SETTINGS: SkillSwitchboardSettings = {
 	],
 	targets: [],
 	language: 'en',
+	viewLocation: 'center',
 	autoScan: false,
 	scanDelayMs: 500,
 	showDistributionBoard: true,
@@ -128,6 +130,7 @@ export function normalizeSettings(value: unknown): SettingsNormalization {
 	const recovered = (value !== null && value !== undefined && !isRecord(value)) ||
 		roots.recovered || targets.recovered ||
 		hasInvalidValue('language', (candidate) => candidate === 'en' || candidate === 'zh-CN') ||
+		hasInvalidValue('viewLocation', (candidate) => candidate === 'center' || candidate === 'sidebar') ||
 		hasInvalidValue('autoScan', (candidate) => typeof candidate === 'boolean') ||
 		hasInvalidValue('scanDelayMs', (candidate) => typeof candidate === 'number' && Number.isFinite(candidate) && candidate >= 0) ||
 		hasInvalidValue('showDistributionBoard', (candidate) => typeof candidate === 'boolean') ||
@@ -138,6 +141,7 @@ export function normalizeSettings(value: unknown): SettingsNormalization {
 		roots: roots.items,
 		targets: targets.items,
 		language: data.language === 'zh-CN' ? 'zh-CN' : DEFAULT_SETTINGS.language,
+		viewLocation: data.viewLocation === 'sidebar' ? 'sidebar' : DEFAULT_SETTINGS.viewLocation,
 		autoScan: typeof data.autoScan === 'boolean' ? data.autoScan : DEFAULT_SETTINGS.autoScan,
 		scanDelayMs: typeof data.scanDelayMs === 'number' && Number.isFinite(data.scanDelayMs) && data.scanDelayMs >= 0
 			? data.scanDelayMs
@@ -202,6 +206,16 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 				},
 			},
 			{
+				name: strings.viewLocation,
+				desc: strings.viewLocationDescription,
+				control: {
+					type: 'dropdown',
+					key: 'viewLocation',
+					options: { center: strings.viewLocationCenter, sidebar: strings.viewLocationSidebar },
+					defaultValue: DEFAULT_SETTINGS.viewLocation,
+				},
+			},
+			{
 				name: strings.autoCheck,
 				desc: strings.autoCheckDescription,
 				control: { type: 'toggle', key: 'autoCheck', defaultValue: DEFAULT_SETTINGS.autoCheck },
@@ -245,6 +259,10 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 			return;
 		}
 		if (key === 'language') this.plugin.settings.language = value === 'zh-CN' ? 'zh-CN' : 'en';
+		else if (key === 'viewLocation') {
+			if (value !== 'center' && value !== 'sidebar') throw new Error('Expected a view location.');
+			this.plugin.settings.viewLocation = value;
+		}
 		else if (key === 'autoCheck' || key === 'autoScan' || key === 'showDistributionBoard') {
 			if (typeof value !== 'boolean') throw new Error('Expected a toggle value.');
 			if (key === 'showDistributionBoard') { await this.plugin.setDistributionBoardVisible(value); return; }
@@ -298,6 +316,21 @@ export class SkillSwitchboardSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 						this.refreshTab();
 						await this.plugin.refreshIndex(false);
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName(strings.viewLocation)
+			.setDesc(strings.viewLocationDescription)
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption('center', strings.viewLocationCenter)
+					.addOption('sidebar', strings.viewLocationSidebar)
+					.setValue(this.plugin.settings.viewLocation)
+					.onChange(async (value) => {
+						if (value !== 'center' && value !== 'sidebar') return;
+						this.plugin.settings.viewLocation = value;
+						await this.plugin.saveSettings();
 					}),
 			);
 

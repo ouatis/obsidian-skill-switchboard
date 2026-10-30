@@ -1,4 +1,5 @@
 import { Notice, Plugin } from 'obsidian';
+import type { WorkspaceItem, WorkspaceLeaf } from 'obsidian';
 import path from 'node:path';
 import {
 	normalizeSettings,
@@ -591,16 +592,33 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		const existing = this.app.workspace.getLeavesOfType(
 			VIEW_TYPE_SKILL_SWITCHBOARD,
 		)[0];
-		if (existing) {
+		const wantsSidebar = this.settings.viewLocation === 'sidebar';
+		if (existing && this.isLeafInSidebar(existing) === wantsSidebar) {
 			await this.app.workspace.revealLeaf(existing);
 			this.scheduleBackgroundCheck();
 			return;
 		}
 
-		const leaf = this.app.workspace.getRightLeaf(false);
+		const leaf = wantsSidebar
+			? this.app.workspace.getRightLeaf(false)
+			: this.app.workspace.getLeaf('tab');
 		if (!leaf) return;
-		await leaf.setViewState({ type: VIEW_TYPE_SKILL_SWITCHBOARD, active: true });
+		const currentState = existing?.getViewState();
+		await leaf.setViewState(currentState
+			? { ...currentState, type: VIEW_TYPE_SKILL_SWITCHBOARD, active: true }
+			: { type: VIEW_TYPE_SKILL_SWITCHBOARD, active: true });
+		if (existing && existing !== leaf) existing.detach();
 		await this.app.workspace.revealLeaf(leaf);
 		this.scheduleBackgroundCheck();
+	}
+
+	private isLeafInSidebar(leaf: WorkspaceLeaf): boolean {
+		let parent: WorkspaceItem | null = leaf.parent;
+		while (parent) {
+			if (parent === this.app.workspace.leftSplit || parent === this.app.workspace.rightSplit) return true;
+			if (parent === this.app.workspace.rootSplit) return false;
+			parent = parent.parent;
+		}
+		return false;
 	}
 }

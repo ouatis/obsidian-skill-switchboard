@@ -39,13 +39,14 @@ try{
         roots:[null,{id:42,label:'invalid',path:'bad',kind:'vault',enabled:true},recoveredRoot,recoveredRoot],
         targets:[{id:'invalid',label:'Invalid',path:'bad',mode:'wrapper',runtime:'unknown',enabled:true},recoveredTarget,recoveredTarget],
         harnesses:[{id:'invalid',label:'Invalid',command:'run',enabled:'yes'},recoveredHarness],
-        language:'fr',autoScan:'false',autoCheck:0,showDistributionBoard:'false',scanDelayMs:'fast',syncRootId:42,syncManifestPath:[],
+        language:'fr',viewLocation:'popup',autoScan:'false',autoCheck:0,showDistributionBoard:'false',scanDelayMs:'fast',syncRootId:42,syncManifestPath:[],
     }});
     await settingsFixture.loadSettings();
     assert.deepEqual(settingsFixture.settings.roots,[recoveredRoot],'malformed and duplicate roots are removed while valid paths survive');
     assert.deepEqual(settingsFixture.settings.targets,[{...recoveredTarget,mode:'copy'}],'targets with unknown runtimes are rejected before use');
     assert.equal(settingsFixture.settings.harnesses,undefined,'retired harness records never reach active settings');
     assert.equal(settingsFixture.settings.language,'en');assert.equal(settingsFixture.settings.autoScan,false);assert.equal(settingsFixture.settings.autoCheck,true);
+    assert.equal(settingsFixture.settings.viewLocation,'center','an invalid opening location recovers to the centered default');
     assert.equal(settingsFixture.settings.showDistributionBoard,true);assert.equal(settingsFixture.settings.scanDelayMs,500);
     assert.equal(settingsFixture.settings.syncRootId,'recovered');assert.equal(settingsFixture.settings.syncManifestPath,'');
     assert.equal(globalThis.fixtureNotices,1);assert.match(globalThis.fixtureNoticeMessages.at(-1),/Some saved settings were invalid/,'settings recovery is visible in the selected language');
@@ -65,6 +66,7 @@ try{
     const app={saved:{roots:[root],targets:[target],harnesses:[],language:'zh-CN',autoScan:false,autoCheck:false,scanDelayMs:500,showDistributionBoard:true},vault:{...vaultEvents,getMarkdownFiles:()=>{vaultScans++;return[{path:'team/skills/test.md',name:'test.md'},{path:'other/skills/new.md',name:'new.md'}];},read:async()=>content,adapter:{getBasePath:()=>vaultPath}},workspace:{...workspaceEvents,layoutReady:true,getLeavesOfType:()=>[],onLayoutReady:callback=>callback()}};
     plugin=new Plugin(app);Object.defineProperty(plugin,'machineSettingsPath',{get:()=>path.join(tempRoot,'machine','settings.json')});
     await plugin.onload();assert.equal(plugin.settings.syncRootId,'team');assert.equal(plugin.settings.language,'zh-CN');assert.deepEqual(plugin.settings.roots,[root]);
+    assert.equal(plugin.settings.viewLocation,'center','the default view location opens in the main area');
     assert.equal(app.saved.roots,undefined,'legacy source paths are removed from shared settings after successful local migration');
     assert.deepEqual(JSON.parse(await fs.readFile(plugin.machineSettingsPath,'utf8')).connections.targets,[target]);
     const upgradedStatus=await waitForStatus(value=>value.buildId==='fixture-build-001');assert.equal(upgradedStatus.pluginVersion,'fixture');assert.equal(upgradedStatus.lastCheck.output,'legacy check preserved');assert.equal(upgradedStatus.currentCheck.state,'stale');
@@ -74,13 +76,41 @@ try{
     for(const method of sectionMethods)tab[method]=()=>sectionCalls.push(method);
     for(const definition of tab.getSettingDefinitions())if(definition.render)definition.render({});
     assert.deepEqual(sectionCalls,sectionMethods,'native settings definitions must actually invoke every dynamic editor');
+    const locationControl=tab.getSettingDefinitions().find(definition=>definition.control?.key==='viewLocation');
+    assert.deepEqual(locationControl?.control?.options,{center:'中间区域',sidebar:'侧边栏'},'the location setting exposes both destinations');
     delete tab.renderSection;for(const method of sectionMethods)delete tab[method];
     let settingRefreshes=0;tab.refreshTab=()=>{settingRefreshes++;};
     await tab.setControlValue('language','en');assert.equal(app.saved.language,'en');
     await tab.setControlValue('language','zh-CN');assert.equal(app.saved.language,'zh-CN');assert.equal(settingRefreshes,2);assert.equal(app.saved.roots,undefined);
+    await tab.setControlValue('viewLocation','sidebar');assert.equal(plugin.settings.viewLocation,'sidebar');assert.equal(app.saved.viewLocation,'sidebar');
+    await tab.setControlValue('viewLocation','center');assert.equal(plugin.settings.viewLocation,'center');
     await tab.setControlValue('scanDelayMs',NaN);assert.equal(plugin.settings.scanDelayMs,500);
-    await assert.rejects(()=>tab.setControlValue('autoCheck','false'));await assert.rejects(()=>tab.setControlValue('unknown',true));
+    await assert.rejects(()=>tab.setControlValue('viewLocation','popup'));await assert.rejects(()=>tab.setControlValue('autoCheck','false'));await assert.rejects(()=>tab.setControlValue('unknown',true));
     delete tab.refreshTab;
+    const workspace=app.workspace, centerArea={}, sidebarArea={};
+    workspace.rootSplit=centerArea;workspace.rightSplit=sidebarArea;workspace.leftSplit={};
+    let activeViewLeaf=null, revealedLeaf=null, centerOpens=0, sidebarOpens=0;
+    const makeViewLeaf=(area)=>({
+        parent:{parent:area},
+        getViewState(){return {type:'skill-switchboard-view',state:{filter:'kept'}};},
+        async setViewState(state){this.state=state;activeViewLeaf=this;},
+        detach(){this.detached=true;if(activeViewLeaf===this)activeViewLeaf=null;},
+    });
+    workspace.getLeavesOfType=()=>activeViewLeaf?[activeViewLeaf]:[];
+    workspace.getLeaf=(kind)=>{assert.equal(kind,'tab');centerOpens++;return makeViewLeaf(centerArea);};
+    workspace.getRightLeaf=(split)=>{assert.equal(split,false);sidebarOpens++;return makeViewLeaf(sidebarArea);};
+    workspace.revealLeaf=async(leaf)=>{revealedLeaf=leaf;};
+    await plugin.activateView();
+    assert.equal(centerOpens,1);assert.equal(revealedLeaf,activeViewLeaf);assert.equal(activeViewLeaf.state.type,'skill-switchboard-view');
+    const centeredLeaf=activeViewLeaf;
+    plugin.settings.viewLocation='sidebar';await plugin.activateView();
+    assert.equal(sidebarOpens,1);assert.equal(centeredLeaf.detached,true,'reopening elsewhere moves instead of duplicating the view');
+    assert.equal(activeViewLeaf.parent.parent,sidebarArea);const sidebarLeaf=activeViewLeaf;
+    assert.equal(sidebarLeaf.state.state.filter,'kept','moving the view preserves its current state');
+    plugin.settings.viewLocation='center';await plugin.activateView();
+    assert.equal(centerOpens,2);assert.equal(sidebarLeaf.detached,true);assert.equal(activeViewLeaf.parent.parent,centerArea);
+    activeViewLeaf.detach();activeViewLeaf=null;
+    workspace.getLeavesOfType=()=>[];
     let writes=0,checks=0;
     const pass={status:'passed',output:'ok',exitCode:0};
     const provider={id:'fixture',inspectManifest:async()=>({...pass,snapshot:{},resources:{status:'passed',packages:[],crossDevice:'unverified'}}),checkRuntime:async()=>{checks++;return pass;},repairRuntime:async()=>{writes++;return pass;}};
@@ -140,7 +170,7 @@ try{
     plugin.settings.autoCheck=false;plugin.settings.autoScan=true;app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(timers.size,1,'auto-scan queues one trailing rescan');
     plugin.settings.autoScan=false;await plugin.saveSettings();assert.equal(timers.size,0,'disabling auto-scan cancels its queued rescan');
     plugin.settings.autoScan=true;const beforeDebouncedScan=vaultScans;app.vault.emit('modify',{path:'team/skills/test.md'});const firstScanTimer=[...timers.keys()][0];
-    app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(timers.size,1,'repeated edits stay in one debounce window');assert.equal(timers.has(firstScanTimer),false,'each edit restarts the scan delay');fire();assert.equal(vaultScans,beforeDebouncedScan+1,'a burst of edits performs one index scan');
+    app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(timers.size,1,'repeated edits stay in one debounce window');assert.equal(timers.has(firstScanTimer),false,'each edit restarts the scan delay');fire();for(let i=0;i<100&&vaultScans===beforeDebouncedScan;i++)await new Promise(resolve=>setTimeout(resolve,5));assert.equal(vaultScans,beforeDebouncedScan+1,'a burst of edits performs one index scan');
     plugin.settings.autoCheck=true;app.vault.emit('modify',{path:'team/skills/test.md'});assert.equal(timers.size,2,'a change queues one read-only check and one auto-scan');const beforeCoalescedScan=vaultScans;fire();await settle();assert.equal(vaultScans,beforeCoalescedScan+1,'the read-only check satisfies the queued auto-scan');
     plugin.settings.autoCheck=false;plugin.settings.autoScan=false;
     const originalRead=app.vault.read;let releaseOldRead,signalOldRead;const oldReadStarted=new Promise(resolve=>{signalOldRead=resolve;});

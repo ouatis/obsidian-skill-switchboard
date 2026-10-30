@@ -165,6 +165,10 @@ export interface Strings {
 	overviewDescription: string;
 	language: string;
 	languageDescription: string;
+	viewLocation: string;
+	viewLocationDescription: string;
+	viewLocationCenter: string;
+	viewLocationSidebar: string;
 	english: string;
 	chinese: string;
 	scanAutomatically: string;
