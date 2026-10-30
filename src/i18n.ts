@@ -102,6 +102,7 @@ export interface Strings {
 	resourceIssue: (code: string) => string;
 	crossDeviceLabel: string;
 	crossDeviceUnverified: string;
+	crossDeviceExplanation: string;
 	repairSummary: (targets: number, skills: number | null, files: number | null) => string;
 	repairChanges: string;
 	lastRepairResult: string;

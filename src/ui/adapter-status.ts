@@ -73,7 +73,9 @@ export function renderAdapterStatus(
 			}
 		}
 	}
-	section.createDiv({ text: `${strings.crossDeviceLabel} · ${strings.crossDeviceUnverified}`, cls: 'skill-switchboard-evidence-note' });
+	const otherDevices = section.createEl('details', { cls: 'skill-switchboard-details' });
+	otherDevices.createEl('summary', { text: `${strings.crossDeviceLabel} · ${strings.crossDeviceUnverified}`, cls: 'skill-switchboard-check-label' });
+	otherDevices.createDiv({ text: strings.crossDeviceExplanation, cls: 'skill-switchboard-evidence-note' });
 
 	if (repairRunning || repair) {
 		const passed = repair?.status === 'passed';
