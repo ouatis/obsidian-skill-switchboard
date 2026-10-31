@@ -43,7 +43,9 @@ try{
     await write(path.join(autoRoot,'drawing','SKILL.md'),'---\nname: drawing\ndescription: Draw diagrams.\n---\n# Drawing\n');
     await write(path.join(path.dirname(autoRoot),'skills-manifest.json'),JSON.stringify({schema_version:1,total_skills:1,skills:[{name:'drawing',shared_file:'drawing/SKILL.md',adapters:{codex:true}}]}));
     const autoLocation=await sources.resolveSyncSourceForVault(autoVault,autoSettings);
-    assert.equal(autoLocation.sharedRoot,autoRoot);assert.equal(autoLocation.manifestPath,path.join(path.dirname(autoRoot),'skills-manifest.json'));assert.equal(autoLocation.autoDiscovered,true);
+    // macOS resolves /var to /private/var, so compare the discovered root by real path.
+    const autoRootReal=await fs.realpath(autoRoot),autoParentReal=path.dirname(autoRootReal);
+    assert.equal(autoLocation.sharedRoot,autoRootReal);assert.equal(autoLocation.manifestPath,path.join(autoParentReal,'skills-manifest.json'));assert.equal(autoLocation.autoDiscovered,true);
     assert.equal((await native.inspectManifest(autoVault,autoLocation)).status,'passed','a stale default root resolves to the unique manifest-backed skills folder');
     await fs.mkdir(path.join(autoVault,'manual'),{recursive:true});
     const manualLocation=await sources.resolveSyncSourceForVault(autoVault,{...autoSettings,roots:[{...autoSettings.roots[0],path:'manual'}]});
