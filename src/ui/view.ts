@@ -1,0 +1,338 @@
+import { ItemView, Notice, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
+import type SkillSwitchboardPlugin from '../main';
+import { IndexedSkill } from '../types';
+import { getStrings, Strings } from '../i18n';
+import { copyTextToClipboard } from '../utils/clipboard';
+import { renderAdapterStatus } from './adapter-status';
+import { DistributionBoard } from './distribution-board';
+import { distributionNodes } from './distribution-state';
+import { openPluginSettings } from './open-settings';
+import { renderSkillCard } from './skill-card';
+import { renderAttentionSummary } from './attention-summary';
+import { renderSetupGuide } from './setup-guide';
+
+export const VIEW_TYPE_SKILL_SWITCHBOARD = 'skill-switchboard-view';
+
+export class SkillSwitchboardView extends ItemView {
+	plugin: SkillSwitchboardPlugin;
+	/** Live filter over the current index; not persisted because it is UI state, not configuration. */
+	private query = '';
+	private distributionBoard: DistributionBoard | null = null;
+
+	constructor(leaf: WorkspaceLeaf, plugin: SkillSwitchboardPlugin) {
+		super(leaf);
+		this.plugin = plugin;
+	}
+
+	getViewType(): string {
+		return VIEW_TYPE_SKILL_SWITCHBOARD;
+	}
+
+	getDisplayText(): string {
+		return getStrings(this.plugin.settings.language).viewTitle;
+	}
+
+	getIcon(): string {
+		return 'waypoints';
+	}
+
+	onOpen(): Promise<void> {
+		this.renderIndex();
+		return Promise.resolve();
+	}
+
+	onClose(): Promise<void> {
+		this.distributionBoard?.destroy();
+		this.distributionBoard = null;
+		this.contentEl.empty();
+		return Promise.resolve();
+	}
+
+	renderIndex(): void {
+		const strings = getStrings(this.plugin.settings.language);
+		this.contentEl.empty();
+		this.contentEl.addClass('skill-switchboard-view');
+		const contentEl = this.contentEl.createDiv('skill-switchboard-page');
+
+		this.renderHeader(contentEl, strings);
+
+		const enabledRoots = this.plugin.settings.roots.filter((root) => root.enabled && root.path).length;
+		const enabledTargets = this.plugin.settings.targets.filter((target) => target.enabled).length;
+		const selectedRoot = this.plugin.settings.roots.find((root) => root.id === this.plugin.settings.syncRootId)
+			?? (!this.plugin.settings.syncRootId ? this.plugin.settings.roots.find((root) => root.enabled) : undefined);
+		// One status line at the top: attention, read-only counts and automation.
+		renderAttentionSummary(contentEl, strings, {
+			checksStale: this.plugin.checksStale,
+			targetChecks: this.plugin.targetChecks,
+			sourceBlocked: this.plugin.manifestCheck?.status === 'failed',
+			resourcesBlocked: this.plugin.manifestCheck?.resources?.status === 'failed',
+			autoDistribute: this.plugin.settings.autoDistribute,
+			onRepair: () => void this.plugin.repairAllAdapters(),
+			stats: {
+				skills: this.plugin.index.skills.length,
+				roots: enabledRoots,
+				targets: enabledTargets,
+			},
+			scannedAt: this.plugin.index.scannedAt,
+			checkedAt: this.plugin.targetCheckedAt,
+		});
+		renderSetupGuide(contentEl, strings, {
+			sourceReady: Boolean(selectedRoot?.enabled && selectedRoot.path.trim()),
+			targetsReady: enabledTargets > 0,
+			indexReady: this.plugin.index.scannedAt > 0,
+		}, () => this.openSettings(), () => void this.plugin.refreshIndex(true));
+
+		if (this.plugin.settings.showDistributionBoard) {
+			if (this.distributionBoard) contentEl.appendChild(this.distributionBoard.element);
+			else this.distributionBoard = new DistributionBoard(contentEl, this.distributionModel(), () => {
+				void this.plugin.setDistributionBoardVisible(false);
+			});
+			this.updateDistributionBoard();
+		} else {
+			this.distributionBoard?.destroy();
+			this.distributionBoard = null;
+		}
+
+		if (this.plugin.index.errors.length > 0) {
+			const errorBox = contentEl.createDiv('skill-switchboard-errors');
+			errorBox.createEl('strong', { text: strings.scanWarnings });
+			for (const error of this.plugin.index.errors) errorBox.createDiv({ text: error });
+		}
+
+		if (this.plugin.index.skills.length === 0) {
+			const empty = contentEl.createDiv('skill-switchboard-empty');
+			empty.createEl('h3', { text: strings.noSkillsTitle });
+			empty.createEl('p', { text: strings.noSkillsDescription });
+		} else {
+			const library = contentEl.createDiv('skill-switchboard-library-header');
+			library.createEl('h2', { text: strings.skillLibrary });
+			library.createSpan({ text: strings.readOnlyScan, cls: 'skill-switchboard-library-note' });
+			this.renderSearchBox(contentEl, strings);
+			this.renderSkillGroups(contentEl, strings);
+		}
+
+		// Diagnostic evidence sits behind a disclosure: it is for troubleshooting,
+		// not part of the everyday read, so it never pushes the library down.
+		const evidence = contentEl.createEl('details', { cls: 'ssb-evidence' });
+		evidence.createEl('summary', { text: strings.evidenceSummary });
+		renderAdapterStatus(evidence, this.plugin, strings, (output) => this.copyOutput(output));
+	}
+
+	updateDistributionBoard(): void {
+		this.distributionBoard?.update(this.distributionModel());
+	}
+
+	private distributionModel() {
+		const plugin = this.plugin;
+		const sourceSnapshot = plugin.manifestCheck?.snapshot;
+		const blocked = plugin.manifestCheck?.status === 'failed'
+			|| (plugin.adapterCheck?.status === 'failed' && plugin.targetChecks.length === 0);
+		return {
+			nodes: distributionNodes({ targets: plugin.settings.targets, checks: plugin.targetChecks, activity: plugin.targetActivity, blocked }),
+			// Use the active sync provider's canonical path, not an unrelated indexing root.
+			sourcePath: sourceSnapshot
+				? sourceSnapshot.sharedPrefix.replace(/\/$/, '') || sourceSnapshot.sharedRoot
+				: plugin.settings.roots.find((root) => root.id === plugin.settings.syncRootId)?.path ?? '',
+			sourceUnavailable: blocked,
+			checkedAt: plugin.targetCheckedAt,
+			strings: getStrings(plugin.settings.language),
+		};
+	}
+
+	/** Filtering runs against the existing index, so typing never hits the disk. */
+	private renderSearchBox(contentEl: HTMLElement, strings: Strings): void {
+		const row = contentEl.createDiv('skill-switchboard-search');
+		const icon = row.createSpan('skill-switchboard-search-icon');
+		setIcon(icon, 'search');
+		const input = row.createEl('input', {
+			type: 'search',
+			cls: 'skill-switchboard-search-input',
+		});
+		input.value = this.query;
+		input.setAttribute('placeholder', strings.searchSkills);
+		input.setAttribute('aria-label', strings.searchSkills);
+
+		const count = row.createSpan('skill-switchboard-search-count');
+		const clear = row.createEl('button', {
+			text: strings.clearSearch,
+			cls: 'skill-switchboard-search-clear',
+		});
+		clear.setAttribute('aria-label', strings.clearSearch);
+		clear.addEventListener('click', () => {
+			this.query = '';
+			input.value = '';
+			input.focus();
+			refresh();
+			this.renderListOnly(strings);
+		});
+
+		const refresh = () => {
+			const matched = this.filteredSkills().length;
+			const filtering = this.query.trim().length > 0;
+			count.setText(filtering ? strings.matchCount(matched) : '');
+			row.toggleClass('is-filtering', filtering);
+		};
+		input.addEventListener('input', () => {
+			this.query = input.value;
+			refresh();
+			this.renderListOnly(strings);
+		});
+		refresh();
+	}
+
+	/** Re-renders only the list so the search box keeps focus and caret position. */
+	private renderListOnly(strings: Strings): void {
+		const contentEl = this.contentEl;
+		contentEl.findAll('.skill-switchboard-list, .skill-switchboard-no-results').forEach((el) => el.remove());
+		const anchor = contentEl.querySelector('.skill-switchboard-search');
+		if (!anchor) {
+			this.renderIndex();
+			return;
+		}
+		this.renderFilteredList(contentEl, strings, anchor);
+	}
+
+	private renderFilteredList(contentEl: HTMLElement, strings: Strings, anchor: Element): void {
+		const matched = this.filteredSkills();
+		if (matched.length === 0) {
+			const empty = contentEl.createDiv('skill-switchboard-no-results');
+			anchor.insertAdjacentElement('afterend', empty);
+			empty.createDiv({ text: strings.noSearchResults });
+			empty.createDiv({
+				text: `“${this.query.trim()}”`,
+				cls: 'skill-switchboard-no-results-query',
+			});
+			const reset = empty.createEl('button', { text: strings.clearSearch });
+			reset.addEventListener('click', () => {
+				this.query = '';
+				this.renderIndex();
+			});
+			return;
+		}
+		this.renderSkillGroups(contentEl, strings, matched, anchor);
+	}
+
+	private filteredSkills(): IndexedSkill[] {
+		const query = this.query.trim().toLowerCase();
+		if (!query) return this.plugin.index.skills;
+		return this.plugin.index.skills.filter((skill) =>
+			[skill.name, skill.description, skill.relativePath, skill.rootLabel]
+				.join('\n')
+				.toLowerCase()
+				.includes(query),
+		);
+	}
+
+	private openSettings(): void {
+		if (!openPluginSettings(this.app, this.plugin.manifest.id)) {
+			new Notice(getStrings(this.plugin.settings.language).settingsNotice);
+		}
+	}
+
+	/** One primary action, restrained utility controls; repair still requires confirmation. */
+	private renderHeader(contentEl: HTMLElement, strings: Strings): void {
+		const header = contentEl.createDiv('skill-switchboard-header');
+		const heading = header.createDiv('skill-switchboard-heading');
+		heading.createEl('h1', { cls: 'skill-switchboard-title', text: strings.viewTitle });
+		heading.createDiv({ cls: 'skill-switchboard-subtitle', text: strings.viewDescription });
+
+		const actions = header.createDiv('skill-switchboard-actions');
+		const primary = actions.createDiv('skill-switchboard-main-actions');
+		const check = actionButton(primary, strings.checkAdapters, 'scan-line', 'mod-cta');
+		const busy = this.plugin.adapterCheckRunning || this.plugin.adapterRepairRunning;
+		check.disabled = busy;
+		check.addEventListener('click', () => void this.plugin.checkAdapters());
+
+		const repair = actionButton(primary, strings.repairAllAdapters, 'wrench');
+		repair.setAttribute('title', strings.repairAllDescription);
+		repair.disabled = busy;
+		repair.addEventListener('click', () => void this.plugin.repairAllAdapters());
+
+		const utilities = actions.createDiv('skill-switchboard-utility-actions');
+		const refresh = utilities.createEl('button', {
+			cls: 'skill-switchboard-icon-button',
+		});
+		refresh.setAttribute('aria-label', strings.refresh);
+		refresh.setAttribute('title', strings.refresh);
+		setIcon(refresh, 'refresh-cw');
+		refresh.addEventListener('click', () => void this.plugin.refreshIndex(true));
+
+		if (!this.plugin.settings.showDistributionBoard) {
+			const showBoard = utilities.createEl('button', { cls: 'skill-switchboard-icon-button' });
+			showBoard.setAttribute('aria-label', strings.distributionShow);
+			showBoard.setAttribute('title', strings.distributionShow);
+			setIcon(showBoard, 'waypoints');
+			showBoard.addEventListener('click', () => void this.plugin.setDistributionBoardVisible(true));
+		}
+
+		const settings = actionButton(utilities, strings.settings, 'settings');
+		settings.addEventListener('click', () => this.openSettings());
+	}
+
+	private renderSkillGroups(
+		contentEl: HTMLElement,
+		strings: Strings,
+		skills: IndexedSkill[] = this.filteredSkills(),
+		anchor?: Element,
+	): void {
+		const groups = new Map<string, IndexedSkill[]>();
+		for (const skill of skills) {
+			const bucket = groups.get(skill.rootLabel);
+			if (bucket) bucket.push(skill);
+			else groups.set(skill.rootLabel, [skill]);
+		}
+
+		// Without an anchor the list goes to the end of the view; with one it is
+		// placed directly after the search box so the filter UI never moves.
+		const container = contentEl.createDiv('skill-switchboard-list');
+		if (anchor) anchor.insertAdjacentElement('afterend', container);
+
+		for (const [rootLabel, items] of groups) {
+			if (groups.size > 1) {
+				const heading = container.createDiv('skill-switchboard-group-heading');
+				heading.createEl('strong', { text: rootLabel });
+				heading.createSpan({ text: String(items.length), cls: 'skill-switchboard-badge' });
+			}
+			for (const skill of items) renderSkillCard(container, skill, strings, () => { void this.openSkill(skill); });
+		}
+	}
+
+	private async copyOutput(output: string): Promise<void> {
+		const strings = getStrings(this.plugin.settings.language);
+		if (!output.trim()) {
+			new Notice(strings.noOutputToCopy);
+			return;
+		}
+		const copied = await copyTextToClipboard(output);
+		new Notice(copied ? strings.outputCopied : strings.copyFailed);
+	}
+
+	/**
+	 * Vault skills resolve to a vault path and open in place. External roots live
+	 * outside the vault, so Obsidian cannot open them and the path is copied instead.
+	 */
+	private async openSkill(skill: IndexedSkill): Promise<void> {
+		const strings = getStrings(this.plugin.settings.language);
+		if (skill.rootKind !== 'vault') {
+			const copied = await copyTextToClipboard(skill.path);
+			new Notice(copied ? strings.pathCopied : strings.pathCopyFailed);
+			return;
+		}
+		// The scanner only indexes markdown files, so narrow the lookup result before
+		// handing it to the workspace.
+		const file = this.app.vault.getAbstractFileByPath(skill.path);
+		if (!(file instanceof TFile)) {
+			new Notice(strings.sourceMissing);
+			return;
+		}
+		await this.app.workspace.getLeaf(false).openFile(file);
+	}
+}
+
+function actionButton(parent: HTMLElement, label: string, icon: string, extraClass = ''): HTMLButtonElement {
+	const button = parent.createEl('button', { cls: `skill-switchboard-button ${extraClass}`.trim() });
+	button.setAttribute('aria-label', label);
+	setIcon(button.createSpan('skill-switchboard-button-icon'), icon);
+	button.createSpan({ text: label });
+	return button;
+}

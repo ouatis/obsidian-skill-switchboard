@@ -1,0 +1,36 @@
+export type RootKind = 'vault' | 'external';
+
+export type SyncMode = 'copy' | 'symlink' | 'wrapper';
+
+export const RUNTIME_NAMES = ['codex', 'hermes', 'workbuddy', 'opencode', 'antigravity', 'dsh'] as const;
+
+export type RuntimeName = typeof RUNTIME_NAMES[number];
+
+export interface SkillRoot {
+	id: string;
+	label: string;
+	path: string;
+	kind: RootKind;
+	enabled: boolean;
+}
+
+export interface RuntimeTarget {
+	id: string;
+	label: string;
+	path: string;
+	mode: SyncMode;
+	enabled: boolean;
+	runtime?: RuntimeName;
+}
+
+export interface IndexedSkill {
+	id: string;
+	name: string;
+	description: string;
+	rootLabel: string;
+	rootKind: RootKind;
+	path: string;
+	relativePath: string;
+	sha256: string;
+	frontmatter: Record<string, string>;
+}
