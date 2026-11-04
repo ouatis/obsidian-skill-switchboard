@@ -23,20 +23,22 @@ vault and distributing complete packages to this computer's agents. Your existin
 vault sync carries the source between computers; Switchboard handles local files.
 It provides no cloud service, makes no network requests and collects no telemetry.
 All reads and writes stay inside the folders you configure — the skill source in
-your vault, your agent target folders, and the plugin's own folder for snapshots
-and status; nothing else on disk is touched.
+your vault, your agent target folders, the plugin folder for snapshots, and the
+vault root for its status file. Nothing else on disk is touched.
 
+Open the switchboard from the ribbon icon or the **Open switchboard** command.
+The view docks in the main area or the sidebar; source, targets, automation and
+snapshot restore live under **Settings → Community plugins → Skill Switchboard**.
 Quiet panels and thin rules share a visual rhythm with Desk Lamp, Scriptorium
 and Collate. The interface follows your Obsidian theme. English and Simplified
 Chinese are available.
 
 ## Install
 
-Requires Obsidian 1.7.2 or newer on desktop. For a published version, download
-`main.js`, `manifest.json` and `styles.css` from the
+Requires Obsidian 1.7.2 or newer on desktop. Download `main.js`, `manifest.json`
+and `styles.css` from the
 [releases page](https://github.com/ouatis/obsidian-skill-switchboard/releases),
 place them in `<vault>/.obsidian/plugins/skill-switchboard/`, then enable the plugin.
-For unpublished changes, build from source using the Development steps below.
 
 ## One source, complete installations
 
@@ -79,13 +81,12 @@ remains read-only. Missing or unsafe resources block that skill; independent hea
 packages still update. The quiet window reduces partial-sync risk; it is not proof
 that another machine finished syncing or that an Agent loaded a skill.
 
-Transient filesystem refusals get at most three attempts (150/450 ms delays).
-Successful runs update the board quietly. An unchanged persistent failure alerts
-once per plugin session and is not retried every five minutes without a changed
-source/target state; use **Repair all** for an explicit retry. Closing Obsidian,
+Transient filesystem refusals are retried briefly. An unchanged persistent failure
+alerts once per plugin session and is not retried while the source and target
+state stay unchanged; use **Repair all** for an explicit retry. Closing Obsidian,
 disabling automation, changing its scope, or unloading the plugin cancels queued
-work and prevents subsequent package swaps. The source-authority and no-history-
-backup rules below apply to automatic runs too.
+work and prevents subsequent package swaps. The source-authority and snapshot
+rules below apply to automatic runs too.
 
 The **Distribution plan** shows four states per agent: **Not installed**,
 **Replace from source**, **Matches source**, and **Blocked**. Blockers expand first
@@ -97,36 +98,30 @@ overwrite, with names and paths.
   edits and older installations are overwritten, not merged or kept as conflicts.
   There is no second takeover workflow or ownership database; checks compare the
   complete expected package directly against the actual files and executable modes.
-- **No history backups are created.** Discarded local edits cannot be recovered
-  through this plugin after a successful overwrite. Make a wanted change in the
-  canonical source before distributing.
+- Before replacing a target package, the displaced tree is copied into the
+  plugin's `snapshots/` folder. The five newest snapshots per skill are kept, and
+  **Restore the latest skill snapshot** writes the newest one back after
+  confirmation. A failed snapshot is reported but does not block distribution.
 - No Agent edit is written back to Obsidian. Other skills not named by the source
   remain untouched. Removing a source or target does not silently uninstall old
   copies; a zero-skill source is not reported as success.
 - A complete new directory is prepared and verified beside the destination.
-  Source additions, removals and file changes invalidate the prepared snapshot.
-  A target change during preparation aborts the swap. The old directory is moved
-  aside only for the transaction: a failed swap attempts to restore it, and a
-  successful swap deletes the temporary old directory. It is not a retained backup.
+  Source changes during preparation, or a target change after the plan, abort the
+  swap; a failed swap attempts to restore the old directory. Restoration or
+  cleanup failures report the remaining paths and are not presented as successful
+  repair.
 - Invalid sources, unreadable files, links inside packages and resource failures
   block the affected skill. Independent skills can still be installed; partial
-  results are never presented as complete success. Filesystem locks prevent two
-  repairs from replacing the same package simultaneously. A crash can leave a
-  lock or temporary directory. Restoration or cleanup failures report the
-  remaining paths and are not presented as successful repair.
+  results are never presented as complete success.
 
-New installations do not write `.skill-switchboard.json` receipts. An obsolete
-package-root receipt is removed with the next replacement; a same-named file in
-a resource subdirectory remains ordinary package content.
+## Legacy sources and external packages
 
-## Existing installations and external packages
-
-Version 0.5 replaces thin-wrapper generation with complete packages. Old
-`wrapper` and `symlink` settings normalize to copy configuration only; loading
-settings never rewrites installed skills. Existing wrappers are replaced in the
-same **Repair all** operation. Links at a destination are refused rather than
+Complete packages are the only install form. Legacy `wrapper` and `symlink`
+settings load as copy configuration; loading settings never rewrites installed
+skills. Old thin entries are replaced in the same **Repair all** operation that
+installs the complete package. Links at a destination are refused rather than
 followed. An old DSH `<name>.md` is removed as its directory package is installed
-in that same operation, without a history backup or duplicate entries.
+in that same operation.
 
 A sibling `skills-manifest.json` remains supported for existing Markdown-card
 sources, runtime selection and metadata. `shared_file` can name a relative card
@@ -150,27 +145,12 @@ Obsidian Sync and remain explicit runtime dependencies.
 
 Sources, targets and enabled agents are machine-local, per vault checkout, in
 `~/.skill-switchboard/vaults/<vault-id>/settings.json`. Display preferences can
-sync with Obsidian settings. Existing connections migrate without a
-separate configuration-history backup; new computers configure their own connections. The source and optional manifest
-stay in the vault; there is no second private content database.
+sync with Obsidian settings. Existing connections migrate in place; new computers
+configure their own connections. The source and optional manifest stay in the
+vault; there is no second private content database.
 
 The hidden `.skill-switchboard-status.json` in the vault records this installation's
 version, build ID and check/repair outputs. It is not another computer's health
 report. Diagnostic text can include local paths; review it before sharing.
-
-## Development
-
-```bash
-npm install
-npm run build
-npm run lint
-npm run test:native
-```
-
-Run the other `test:*` scripts in `package.json` as well. Native tests use isolated
-temporary vaults and Agent folders, never live installations. To exercise the new
-UI in an existing Obsidian host without replacing its installed plugin, run
-`node scripts/test-package-ui-live.mjs <obsidian-cli> <host-vault>`.
-No release, deployment or live Agent migration is performed by these tests.
 
 Created by [@ouatis](https://github.com/ouatis).
