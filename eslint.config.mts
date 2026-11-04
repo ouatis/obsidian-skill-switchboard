@@ -34,6 +34,7 @@ export default defineConfig(
 		'scripts/run-tests.mjs',
 		'scripts/test-target-snapshot.mjs',
 		'scripts/capture-distribution.mjs',
+		'scripts/check-runtime.mjs',
 		'tsconfig.json',
 	]),
 	{

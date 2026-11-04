@@ -30,7 +30,8 @@
 		"lint": "eslint .",
 		"test": "node scripts/run-tests.mjs",
 		"audit:deps": "npm audit --audit-level=moderate",
-		"verify": "npm run audit:deps && npm run lint && npm test && npm run build"
+		"verify": "npm run audit:deps && npm run lint && npm test && npm run build",
+		"check:runtime": "node scripts/check-runtime.mjs"
 	},
 	"keywords": [],
 	"license": "MIT",

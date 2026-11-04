@@ -88,6 +88,13 @@ npm run build
 ## Verification & snapshots
 
 - `npm run verify` is the single gate: `audit:deps` → `lint` → `npm test` → `build`.
+- `npm run check:runtime -- --vault "<vault path>"` (or `SKILL_SWITCHBOARD_VAULT`) reports drift for
+  every configured runtime target without Obsidian: it bundles the same `adapter-run` / `sync-provider`
+  modules the panel uses, reads the machine-local wiring at
+  `~/.skill-switchboard/vaults/<sha256(resolved vault)[:24]>/settings.json`, names the stale skills, and
+  exits 1 on any drift. It is read-only — no repair, no status file — so the panel stays the only writer.
+  `--json` prints the same rows for scripts. It is meant for agents and for a quick look from a terminal;
+  CI has no vault wiring, so it never runs there.
 - `npm test` runs `scripts/run-tests.mjs`, which discovers every `scripts/test-*.mjs` in sorted order
   and fails fast; `test-ui-live.mjs` and `test-package-ui-live.mjs` are excluded (they need a real
   Obsidian CLI + vault) and remain manual steps.
