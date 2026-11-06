@@ -9,9 +9,9 @@ _Maintain skills in Obsidian. Distribute complete local copies._
 <a href="https://community.obsidian.md/plugins/skill-switchboard"><img src="img/open-in-obsidian-button.svg" alt="Open Skill Switchboard in Obsidian" width="150"></a>
 
 <p>
-  <img src="https://img.shields.io/github/v/release/ouatis/obsidian-skill-switchboard?style=flat-square&label=version&color=c24e18" alt="Latest release">
-  <img src="https://img.shields.io/github/downloads/ouatis/obsidian-skill-switchboard/total?style=flat-square&logo=obsidian&logoColor=white&label=downloads&color=6d665d" alt="Downloads">
-  <img src="https://img.shields.io/github/license/ouatis/obsidian-skill-switchboard?style=flat-square&label=license&color=406e40" alt="MIT License">
+  <img src="https://img.shields.io/github/v/release/ouatis/obsidian-skill-switchboard?style=flat-square&label=version&color=ad3e32" alt="Latest release">
+  <img src="https://img.shields.io/github/downloads/ouatis/obsidian-skill-switchboard/total?style=flat-square&logo=obsidian&logoColor=white&label=downloads&color=d0a85c" alt="Downloads">
+  <img src="https://img.shields.io/github/license/ouatis/obsidian-skill-switchboard?style=flat-square&label=license&color=2f6754" alt="MIT License">
 </p>
 
 </div>
@@ -35,8 +35,12 @@ Chinese are available.
 
 ## Install
 
-Requires Obsidian 1.7.2 or newer on desktop. Download `main.js`, `manifest.json`
-and `styles.css` from the
+Available in the Obsidian community plugin store: enable community plugins,
+then **Settings → Community plugins → Browse** and search for **Skill
+Switchboard**. Requires Obsidian 1.7.2 or newer on desktop.
+
+Manual, if you prefer: download `main.js`, `manifest.json` and `styles.css`
+from the
 [releases page](https://github.com/ouatis/obsidian-skill-switchboard/releases),
 place them in `<vault>/.obsidian/plugins/skill-switchboard/`, then enable the plugin.
 

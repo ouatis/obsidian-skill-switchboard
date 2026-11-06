@@ -9,9 +9,9 @@ _在 Obsidian 维护技能，向本机 Agent 分发完整副本。_
 <a href="https://community.obsidian.md/plugins/skill-switchboard"><img src="img/open-in-obsidian-button.svg" alt="Open Skill Switchboard in Obsidian" width="150"></a>
 
 <p>
-  <img src="https://img.shields.io/github/v/release/ouatis/obsidian-skill-switchboard?style=flat-square&label=version&color=c24e18" alt="Latest release">
-  <img src="https://img.shields.io/github/downloads/ouatis/obsidian-skill-switchboard/total?style=flat-square&logo=obsidian&logoColor=white&label=downloads&color=6d665d" alt="Downloads">
-  <img src="https://img.shields.io/github/license/ouatis/obsidian-skill-switchboard?style=flat-square&label=license&color=406e40" alt="MIT License">
+  <img src="https://img.shields.io/github/v/release/ouatis/obsidian-skill-switchboard?style=flat-square&label=version&color=ad3e32" alt="Latest release">
+  <img src="https://img.shields.io/github/downloads/ouatis/obsidian-skill-switchboard/total?style=flat-square&logo=obsidian&logoColor=white&label=downloads&color=d0a85c" alt="Downloads">
+  <img src="https://img.shields.io/github/license/ouatis/obsidian-skill-switchboard?style=flat-square&label=license&color=2f6754" alt="MIT License">
 </p>
 
 </div>
@@ -24,7 +24,9 @@ _在 Obsidian 维护技能，向本机 Agent 分发完整副本。_
 
 ## 安装
 
-需要桌面端 Obsidian 1.7.2 或更新版本。从[发布页面](https://github.com/ouatis/obsidian-skill-switchboard/releases)下载 `main.js`、`manifest.json` 和 `styles.css`，放入 `<vault>/.obsidian/plugins/skill-switchboard/`，再启用插件。
+已上架社区插件商店：开启第三方插件后，**设置 → 第三方插件 → 浏览**，搜「Skill Switchboard」即可。需要桌面端 Obsidian 1.7.2 或更新版本。
+
+也可以手动安装：从[发布页面](https://github.com/ouatis/obsidian-skill-switchboard/releases)下载 `main.js`、`manifest.json` 和 `styles.css`，放入 `<vault>/.obsidian/plugins/skill-switchboard/`，再启用插件。
 
 ## 一份源，完整安装
 
