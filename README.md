@@ -96,7 +96,7 @@ The **Distribution plan** shows four states per agent: **Not installed**,
 **Replace from source**, **Matches source**, and **Blocked**. Blockers expand first
 and show their reasons without requiring the raw log. Counts describe agent copies,
 not unique source skills. One **Repair all** confirmation lists every install and
-overwrite, with names and paths.
+overwrite, with names and paths, plus the copies that would be retired.
 
 - A same-name target package is a disposable output of the selected source. Local
   edits and older installations are overwritten, not merged or kept as conflicts.
@@ -109,6 +109,13 @@ overwrite, with names and paths.
 - No Agent edit is written back to Obsidian. Other skills not named by the source
   remain untouched. Removing a source or target does not silently uninstall old
   copies; a zero-skill source is not reported as success.
+- When a skill leaves the source, the copies this plugin installed for it are
+  reported as **Copies whose source is gone**. Repair removes them after taking a
+  retirement snapshot, so **Restore the latest skill snapshot** brings one back.
+  A copy is only removed when the install record names it *and* its tree still
+  matches what that install recorded; a copy edited since install is reported and
+  kept, and a directory the user wrote by hand is never a candidate. The install
+  record lives in the plugin's `snapshots/` folder beside the snapshots it keeps.
 - A complete new directory is prepared and verified beside the destination.
   Source changes during preparation, or a target change after the plan, abort the
   swap; a failed swap attempts to restore the old directory. Restoration or

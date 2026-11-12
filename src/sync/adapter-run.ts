@@ -35,6 +35,8 @@ export interface AdapterRunContext {
 	isCurrent?: () => boolean;
 	/** When set, each displaced target tree is snapshotted here before repair writes. */
 	snapshotDirectory?: string;
+	/** Where install evidence is kept. Without it no orphan can be identified or retired. */
+	ledgerDirectory?: string;
 }
 
 export interface AdapterRun {
@@ -144,12 +146,12 @@ export async function collectTargetChecks(
 			});
 			continue;
 		}
-		const result = await context.provider.checkRuntime(vaultPath, target.runtime, target.path, snapshot);
+		const result = await context.provider.checkRuntime(vaultPath, target.runtime, target.path, snapshot, { ledgerDirectory: context.ledgerDirectory });
 		const plan = result.native?.installs ? planInstalls(result.native.installs) : null;
 		record({
 			target,
 			targetPath: resolvedTarget,
-			repairable: result.native?.kind !== 'error' && (plan ? result.status === 'passed' || plan.writes > 0 : result.native?.kind !== 'blocked'),
+			repairable: result.native?.kind !== 'error' && (plan ? result.status === 'passed' || plan.writes > 0 || ((result.native?.orphanCandidates?.length ?? 0) > 0) : result.native?.kind !== 'blocked'),
 			result,
 		});
 	}
@@ -285,7 +287,14 @@ export async function repairDriftedTargets(
 		}
 		const label = displayTargetName(check.target);
 		context.onTargetActivity?.({ targetId: check.target.id, phase: 'repairing' });
-		const repair = await context.provider.repairRuntime(vaultPath, runtime, check.target.path, snapshot, { isCurrent: context.isCurrent, snapshotDirectory: context.snapshotDirectory });
+		const repair = await context.provider.repairRuntime(vaultPath, runtime, check.target.path, snapshot, {
+			isCurrent: context.isCurrent,
+			snapshotDirectory: context.snapshotDirectory,
+			ledgerDirectory: context.ledgerDirectory,
+			// A sweep removes directories, so it only runs where the caller gave us
+			// somewhere to keep the install evidence that makes removal safe.
+			sweepOrphans: context.ledgerDirectory !== undefined,
+		});
 		const detail: TargetRepairDetail = { targetId: check.target.id, label, runtime, repair };
 		details.push(detail);
 		if (repair.status === 'failed' && !repair.native?.partial) {
@@ -297,7 +306,7 @@ export async function repairDriftedTargets(
 		}
 
 		context.onTargetActivity?.({ targetId: check.target.id, phase: 'checking' });
-		const followUp = await context.provider.checkRuntime(vaultPath, runtime, check.target.path);
+		const followUp = await context.provider.checkRuntime(vaultPath, runtime, check.target.path, undefined, { ledgerDirectory: context.ledgerDirectory });
 		detail.followUp = followUp;
 		context.onTargetCheck?.({ ...check, result: followUp, repairFailed: false });
 		if (followUp.status === 'passed' && repair.status === 'passed') {

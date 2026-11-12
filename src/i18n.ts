@@ -110,6 +110,14 @@ export interface Strings {
 	repairChanges: string;
 	lastRepairResult: string;
 	changeLabel: (kind: string, action: string) => string;
+	/** Orphan copies this plugin installed and could safely retire. */
+	orphanPlanTitle: string;
+	orphanPlanDescription: string;
+	orphanRetire: string;
+	orphanKept: string;
+	orphanReasonEdited: (reason: string) => string;
+	/** How many copies were retired and kept back during the last repair. */
+	orphanTotals: (retired: number, kept: number) => string;
 	repairPartial: (files: number | null, failed: number) => string;
 	autoCheck: string;
 	autoDistribute: string;

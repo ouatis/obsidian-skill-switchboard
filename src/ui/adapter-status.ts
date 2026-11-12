@@ -3,8 +3,8 @@ import type { Strings } from '../i18n';
 import type { RepairSummary, TargetCheck } from '../sync/adapter-run';
 import type { AdapterCheckResult } from '../sync/result';
 import type { ManifestCheckResult } from '../sync-provider';
-import { repairTotals } from './repair-summary';
-import { renderInstallPlans } from './install-plan';
+import { orphanTotals, repairTotals } from './repair-summary';
+import { renderInstallPlans, renderOrphanPlan } from './install-plan';
 
 export interface AdapterStatusState {
 	checksStale: boolean;
@@ -32,6 +32,7 @@ export function renderAdapterStatus(
 	const section = contentEl.createDiv('skill-switchboard-check');
 	if (!state.checksStale) {
 		renderInstallPlans(section, state.targetChecks, strings);
+		renderOrphanPlan(section, state.targetChecks, strings);
 		const found = state.targetChecks.flatMap((check) => check.result.native?.unmanagedEntries ?? []);
 		if (found.length) {
 			const details = section.createEl('details');
@@ -81,10 +82,14 @@ export function renderAdapterStatus(
 		const passed = repair?.status === 'passed';
 		const summary = state.lastRepairSummary;
 		const totals = summary ? repairTotals(summary) : null;
+		// Retired copies are not files, so they get their own clause instead of
+		// inflating the written-file count.
+		const retired = summary ? orphanTotals(summary) : null;
+		const retiredText = retired && (retired.retired || retired.kept) ? ` · ${strings.orphanTotals(retired.retired, retired.kept)}` : '';
 		const text = repairRunning
 			? strings.repairAllRunning
 			: passed
-				? totals?.targets ? strings.repairSummary(totals.targets, totals.skills, totals.files) : strings.repairAllNoDrift
+				? totals?.targets ? `${strings.repairSummary(totals.targets, totals.skills, totals.files)}${retiredText}` : retired && (retired.retired || retired.kept) ? `${strings.repairAllNoDrift}${retiredText}` : strings.repairAllNoDrift
 				: summary && !summary.aborted && totals ? strings.repairPartial(totals.files, summary.failedCount) : strings.adapterCheckFailed(repair?.exitCode ?? 1);
 		renderStatusRow(section, repairRunning ? text : `${strings.lastRepairResult} · ${text}`, repairRunning ? 'running' : state.checksStale ? 'unknown' : passed ? 'passed' : 'failed', repairRunning || passed ? 'wrench' : 'alert-triangle');
 		if (summary?.details.length) {

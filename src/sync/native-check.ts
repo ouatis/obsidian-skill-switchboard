@@ -9,6 +9,7 @@ import { safeInstallPath } from './install-package';
 import { existingRealPath } from './filesystem';
 import { resolveConfiguredPath } from '../utils/paths';
 import { blockedResourceSkills } from './resources';
+import { findOrphans, type OrphanCandidate, type OrphanScan } from './install-ledger';
 
 export { inspectManifest } from './manifest';
 export type NativeCheckKind = 'clean' | 'drift' | 'blocked' | 'error';
@@ -20,8 +21,16 @@ export interface NativeCheckResult extends AdapterCheckResult {
 	blockedSkills?: string[];
 	installs?: SkillInstallCheck[];
 	unmanagedEntries?: string[];
+	/** Copies this plugin installed whose skill has since left the source. */
+	orphanEntries?: OrphanCandidate[];
+	/** The orphans whose tree still matches the install, so they can be retired. */
+	orphanCandidates?: OrphanCandidate[];
 }
-export interface NativeCheckOptions { opencodeCommandsDir?: string }
+export interface NativeCheckOptions {
+	opencodeCommandsDir?: string;
+	/** Where install evidence is kept; without it no orphan can be identified. */
+	ledgerDirectory?: string;
+}
 export interface PreparedSkill { name: string; bundle?: SkillBundle; state: InstallState }
 
 export async function prepareRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot: SyncManifestSnapshot): Promise<PreparedSkill[]> {
@@ -48,7 +57,7 @@ export async function prepareRuntime(vaultPath: string, runtime: RuntimeName, ta
 }
 
 /** A found skill is not automatically owned; unrelated installations are informational. */
-async function otherEntries(target: string, managed: Set<string>, runtime: RuntimeName): Promise<string[]> {
+export async function otherEntries(target: string, managed: Set<string>, runtime: RuntimeName): Promise<string[]> {
 	if (!await exists(target)) return [];
 	const found: string[] = [];
 	// The managed set is built from install directories that went through
@@ -76,7 +85,25 @@ async function otherEntries(target: string, managed: Set<string>, runtime: Runti
 	return found;
 }
 
-export async function checkRuntimeNative(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot: SyncManifestSnapshot, _options: NativeCheckOptions = {}): Promise<NativeCheckResult> {
+/** The orphans under a target, using the same rule the repair follows. */
+export async function orphanScan(
+	vaultPath: string,
+	runtime: RuntimeName,
+	targetPath: string,
+	snapshot: SyncManifestSnapshot,
+	ledgerDirectory?: string,
+): Promise<OrphanScan> {
+	const configured = resolveConfiguredPath(targetPath, vaultPath);
+	const target = await safeInstallPath(configured, snapshot.vaultPath, snapshot.sharedRoot);
+	const plans = await prepareRuntime(vaultPath, runtime, targetPath, snapshot);
+	// Only what the source still installs counts as managed. A plan without a
+	// bundle is blocked, so its directory is not an install the user asked for.
+	const managed = new Set(plans.flatMap((plan) => plan.bundle ? [plan.bundle.directory] : []));
+	const unmanagedEntries = await otherEntries(target, managed, runtime);
+	return findOrphans({ store: ledgerDirectory, entries: unmanagedEntries, runtime, live: managed, targets: [configured, target] });
+}
+
+export async function checkRuntimeNative(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot: SyncManifestSnapshot, options: NativeCheckOptions = {}): Promise<NativeCheckResult> {
 	try {
 		const plans = await prepareRuntime(vaultPath, runtime, targetPath, snapshot);
 		const installs = plans.map(({ name, bundle, state }) => ({ name, path: bundle?.directory ?? '', state: state.kind, detail: state.detail, fingerprint: state.fingerprint }));
@@ -84,9 +111,35 @@ export async function checkRuntimeNative(vaultPath: string, runtime: RuntimeName
 		const drift = installs.some((item) => item.state === 'missing' || item.state === 'update');
 		const problems = installs.filter((item) => item.state !== 'current').map((item) => `${item.state}: ${item.name} — ${item.detail}`);
 		const kind: NativeCheckKind = drift ? 'drift' : blockedSkills.length ? 'blocked' : 'clean';
-		const unmanagedEntries = await otherEntries(resolveConfiguredPath(targetPath, vaultPath), new Set(installs.map((item) => item.path)), runtime);
-		return { status: kind === 'clean' ? 'passed' : 'failed', kind, checkedSkillCount: plans.length, blockedSkills, installs, unmanagedEntries, problems, exitCode: kind === 'clean' ? 0 : 1,
-			output: [`[native] ${kind === 'clean' ? 'PASS' : kind.toUpperCase()}`, ...problems, ...(unmanagedEntries.length ? [`Found ${unmanagedEntries.length} other skill(s); not managed or changed by this plugin.`] : [])].join('\n') };
+		const resolvedTarget = resolveConfiguredPath(targetPath, vaultPath);
+		const managed = new Set(installs.map((item) => item.path));
+		const unmanagedEntries = await otherEntries(resolvedTarget, managed, runtime);
+		const orphans = await findOrphans({
+			store: options.ledgerDirectory,
+			entries: unmanagedEntries,
+			runtime,
+			live: managed,
+			targets: [resolveConfiguredPath(targetPath, vaultPath), await safeInstallPath(resolvedTarget, vaultPath, snapshot.sharedRoot)],
+		});
+		return {
+			status: kind === 'clean' ? 'passed' : 'failed',
+			kind,
+			checkedSkillCount: plans.length,
+			blockedSkills,
+			installs,
+			unmanagedEntries,
+			orphanEntries: [...orphans.sweepable, ...orphans.kept],
+			orphanCandidates: orphans.sweepable,
+			problems,
+			exitCode: kind === 'clean' ? 0 : 1,
+			output: [
+				`[native] ${kind === 'clean' ? 'PASS' : kind.toUpperCase()}`,
+				...problems,
+				...(unmanagedEntries.length ? [`Found ${unmanagedEntries.length} other skill(s); not managed or changed by this plugin.`] : []),
+				...(orphans.sweepable.length ? [`Found ${orphans.sweepable.length} orphaned skill copy(s) this plugin installed; ready to retire.`] : []),
+				...(orphans.kept.length ? [`Kept ${orphans.kept.length} orphaned copy/copies that changed since install or could not be read.`] : []),
+			].join('\n'),
+		};
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
 		return { status: 'failed', kind: 'error', checkedSkillCount: 0, problems: [message], exitCode: 2, output: `[native] UNAVAILABLE\n${message}` };

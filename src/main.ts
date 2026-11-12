@@ -452,6 +452,7 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			settings: { targets: this.settings.targets.map((target) => ({ ...target })) },
 			isCurrent: () => !this.disposed && this.freshness.isCurrent(revision) && current?.() !== false,
 			snapshotDirectory: this.snapshotStore(),
+			ledgerDirectory: this.snapshotStore(),
 			onTargetActivity: (activity) => {
 				if (this.disposed || !this.freshness.isCurrent(revision)) return;
 				this.targetActivity = activity;

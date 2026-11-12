@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { SkillBundle } from './skill-bundle';
+import type { RuntimeName } from '../types';
 import { materialize } from './package-files';
 import { exists, inspectInstall } from './install-state';
 import { existingRealPath } from './filesystem';
@@ -9,6 +10,7 @@ import { isInside, pathsOverlap } from '../utils/paths';
 import { snapshotSkillFiles } from './source-catalog';
 import { retryFileOperation } from './file-retry';
 import { createTargetSnapshot } from './target-snapshot';
+import { bundleDigest, recordInstall } from './install-ledger';
 
 export interface InstallOptions {
 	isCurrent?: () => boolean;
@@ -18,6 +20,19 @@ export interface InstallOptions {
 	beforeCommit?: () => Promise<void>;
 	afterDisplace?: () => Promise<void>;
 	beforeCleanup?: () => Promise<void>;
+	/**
+	 * Where install evidence is recorded. Repair passes the snapshot store so a
+	 * later sweep can tell a managed copy from a directory the user wrote by hand.
+	 */
+	ledgerDirectory?: string;
+	/** The runtime the copy belongs to. Without it no entry is written. */
+	runtime?: RuntimeName;
+	/**
+	 * How the target is spelled in the settings, which is how the scan finds the
+	 * copy again. Without it the resolved directory is recorded instead, and a
+	 * target written with a symlink or a short name reads as a different path.
+	 */
+	targetLabel?: string;
 }
 
 export async function safeInstallPath(candidate: string, vault: string, source: string): Promise<string> {
@@ -147,6 +162,22 @@ export async function installPackage(bundle: SkillBundle, vault: string, source:
 			if (displaced) leftovers.push(displayOf(oldName ?? path.basename(displaced)));
 			if (legacyDisplaced) leftovers.push(displayOf(oldFlatName ?? path.basename(legacyDisplaced)));
 			cleanupWarnings.push(`Canonical copy installed, but temporary old-file cleanup failed: ${error instanceof Error ? error.message : String(error)}. Check ${leftovers.join('; ')}.`);
+		}
+		// The ledger is what makes a later sweep able to tell a copy this plugin
+		// installed from a directory the user wrote by hand. A failed write is
+		// reported but never undoes the copy that is already in place.
+		if (options.runtime) {
+			try {
+				await recordInstall(options.ledgerDirectory, {
+					skill: bundle.name,
+					runtime: options.runtime,
+					target: options.targetLabel ?? path.resolve(bundle.directory),
+					fingerprint: bundleDigest(bundle),
+					installedAt: new Date().toISOString(),
+				});
+			} catch (error) {
+				cleanupWarnings.push(`Install ledger could not be updated; this copy is installed but not recorded as managed: ${error instanceof Error ? error.message : String(error)}.`);
+			}
 		}
 		return { changed: true, files: bundle.files.length, cleanupWarnings: [...earlyWarnings, ...cleanupWarnings] };
 	} finally {

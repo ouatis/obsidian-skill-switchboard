@@ -33,6 +33,7 @@ export default defineConfig(
 		'scripts/test-ui-live.mjs',
 		'scripts/run-tests.mjs',
 		'scripts/test-target-snapshot.mjs',
+		'scripts/test-orphan-sweep.mjs',
 		'scripts/capture-distribution.mjs',
 		'scripts/check-runtime.mjs',
 		'tsconfig.json',

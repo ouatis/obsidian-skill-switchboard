@@ -13,12 +13,19 @@ export interface SyncRuntimeCheckResult extends AdapterCheckResult {
 }
 
 export interface SyncRepairResult extends AdapterCheckResult { native?: NativeRepairResult }
-export interface RepairControl { isCurrent?: () => boolean; snapshotDirectory?: string }
+export interface RepairControl {
+	isCurrent?: () => boolean;
+	snapshotDirectory?: string;
+	/** Where install evidence is kept, so a sweep can tell a managed copy from a foreign one. */
+	ledgerDirectory?: string;
+	/** Remove copies whose source skill left the manifest. */
+	sweepOrphans?: boolean;
+}
 
 export interface SyncProvider {
 	readonly id: string;
 	inspectManifest(vaultPath: string): Promise<ManifestCheckResult>;
-	checkRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot?: SyncManifestSnapshot): Promise<SyncRuntimeCheckResult>;
+	checkRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot?: SyncManifestSnapshot, control?: RepairControl): Promise<SyncRuntimeCheckResult>;
 	repairRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot?: SyncManifestSnapshot, control?: RepairControl): Promise<SyncRepairResult>;
 }
 
@@ -33,11 +40,11 @@ export class NativeSyncProvider implements SyncProvider {
 		catch (error) { return { status: 'failed', output: error instanceof Error ? error.message : String(error), exitCode: 1, snapshot: null }; }
 	}
 
-	async checkRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot?: SyncManifestSnapshot): Promise<SyncRuntimeCheckResult> {
+	async checkRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot?: SyncManifestSnapshot, control?: RepairControl): Promise<SyncRuntimeCheckResult> {
 		const manifest = snapshot ? null : await this.inspectManifest(vaultPath);
 		const selected = snapshot ?? manifest?.snapshot;
 		if (!selected) return manifest as ManifestCheckResult;
-		const native = await checkRuntimeNative(vaultPath, runtime, targetPath, selected);
+		const native = await checkRuntimeNative(vaultPath, runtime, targetPath, selected, { ledgerDirectory: control?.ledgerDirectory });
 		return {
 			...native,
 			native,
@@ -51,7 +58,10 @@ export class NativeSyncProvider implements SyncProvider {
 		if (snapshot && !sameSourceSnapshot(snapshot, manifest.snapshot)) {
 			return { status: 'failed', exitCode: 1, output: 'Source changed during repair. Check again before writing.' };
 		}
-		const native = await repairRuntimeNative(vaultPath, runtime, targetPath, manifest.snapshot, control);
+		const native = await repairRuntimeNative(vaultPath, runtime, targetPath, manifest.snapshot, {
+			...control,
+			ledgerDirectory: control?.ledgerDirectory ?? control?.snapshotDirectory,
+		});
 		return { ...native, native };
 	}
 }

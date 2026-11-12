@@ -157,6 +157,9 @@ try{
     const freshness=new CheckFreshness();assert.equal(freshness.stale,true);const token=freshness.capture();assert(freshness.accept(token));freshness.invalidate();assert(freshness.stale);assert(!freshness.accept(token));assert(freshness.accept(freshness.capture()));
     const detail=(id,skills,count)=>({targetId:id,label:id,runtime:'codex',repair:{native:{writtenFiles:count,replacedDirectories:0,changedSkills:skills,changes:[]}}});
     assert.deepEqual(repairTotals({details:[detail('a',['x','y'],2),detail('b',['y','z'],3)],repairedCount:2}),{targets:2,skills:3,files:5});
+    // A target whose only work was retiring a copy still changed, so it counts.
+    const retireOnly={targetId:'c',label:'c',runtime:'codex',repair:{native:{writtenFiles:0,replacedDirectories:0,changedSkills:[],changes:[],retiredSkills:['/tmp/old'],keptOrphans:[]}}};
+    assert.deepEqual(repairTotals({details:[detail('a',['x'],1),retireOnly],repairedCount:2}),{targets:2,skills:1,files:1});
     assert.deepEqual(repairTotals({details:[{repair:{}}],repairedCount:1}),{targets:1,skills:null,files:null});
     console.log('Readiness checks passed: configurable sources, complete copied packages, inventories, corruption/write refusal, machine-local external packages, symlink confinement, missing mappings, invalid registries/paths, adapter defaults, stale-result rejection, and structured repair totals.');
 }finally{
