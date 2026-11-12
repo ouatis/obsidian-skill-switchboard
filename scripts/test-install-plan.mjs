@@ -21,7 +21,7 @@ const element = (tag) => {
 const descendants = (node) => [node, ...node.children.flatMap(descendants)];
 try {
 	const output = path.join(temporary, 'engine.cjs');
-	await esbuild.build({ stdin: { contents: `export {inspectManifest} from './src/sync/manifest';export {checkRuntimeNative} from './src/sync/native-check';export {repairRuntimeNative} from './src/sync/native-repair';export {runRepairAll,collectTargetChecks} from './src/sync/adapter-run';export {planInstalls} from './src/sync/install-plan';export {sourceTree} from './src/sync/package-files';export {repairPlanDetails} from './src/ui/repair-plan';export {renderInstallPlans} from './src/ui/install-plan';export {getStrings} from './src/i18n';`, resolveDir: repo }, outfile: output, bundle: true, platform: 'node', format: 'cjs', logLevel: 'silent' });
+	await esbuild.build({ stdin: { contents: `export {inspectManifest} from './src/sync/manifest';export {checkRuntimeNative} from './src/sync/native-check';export {repairRuntimeNative} from './src/sync/native-repair';export {runRepairAll,collectTargetChecks} from './src/sync/adapter-run';export {planInstalls} from './src/sync/install-plan';export {sourceTree} from './src/sync/package-files';export {repairPlanDetails,orphanConfirmCount} from './src/ui/repair-plan';export {renderInstallPlans} from './src/ui/install-plan';export {getStrings} from './src/i18n';`, resolveDir: repo }, outfile: output, bundle: true, platform: 'node', format: 'cjs', logLevel: 'silent' });
 	const e = await import(pathToFileURL(output).href);
 	const names = ['missing-copy', 'update-copy', 'local-edit', 'foreign-copy', 'broken', 'keep-current'];
 	const vault = path.join(temporary, 'vault'), source = path.join(vault, 'skills'), target = path.join(temporary, 'agent');
@@ -57,13 +57,18 @@ try {
 		assert.equal(plan.writes, 4);
 		assert.equal(checks[0].repairable, true);
 	});
-	await test('bilingual confirmation describes all overwrites and the no-backup policy', () => {
+	await test('bilingual confirmation names the retirement and never claims no backup', () => {
 		for (const locale of ['en', 'zh-CN']) {
 			const strings = e.getStrings(locale), details = e.repairPlanDetails(checks, strings);
 			assert(details.includes(strings.installPlanCounts({ install: 1, update: 3, blocked: 1, current: 1 })));
-			for (const [action, name] of [['install', 'missing-copy'], ['update', 'update-copy'], ['update', 'local-edit'], ['update', 'foreign-copy'], ['blocked', 'broken']]) assert(details.includes(`${strings.installAction(action)} · ${name}`));
+			for (const [action, name] of [['install', 'missing-copy'], ['update', 'update-copy'], ['update', 'local-edit'], ['update', 'foreign-copy'], ['blocked', 'broken']]) assert(details.includes(`${strings.installAction(action)} \u00b7 ${name}`));
 			assert(details.includes('references'));
-			assert(strings.repairConfirmMessage.includes(locale === 'en' ? 'without a history backup' : '不保留历史备份'));
+			// A repair now snapshots before it overwrites, and it can retire a copy whose
+			// source is gone, so the old "no history backup" sentence was simply untrue.
+			assert(!strings.repairConfirmMessage.includes(locale === 'en' ? 'without a history backup' : '不保留历史备份'));
+			assert(strings.repairConfirmMessage.includes(locale === 'en' ? 'snapshot' : '快照'));
+			assert(strings.repairConfirmMessage.includes(locale === 'en' ? 'retired' : '退库'));
+			assert.equal(e.orphanConfirmCount(checks), 0, 'no copy is about to be removed in this fixture');
 		}
 	});
 	await test('problem groups open first while healthy groups remain collapsed', () => {

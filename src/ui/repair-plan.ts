@@ -30,6 +30,9 @@ export function repairPlanDetails(checks: TargetCheck[], strings: Strings): stri
 				}
 			}
 		}
+		// The retirement paragraph goes above the rows it explains: the rows are
+		// evidence, so the summary should be read before the paths.
+		if (sweepable.length) lines.push(strings.orphanConfirm(sweepable.length));
 		for (const entry of sweepable) lines.push(`${strings.orphanRetire} · ${entry.skill}${entry.target ? ` · ${entry.target}` : ''}`);
 		for (const entry of kept) lines.push(`${strings.orphanKept} · ${entry.skill} · ${strings.orphanReasonEdited(entry.reason ?? 'unknown-copy')}`);
 		// A target with no writes and no retirement is clean; saying "no writes"
@@ -38,4 +41,15 @@ export function repairPlanDetails(checks: TargetCheck[], strings: Strings): stri
 		else if (!plan && check.result.status === 'failed') lines.push(check.result.output);
 		return lines.filter(Boolean).join('\n');
 	}).join('\n\n');
+}
+
+/**
+ * How many copies the confirmation is about to remove, across every target.
+ * Zero means the paragraph is left out rather than saying "0 copies".
+ */
+export function orphanConfirmCount(checks: TargetCheck[]): number {
+	return checks.reduce((count, check) => {
+		const orphans = check.result.native?.kind === 'error' ? [] : check.result.native?.orphanEntries ?? [];
+		return count + orphans.filter((entry) => entry.reason === null).length;
+	}, 0);
 }

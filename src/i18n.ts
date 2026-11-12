@@ -116,6 +116,11 @@ export interface Strings {
 	orphanRetire: string;
 	orphanKept: string;
 	orphanReasonEdited: (reason: string) => string;
+	/**
+	 * One paragraph for the repair confirmation, naming what will be removed.
+	 * Empty when this computer has no orphan to retire.
+	 */
+	orphanConfirm: (copies: number) => string;
 	/** How many copies were retired and kept back during the last repair. */
 	orphanTotals: (retired: number, kept: number) => string;
 	repairPartial: (files: number | null, failed: number) => string;

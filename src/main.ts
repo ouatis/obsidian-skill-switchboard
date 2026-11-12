@@ -13,7 +13,7 @@ import { checkState, runRecord, writePluginStatus } from './status';
 import { getStrings } from './i18n';
 import { registerCommands } from './commands';
 import { confirmDetectedTargets, confirmRepair } from './ui/confirm-modal';
-import { repairPlanDetails } from './ui/repair-plan';
+import { orphanConfirmCount, repairPlanDetails } from './ui/repair-plan';
 import type { AdapterCheckResult } from './sync/result';
 import { createSyncProvider, ManifestCheckResult, SyncProvider, type SyncManifestSnapshot } from './sync-provider';
 import {
@@ -566,7 +566,11 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			this.freshness.accept(previewRevision);
 			previewComplete = true;
 			await writePluginStatus(this, { lastCheck: runRecord(preview.result.status, preview.result.exitCode, preview.result.output), currentCheck: checkState(preview.result.status) });
-			confirmed = await confirmRepair(this.app, strings, strings.repairConfirmMessage, repairPlanDetails(preview.checks, strings));
+			// The confirmation says plainly how many copies will be removed, because a
+			// repair now can: retirement is the one destructive thing it does.
+			const sweepable = orphanConfirmCount(preview.checks);
+			const confirmMessage = sweepable ? `${strings.repairConfirmMessage}\n\n${strings.orphanConfirm(sweepable)}` : strings.repairConfirmMessage;
+			confirmed = await confirmRepair(this.app, strings, confirmMessage, repairPlanDetails(preview.checks, strings));
 			if (confirmed && !this.freshness.isCurrent(previewRevision)) throw new Error(strings.checksStale);
 		} catch (error) {
 			if (!previewComplete) this.invalidateChecks('Repair stopped unexpectedly; run a fresh read-only check.');

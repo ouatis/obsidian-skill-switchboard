@@ -167,7 +167,7 @@ try {
 	// The plan and the confirmation list name the copies that are about to go.
 	const { getStrings } = await load('i18n');
 	const { renderOrphanPlan } = await load('ui/install-plan');
-	const { repairPlanDetails } = await load('ui/repair-plan');
+	const { repairPlanDetails, orphanConfirmCount } = await load('ui/repair-plan');
 	const en = getStrings('en');
 	const zh = getStrings('zh-CN');
 	// The UI reads a check's `native` payload, so wrap the native result the way
@@ -211,6 +211,12 @@ try {
 		const plan = repairPlanDetails([targetCheck(planned)], locale);
 		assert.ok(plan.includes(locale.orphanRetire), 'the confirmation list names the removal');
 		assert.ok(plan.includes('fresh'));
+		// The confirmation paragraph carries the count, so the user reads how many
+		// copies are about to disappear without counting lines in the list.
+		assert.equal(orphanConfirmCount([targetCheck(planned)]), 1);
+		assert.ok(plan.includes(locale.orphanConfirm(1)), 'the paragraph says how many will be removed');
+		// A kept-only scope must not claim any removal is coming.
+		assert.equal(orphanConfirmCount([targetCheck(keptOnly)]), 0);
 		const keptPlan = repairPlanDetails([targetCheck(keptOnly)], locale);
 		assert.ok(keptPlan.includes(locale.orphanKept), 'a kept copy is reported, not counted as work');
 		assert.ok(keptPlan.includes(locale.orphanReasonEdited('edited')));
