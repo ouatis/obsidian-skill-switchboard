@@ -15,7 +15,12 @@ export interface NativeRepairResult extends AdapterCheckResult {
 	replacedDirectories: number;
 	changedSkills: string[];
 	changes: RepairChange[];
-	/** Copies removed because the source skill left the manifest. */
+	/**
+	 * Copies removed because the source skill left the manifest.
+	 *
+	 * Named rather than counted: the user needs to see which directory went, and
+	 * a bare number cannot be matched against what was there before.
+	 */
 	retiredSkills?: string[];
 	/** Orphans reported but kept, with the reason. */
 	keptOrphans?: string[];
@@ -26,6 +31,15 @@ export interface NativeRepairOptions extends InstallOptions {
 	opencodeCommandsDir?: string;
 	/** Remove installed copies whose source skill is no longer in the manifest. */
 	sweepOrphans?: boolean;
+	/**
+	 * Sweep only, write nothing.
+	 *
+	 * The dedicated retirement command needs this: re-installing every healthy
+	 * copy to get one stale copy removed would make a deletion request look like
+	 * an install request, and the counts in the report would stop meaning
+	 * anything. When set, the install loop is skipped entirely.
+	 */
+	retireOnly?: boolean;
 }
 
 /** One-way distribution. No edited Agent copy is ever promoted to the canonical source. */
@@ -37,9 +51,11 @@ export async function repairRuntimeNative(vaultPath: string, runtime: RuntimeNam
 	const keptOrphans: string[] = [];
 	let writtenFiles = 0;
 	try {
+		// A retirement still prepares the runtime, because that is what proves the
+		// target is reachable and what the orphan scan reads the source through.
 		const plans = await prepareRuntime(vaultPath, runtime, targetPath, snapshot);
 		const targetLabel = resolveConfiguredPath(targetPath, vaultPath);
-		for (const plan of plans) {
+		for (const plan of options.retireOnly ? [] : plans) {
 			if (options.isCurrent?.() === false) { problems.push('Repair was cancelled; remaining packages were not changed.'); break; }
 			try {
 				if (!plan.bundle) throw new Error(plan.state.detail);
@@ -63,7 +79,9 @@ export async function repairRuntimeNative(vaultPath: string, runtime: RuntimeNam
 		status: problems.length ? 'failed' : 'passed', exitCode: problems.length ? 1 : 0,
 		output: [
 			`[distribution] ${problems.length ? 'INCOMPLETE' : 'PASS'}`,
-			`Installed ${changes.length} complete skill package(s), ${writtenFiles} file(s); retired ${retiredSkills.length} copy/copies whose source is gone.`,
+			options.retireOnly
+				? `Retired ${retiredSkills.length} copy/copies whose source is gone; nothing was installed.`
+				: `Installed ${changes.length} complete skill package(s), ${writtenFiles} file(s); retired ${retiredSkills.length} copy/copies whose source is gone.`,
 			...problems,
 		].join('\n'),
 		writtenFiles,
@@ -85,8 +103,12 @@ export async function repairRuntimeNative(vaultPath: string, runtime: RuntimeNam
  * first says the copy is ours to retire, the second says nothing of the user's
  * own work is inside it. A snapshot is taken first, so the removal can be undone;
  * without one the copy is reported and left alone.
+ *
+ * Exported because retirement is also its own command: a user who removed a
+ * skill from the source wants to retire the copy without re-installing
+ * everything else, so they must be able to run a sweep with no writes.
  */
-async function sweepRuntimeOrphans(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot: SyncManifestSnapshot, options: NativeRepairOptions): Promise<{ retired: string[]; kept: string[]; problems: string[] }> {
+export async function sweepRuntimeOrphans(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot: SyncManifestSnapshot, options: NativeRepairOptions): Promise<{ retired: string[]; kept: string[]; problems: string[] }> {
 	const retired: string[] = [];
 	const kept: string[] = [];
 	const problems: string[] = [];

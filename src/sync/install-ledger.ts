@@ -38,6 +38,8 @@ export interface OrphanCandidate {
 	reason: OrphanReason | null;
 	/** The target spelling the install recorded, so a report can name it. */
 	target: string | null;
+	/** When the plugin installed this copy, so a report can say how long it sat here. */
+	installedAt: string;
 }
 
 export interface OrphanScan {
@@ -216,6 +218,7 @@ export async function findOrphans(options: {
 			fingerprint: recorded.fingerprint,
 			reason: !own[1] ? 'read-failed' : own[0] ? null : 'edited',
 			target: recorded.target,
+			installedAt: recorded.installedAt,
 		});
 	}
 	const sweepable = claimed.filter((candidate) => candidate.reason === null);

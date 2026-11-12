@@ -22,8 +22,10 @@ import {
 	TargetActivity,
 	TargetCheck,
 	checkAllTargets,
+	collectTargetChecks,
 	desktopPathFailure,
 	getRepairTargets,
+	retireOrphanCopies as runOrphanRetirement,
 	runRepairAll,
 	type RepairSummary,
 	type AdapterRun,
@@ -446,13 +448,15 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		}
 	}
 
-	private adapterContext(revision: number, current?: () => boolean): AdapterRunContext {
+	private adapterContext(revision: number, current?: () => boolean, options: { sweepOrphans?: boolean; ledgerDirectory?: string } = {}): AdapterRunContext {
 		return {
 			provider: this.syncProvider,
 			settings: { targets: this.settings.targets.map((target) => ({ ...target })) },
 			isCurrent: () => !this.disposed && this.freshness.isCurrent(revision) && current?.() !== false,
 			snapshotDirectory: this.snapshotStore(),
-			ledgerDirectory: this.snapshotStore(),
+			ledgerDirectory: options.ledgerDirectory ?? this.snapshotStore(),
+			// Deletion is not overwrite: only a repair the user confirmed may retire.
+			sweepOrphans: options.sweepOrphans === true,
 			onTargetActivity: (activity) => {
 				if (this.disposed || !this.freshness.isCurrent(revision)) return;
 				this.targetActivity = activity;
@@ -610,7 +614,10 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		this.renderViews();
 
 		let summary: RepairSummary;
-		try { summary = await runRepairAll(this.adapterContext(revision, automaticCurrent), vaultPath, strings, approvedSnapshot); }
+		// Automatic distribution may overwrite what it was authorized to overwrite;
+		// it was never authorized to delete, so its repairs never sweep.
+		const sweepOrphans = !automaticCurrent;
+		try { summary = await runRepairAll(this.adapterContext(revision, automaticCurrent, { sweepOrphans }), vaultPath, strings, approvedSnapshot); }
 		catch (error) {
 			const output = error instanceof Error ? error.message : String(error);
 			this.targetActivity = null;
@@ -665,6 +672,117 @@ export default class SkillSwitchboardPlugin extends Plugin {
 			lastRepair: runRecord(this.adapterRepair.status, this.adapterRepair.exitCode, this.adapterRepair.output),
 		});
 		return summary;
+	}
+
+	/**
+	 * Retires installed copies whose source skill has left the manifest.
+	 *
+	 * Its own command rather than a mode of repair: re-writing every healthy copy
+	 * to remove one stale one would make a deletion read as an install, and the
+	 * counts would stop answering the question that was asked. Nothing here
+	 * installs anything.
+	 */
+	/**
+ * Retires orphaned copies and writes nothing else.
+ *
+ * This is its own command rather than a corner of "repair all": removing a skill
+ * from the source should retire its copy without re-writing every other copy,
+ * and without a confirmation that only ever named the copies that were about to
+ * be installed. The confirmation lists the copies first, and each one is
+ * snapshotted before it goes, so the whole pass can be undone.
+ */
+async retireOrphanCopies(): Promise<void> {
+		if (this.adapterCheckRunning || this.adapterRepairRunning) return;
+		this.automatic.cancel();
+		const strings = getStrings(this.settings.language);
+		const vaultPath = this.getVaultBasePath();
+		if (!vaultPath) {
+			new Notice(desktopPathFailure().output);
+			return;
+		}
+		if (getRepairTargets(this.settings.targets).length === 0) {
+			new Notice(strings.noRepairTargets);
+			return;
+		}
+
+		const ledgerDirectory = this.snapshotStore();
+		const manifest = await this.syncProvider.inspectManifest(vaultPath);
+		if (manifest.status === 'failed' || !manifest.snapshot) {
+			new Notice(manifest.output);
+			return;
+		}
+
+		// Ask the same check the panel uses which copies are orphans, so the
+		// confirmation and the action can never disagree about the count.
+		const revision = this.freshness.capture();
+		const checks = await collectTargetChecks(
+			this.adapterContext(revision, undefined, { ledgerDirectory }),
+			vaultPath,
+			manifest.snapshot,
+		);
+		const rows = checks.flatMap((check) => {
+			const sweepable = check.result.native?.orphanCandidates ?? [];
+			if (!sweepable.length) return [];
+			const target = this.settings.targets.find((item) => item.id === check.target.id);
+			return [{ label: target?.label.trim() || check.target.runtime, sweepable }];
+		});
+		const sweepableCount = rows.reduce((count, row) => count + row.sweepable.length, 0);
+		if (!sweepableCount) {
+			new Notice(strings.orphanRetireNone);
+			return;
+		}
+
+		const listed = rows
+			.map((row) => [row.label, ...row.sweepable.map((entry) => `  ${entry.skill} · ${entry.path}`)].join('\n'))
+			.join('\n\n');
+		const confirmed = await confirmRepair(
+			this.app,
+			strings,
+			strings.orphanRetireConfirm(sweepableCount),
+			listed,
+			{ title: strings.orphanRetireTitle, confirm: strings.orphanRetireConfirmAction },
+		);
+		if (!confirmed || !this.freshness.isCurrent(revision)) return;
+
+		this.adapterRepairRunning = true;
+		this.adapterRepair = null;
+		this.freshness.invalidate();
+		const sweepRevision = this.freshness.capture();
+		void writePluginStatus(this, {
+			currentCheck: checkState('stale', 'A retirement may remove runtime files; run a separate read-only check afterward.'),
+		});
+		this.renderViews();
+
+		try {
+			const outcome = await runOrphanRetirement(
+				this.adapterContext(sweepRevision, undefined, { sweepOrphans: true }),
+				vaultPath,
+				strings,
+			);
+			this.adapterRepair = outcome.report;
+			this.latestOutput = outcome.report.output;
+			this.targetCheckedAt = Date.now();
+			await writePluginStatus(this, {
+				lastRepair: runRecord(outcome.report.status, outcome.report.exitCode, outcome.report.output),
+			});
+			notifyWithCopy(
+				strings,
+				outcome.failedCount === 0
+					? strings.orphanRetireDone(outcome.retiredCount, outcome.kept.length)
+					: strings.orphanRetireFailed(outcome.failedCount),
+				outcome.report.output,
+			);
+		} catch (error) {
+			const output = error instanceof Error ? error.message : String(error);
+			this.adapterRepair = { status: 'failed', exitCode: 1, output };
+			this.latestOutput = output;
+			await writePluginStatus(this, { lastRepair: runRecord('failed', 1, output) });
+			notifyWithCopy(strings, strings.repairAllFailed(1), output);
+		} finally {
+			this.adapterRepairRunning = false;
+			this.targetActivity = null;
+			if (!this.disposed) { this.renderViews(); this.scheduleBackgroundCheck(); }
+		}
 	}
 
 	getVaultBasePath(): string | null {

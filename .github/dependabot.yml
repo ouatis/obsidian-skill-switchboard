@@ -37,6 +37,5 @@ updates:
       - dependency-name: "eslint"
       - dependency-name: "@eslint/js"
         update-types: ["version-update:semver-major"]
-        update-types: ["version-update:semver-major"]
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]

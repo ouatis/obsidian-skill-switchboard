@@ -31,7 +31,9 @@ try {
 		f.controller = new e.AutomaticDistribution({ enabled: () => settings.autoDistribute, consent: () => settings.autoDistributeScope,
 			busy: () => f.busy, scope: f.scope, inspect: () => provider.inspectManifest(vault), requestCheck: () => f.requests++,
 			revoke: async () => { f.revokes++; settings.autoDistribute = false; settings.autoDistributeScope = ''; },
-			repair: async (snapshot, current) => { f.repairs++; f.last = await e.runRepairAll({ ...context, isCurrent: current }, vault, e.getStrings('en'), snapshot); return f.last; },
+			// Automatic distribution writes exactly what manual repair writes, with one
+			// deliberate difference: it was never authorized to delete, so it never sweeps.
+			repair: async (snapshot, current) => { f.repairs++; f.last = await e.runRepairAll({ ...context, isCurrent: current, sweepOrphans: false }, vault, e.getStrings('en'), snapshot); return f.last; },
 			failure: output => f.notifications.push(output) });
 		f.authorize = async () => { settings.autoDistributeScope = (await f.scope()).key; settings.autoDistribute = true; };
 		f.fire = () => { const [id, item] = [...timers].at(-1) ?? []; assert(item); assert.equal(item.ms, 2000); timers.delete(id); item.fn(); };
@@ -75,6 +77,27 @@ try {
 		await write(path.join(f.source, 'references/missing.md'), '# Restored resource\n');
 		f.last = null; f.controller.consider(await f.run()); f.fire(); await until(() => f.last?.repair.status === 'passed');
 		assert.equal((await f.run()).result.status, 'passed'); assert.equal(f.notifications.length, 1); f.controller.cancel();
+	});
+	await test('automatic distribution retires nothing, even with a ledger that names a copy', async () => {
+		const f = await fixture();
+		await write(path.join(f.source, 'leaver/SKILL.md'), '---\nname: leaver\ndescription: Leaving.\n---\n# Leaver\n');
+		await write(path.join(f.vault, 'skills-manifest.json'), JSON.stringify({ schema_version: 1, total_skills: 2, skills: [
+			{ name: 'drawing', shared_file: 'drawing/SKILL.md', adapters: { codex: true } }, { name: 'leaver', shared_file: 'leaver/SKILL.md', adapters: { codex: true } } ] }));
+		await f.authorize(); f.controller.consider(await f.run()); f.fire(); await until(() => f.last !== null);
+		assert.match(await fs.readFile(path.join(f.target, 'leaver/SKILL.md'), 'utf8'), /Leaver/);
+		// The skill leaves the source. The copy stays: only a manual, confirmed
+		// retirement may remove it, because deleting is not overwriting.
+		await fs.rm(path.join(f.source, 'leaver'), { recursive: true, force: true });
+		await fs.writeFile(path.join(f.vault, 'skills-manifest.json'), JSON.stringify({ schema_version: 1, total_skills: 1, skills: [
+			{ name: 'drawing', shared_file: 'drawing/SKILL.md', adapters: { codex: true } } ] }));
+		// The target already matches the reduced source, so there is no drift to repair.
+		// That is the point: the stale copy is an orphan, not a difference, and the
+		// automatic pass only knows how to close differences.
+		f.last = null; f.controller.consider(await f.run()); f.fire(); await pause();
+		assert.equal(f.repairs, 1, 'a target with no drift is not repaired, so nothing can be retired');
+		assert.equal((await fs.readFile(path.join(f.target, 'leaver/SKILL.md'), 'utf8')).includes('Leaver'), true, 'automatic distribution never removes a copy');
+		assert.equal((await fs.readdir(f.target)).includes('leaver'), true, 'the directory is still there');
+		f.controller.cancel();
 	});
 	await test('destination changes revoke consent, labels do not, and overlapping roots are refused', async () => {
 		const f = await fixture(); await f.authorize(); const scope = f.settings.autoDistributeScope;

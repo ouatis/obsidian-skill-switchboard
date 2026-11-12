@@ -58,6 +58,8 @@ place them in `<vault>/.obsidian/plugins/skill-switchboard/`, then enable the pl
 4. Run **Check skills**, then **Repair all**. Missing packages are installed and
    differing copies are replaced from the source after one confirmation. Checks
    are read-only. Background writes require the separate local opt-in below.
+   When a skill is removed from the source, **Retire copies whose source is gone**
+   removes the copies this plugin installed for it, snapshotting each one first.
 
 The installed `SKILL.md` contains the instructions themselves, not a thin wrapper
 that asks the model to read the real instructions elsewhere. Required files are
@@ -110,12 +112,17 @@ overwrite, with names and paths, plus the copies that would be retired.
   remain untouched. Removing a source or target does not silently uninstall old
   copies; a zero-skill source is not reported as success.
 - When a skill leaves the source, the copies this plugin installed for it are
-  reported as **Copies whose source is gone**. Repair removes them after taking a
-  retirement snapshot, so **Restore the latest skill snapshot** brings one back.
+  reported as **Copies whose source is gone**. **Retire copies whose source is
+  gone** removes exactly those, after a retirement snapshot each, so **Restore
+  the latest skill snapshot** brings one back. **Repair all** retires them too,
+  but only after a confirmation that names them; background distribution never
+  does, because it was authorized to overwrite and not to delete.
   A copy is only removed when the install record names it *and* its tree still
   matches what that install recorded; a copy edited since install is reported and
   kept, and a directory the user wrote by hand is never a candidate. The install
   record lives in the plugin's `snapshots/` folder beside the snapshots it keeps.
+  The dedicated command writes nothing else: it does not re-install healthy
+  copies, so a deletion request does not come back as an install report.
 - A complete new directory is prepared and verified beside the destination.
   Source changes during preparation, or a target change after the plan, abort the
   swap; a failed swap attempts to restore the old directory. Restoration or

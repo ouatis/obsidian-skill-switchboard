@@ -30,6 +30,15 @@ export function registerCommands(plugin: SkillSwitchboardPlugin): void {
 		name: strings.restoreLastSnapshot,
 		callback: () => void restoreLatestSnapshot(plugin),
 	});
+
+	// Retirement is its own command, not a corner of "repair all": a user who
+	// deleted a skill from the source wants the stale copy gone, and should not
+	// have to re-install every other copy to get it.
+	plugin.addCommand({
+		id: 'retire-orphan-copies',
+		name: strings.retireOrphanCopies,
+		callback: () => void plugin.retireOrphanCopies(),
+	});
 }
 
 async function copyLatestCheckOutput(plugin: SkillSwitchboardPlugin): Promise<void> {

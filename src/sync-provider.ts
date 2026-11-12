@@ -20,6 +20,14 @@ export interface RepairControl {
 	ledgerDirectory?: string;
 	/** Remove copies whose source skill left the manifest. */
 	sweepOrphans?: boolean;
+	/**
+	 * Retire orphans without writing anything else.
+	 *
+	 * This is the dedicated retirement command's whole point: a user who removed a
+	 * skill from the source should not have to re-install every other copy to get
+	 * the stale one removed. When set, a provider only sweeps.
+	 */
+	retireOnly?: boolean;
 }
 
 export interface SyncProvider {
@@ -61,6 +69,8 @@ export class NativeSyncProvider implements SyncProvider {
 		const native = await repairRuntimeNative(vaultPath, runtime, targetPath, manifest.snapshot, {
 			...control,
 			ledgerDirectory: control?.ledgerDirectory ?? control?.snapshotDirectory,
+			// Retiring is a kind of sweep, so it implies one.
+			sweepOrphans: control?.sweepOrphans || control?.retireOnly,
 		});
 		return { ...native, native };
 	}

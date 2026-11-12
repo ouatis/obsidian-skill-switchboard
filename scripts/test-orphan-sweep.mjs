@@ -61,7 +61,7 @@ async function load(entry) {
 
 try {
 	const modules = {};
-	for (const name of ['manifest', 'native-check', 'native-repair', 'install-ledger']) modules[name] = await bundleOf(name);
+	for (const name of ['manifest', 'native-check', 'native-repair', 'install-ledger', 'adapter-run']) modules[name] = await bundleOf(name);
 	// target-snapshot imports install-ledger, so it needs its own isolated bundle
 	// (one shared outfile would carry two copies of the ledger module state).
 	const snapshotBundle = path.join(temporary, 'target-snapshot.cjs');
@@ -223,13 +223,36 @@ try {
 		assert.ok(!keptPlan.includes(locale.orphanRetire), 'a kept copy is never listed as something to retire');
 	}
 
-	// Retiring it here leaves the target exactly as a real repair would.
-	const swept = await repair(reduced3.snapshot, target);
-	assert.equal(swept.retiredSkills.length, 1, `one copy retired, got ${JSON.stringify(swept.retiredSkills)}`);
-	assert.equal(swept.keptOrphans.length, 1, 'the edited copy from earlier is still reported as kept');
-	assert.equal(swept.keptOrphans[0].includes('leaving'), true, 'the kept copy is the edited one');
-	await assert.rejects(fs.access(path.join(target, 'fresh/SKILL.md')), { code: 'ENOENT' }, 'the copy is really gone');
-	console.log('Orphan retirement passed: install records ownership, source removal retires the copy, snapshot makes it reversible, hand-written and edited copies are kept, and the plan lists what will go.');
+	// The retirement command is its own path, and it must not re-install anything:
+	// a user who removed a skill from the source is not asking for a repair.
+	const { createSyncProvider } = await load('sync-provider');
+	const strings = getStrings('en');
+	const provider = createSyncProvider(() => location);
+	const retireContext = {
+		provider,
+		settings: { targets: [{ id: 'codex', runtime: 'codex', label: 'Codex', path: target, mode: 'copy', enabled: true }] },
+		ledgerDirectory: store,
+		snapshotDirectory: store,
+		sweepOrphans: true,
+	};
+	const outcome = await modules['adapter-run'].retireOrphanCopies(retireContext, vault, strings, reduced3.snapshot);
+	assert.equal(outcome.failedCount, 0, outcome.report.output);
+	assert.equal(outcome.report.status, 'passed', outcome.report.output);
+	assert.equal(outcome.retiredCount, 1, `the command retires the one copy, got ${JSON.stringify(outcome.report.output)}`);
+	assert.equal(outcome.kept.length, 1, 'the edited copy from earlier is still reported as kept');
+	assert.equal(outcome.kept[0].includes('leaving'), true, 'the kept copy is the edited one');
+	assert.match(outcome.report.output, /nothing was installed/, 'a retirement never claims to have installed anything');
+	assert.equal((await repair(reduced3.snapshot, target)).retiredSkills.length, 0, 'the copy is really gone, so a repair has nothing left to retire');
+
+	// Retiring is opt-in: without the ledger there is no evidence, so the command
+	// skips the target rather than guessing which directories are its own.
+	const skipped = await modules['adapter-run'].retireOrphanCopies({ ...retireContext, ledgerDirectory: undefined }, vault, strings, reduced3.snapshot);
+	assert.equal(skipped.retiredCount, 0);
+	assert.equal(skipped.failedCount, 0);
+	assert.equal(skipped.report.status, 'passed');
+	assert.ok(skipped.report.output.includes('RETIRE SKIPPED'), 'a target with no ledger is skipped, not failed');
+	assert.ok(skipped.report.output.includes(strings.orphanLedgerUnavailable), 'the skip says why');
+	console.log('Orphan retirement passed: install records ownership, source removal retires the copy, the dedicated command retires without installing, snapshot makes it reversible, and hand-written and edited copies are kept.');
 } finally {
 	assert(path.resolve(temporary).startsWith(path.resolve(os.tmpdir()) + path.sep));
 	await fs.rm(temporary, { recursive: true, force: true });

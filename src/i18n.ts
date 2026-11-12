@@ -121,6 +121,19 @@ export interface Strings {
 	 * Empty when this computer has no orphan to retire.
 	 */
 	orphanConfirm: (copies: number) => string;
+	/** The retirement command's own notice when there is nothing to retire. */
+	orphanRetireNone: string;
+	/** Title and body of the retirement command's confirmation. */
+	orphanRetireTitle: string;
+	orphanRetireConfirm: (copies: number) => string;
+	orphanRetireConfirmAction: string;
+	/** Success and failure summaries for a retirement-only pass. */
+	orphanRetireDone: (copies: number, kept: number) => string;
+	orphanRetireFailed: (failed: number) => string;
+	/** Reported when the install ledger is missing, so no copy can be named as ours. */
+	orphanLedgerUnavailable: string;
+	/** Command palette label for the retirement command. */
+	retireOrphanCopies: string;
 	/** How many copies were retired and kept back during the last repair. */
 	orphanTotals: (retired: number, kept: number) => string;
 	repairPartial: (files: number | null, failed: number) => string;

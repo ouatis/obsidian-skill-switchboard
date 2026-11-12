@@ -37,6 +37,24 @@ export interface AdapterRunContext {
 	snapshotDirectory?: string;
 	/** Where install evidence is kept. Without it no orphan can be identified or retired. */
 	ledgerDirectory?: string;
+	/**
+	 * Let a repair retire installed copies whose source skill left the manifest.
+	 *
+	 * Off by default: deleting a directory is a different class of action from
+	 * overwriting one, so only a caller that asked for retirement gets it. Manual
+	 * repair turns it on because the confirmation named the copies; automatic
+	 * distribution leaves it off because nobody confirmed anything.
+	 */
+	sweepOrphans?: boolean;
+	/**
+	 * Retire orphans without installing anything.
+	 *
+	 * The dedicated retirement command is the only caller that sets this: a user
+	 * who removed a skill from the source should not have to re-write every other
+	 * copy to get one stale copy removed, and a report full of installs would stop
+	 * answering the question that was asked.
+	 */
+	retireOnly?: boolean;
 }
 
 export interface AdapterRun {
@@ -173,6 +191,92 @@ export interface TargetRepairDetail {
 	followUp?: SyncRuntimeCheckResult;
 }
 
+/** What one retirement pass did, across every target. */
+export interface RetirementOutcome {
+	/** The sweep result per target, or a skip line when there was nothing to do. */
+	report: AdapterCheckResult;
+	/** Copies actually removed. */
+	retiredCount: number;
+	/** Copies kept back, with the reason in parentheses. */
+	kept: string[];
+	/** Targets whose sweep failed, so the caller can report them. */
+	failedCount: number;
+}
+
+/**
+ * Retires orphaned copies and writes nothing else.
+ *
+ * A user who removed a skill from the source should not have to re-write every
+ * healthy copy to get the stale one removed: that would make a deletion request
+ * produce a report full of installs, and the counts would stop answering the
+ * question that was asked. So this runs the sweep alone, through a repair that
+ * is told to write nothing.
+ *
+ * What may go is decided by the same rule as everywhere else: the ledger names
+ * the copy and its tree still matches what the install recorded. Everything
+ * else is reported and kept.
+ */
+export async function retireOrphanCopies(
+	context: AdapterRunContext,
+	vaultPath: string,
+	strings: Strings,
+	snapshot?: SyncManifestSnapshot,
+): Promise<RetirementOutcome> {
+	const lines: string[] = [];
+	const kept: string[] = [];
+	let retiredCount = 0;
+	let failedCount = 0;
+	let firstFailureCode: number | undefined;
+
+	for (const check of await collectTargetChecks(context, vaultPath, snapshot)) {
+		if (context.isCurrent?.() === false) {
+			failedCount += 1;
+			firstFailureCode ??= 1;
+			lines.push(strings.checksStale);
+			break;
+		}
+		const label = displayTargetName(check.target);
+		if (!check.targetPath) {
+			failedCount += 1;
+			firstFailureCode ??= 1;
+			lines.push(`[${label}] RETIRE FAILED\n${check.result.output}`);
+			continue;
+		}
+		// No ledger, no evidence: a copy the plugin cannot name is not its to remove.
+		if (!context.ledgerDirectory) {
+			lines.push(`[${label}] RETIRE SKIPPED\n${strings.orphanLedgerUnavailable}`);
+			continue;
+		}
+		const repair = await context.provider.repairRuntime(vaultPath, check.target.runtime, check.target.path, snapshot, {
+			isCurrent: context.isCurrent,
+			snapshotDirectory: context.snapshotDirectory,
+			ledgerDirectory: context.ledgerDirectory,
+			retireOnly: true,
+		});
+		const retired = (repair.native?.retiredSkills ?? []).length;
+		retiredCount += retired;
+		kept.push(...(repair.native?.keptOrphans ?? []));
+		if (repair.status === 'failed') {
+			failedCount += 1;
+			firstFailureCode ??= repair.exitCode;
+			lines.push(`[${label}] RETIRE FAILED\n${repair.output}`);
+			continue;
+		}
+		lines.push(`[${label}] RETIRED ${retired}\n${repair.output}`);
+	}
+
+	return {
+		report: {
+			status: failedCount === 0 ? 'passed' : 'failed',
+			output: lines.filter(Boolean).join('\n\n'),
+			exitCode: firstFailureCode ?? 0,
+		},
+		retiredCount,
+		kept,
+		failedCount,
+	};
+}
+
 export interface RepairSummary {
 	manifest: ManifestCheckResult;
 	checkResult: AdapterCheckResult;
@@ -269,6 +373,10 @@ export async function repairDriftedTargets(
 	let failedCount = blockedCount;
 	let firstFailureCode: number | undefined;
 	const details: TargetRepairDetail[] = [];
+	// A sweep needs the install evidence, so it is only possible when the caller
+	// supplied a ledger directory; on top of that the caller must opt in.
+	const sweepOrphans = context.sweepOrphans === true && context.ledgerDirectory !== undefined;
+	const retireOnly = context.retireOnly === true && sweepOrphans;
 
 	for (const check of drifted) {
 		if (context.isCurrent?.() === false) {
@@ -291,9 +399,10 @@ export async function repairDriftedTargets(
 			isCurrent: context.isCurrent,
 			snapshotDirectory: context.snapshotDirectory,
 			ledgerDirectory: context.ledgerDirectory,
-			// A sweep removes directories, so it only runs where the caller gave us
-			// somewhere to keep the install evidence that makes removal safe.
-			sweepOrphans: context.ledgerDirectory !== undefined,
+			retireOnly,
+			// A sweep removes directories, so it needs both the install evidence and
+			// an explicit opt-in from the caller.
+			sweepOrphans,
 		});
 		const detail: TargetRepairDetail = { targetId: check.target.id, label, runtime, repair };
 		details.push(detail);
