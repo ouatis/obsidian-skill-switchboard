@@ -1,0 +1,1240 @@
+/* Family shape and rhythm; colors and type always belong to the host theme. */
+.skill-switchboard-view {
+	--ssb-border: var(--background-modifier-border);
+	--ssb-surface: var(--background-primary);
+	--ssb-soft: var(--background-secondary);
+	--ssb-soft: color-mix(in srgb, var(--background-secondary) 35%, var(--background-primary));
+	--ssb-radius: 12px;
+	--ssb-control-radius: 8px;
+	--ssb-motion: 160ms;
+	--ssb-ease: cubic-bezier(0.16, 1, 0.3, 1);
+	--ssb-ink: var(--text-muted);
+	--ssb-match: var(--text-success, var(--color-green));
+	--ssb-drift: var(--text-warning, var(--color-orange));
+	--ssb-success: color-mix(in srgb, var(--ssb-match) 65%, var(--text-normal));
+	--ssb-warning: color-mix(in srgb, var(--ssb-drift) 60%, var(--text-normal));
+	--ssb-error: color-mix(in srgb, var(--text-error) 65%, var(--text-normal));
+	container-type: inline-size;
+	color: var(--text-normal);
+	font-family: var(--font-interface);
+	padding: 16px 24px 32px;
+}
+
+.skill-switchboard-page {
+	margin: 0 auto;
+	max-width: 960px;
+	width: 100%;
+}
+
+/* Header ------------------------------------------------------------------ */
+
+.skill-switchboard-header {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px 20px;
+	justify-content: space-between;
+	padding: 12px 0 20px;
+	margin-bottom: 20px;
+	border-bottom: 1px solid var(--ssb-border);
+	position: sticky;
+	top: 0;
+	background: var(--background-primary);
+	z-index: 2;
+}
+
+.skill-switchboard-heading {
+	flex: 1;
+	min-width: 210px;
+}
+
+.skill-switchboard-title {
+	color: var(--text-normal);
+	font-size: 24px;
+	font-weight: var(--font-semibold);
+	letter-spacing: -0.01em;
+	line-height: 1.35;
+	margin: 0;
+	white-space: nowrap;
+}
+
+.skill-switchboard-subtitle {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+	margin-top: 4px;
+}
+
+.skill-switchboard-actions {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 12px;
+}
+
+.skill-switchboard-main-actions,
+.skill-switchboard-utility-actions {
+	align-items: center;
+	display: flex;
+	gap: 8px;
+}
+
+.skill-switchboard-main-actions {
+	flex-wrap: wrap;
+	max-width: 100%;
+}
+
+.skill-switchboard-actions button {
+	font-size: var(--font-ui-small);
+	border-radius: var(--ssb-control-radius);
+	height: 36px;
+	box-shadow: none;
+	transition: background var(--ssb-motion) var(--ssb-ease), border-color var(--ssb-motion) var(--ssb-ease);
+}
+
+.skill-switchboard-actions .skill-switchboard-button {
+	align-items: center;
+	display: inline-flex;
+	gap: 8px;
+	padding: 0 12px;
+	white-space: nowrap;
+}
+
+.skill-switchboard-button:not(.mod-cta) {
+	background: var(--ssb-surface);
+	border: 1px solid var(--ssb-border);
+	color: var(--text-normal);
+}
+
+.skill-switchboard-button:not(.mod-cta):hover,
+.skill-switchboard-icon-button:hover {
+	background: var(--background-modifier-hover);
+}
+
+.skill-switchboard-button-icon {
+	display: flex;
+}
+
+.skill-switchboard-button-icon svg {
+	height: 14px;
+	width: 14px;
+}
+
+.skill-switchboard-view button:focus-visible,
+.skill-switchboard-view summary:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+.skill-switchboard-icon-button {
+	align-items: center;
+	display: flex;
+	justify-content: center;
+	background: transparent;
+	border: 1px solid var(--ssb-border);
+	color: var(--text-muted);
+	padding: 0;
+	width: 36px;
+}
+
+.skill-switchboard-icon-button svg {
+	height: var(--icon-s);
+	width: var(--icon-s);
+}
+
+/* First-run guide and attention status line -------------------------------- */
+
+.ssb-setup-guide,
+.ssb-attention {
+	background: var(--ssb-surface);
+	border: 1px solid var(--ssb-border);
+	border-radius: var(--ssb-radius);
+	margin-bottom: 20px;
+	padding: 16px;
+}
+
+.ssb-setup-guide {
+	background: color-mix(in srgb, var(--interactive-accent) 5%, var(--ssb-surface));
+}
+
+.ssb-setup-heading {
+	align-items: flex-start;
+	display: flex;
+	gap: 10px;
+}
+
+.ssb-setup-icon {
+	color: var(--interactive-accent);
+	display: flex;
+	flex: 0 0 auto;
+	margin-top: 3px;
+}
+
+.ssb-setup-heading h2 {
+	color: var(--text-normal);
+	font-size: var(--font-ui-medium);
+	font-weight: var(--font-semibold);
+	margin: 0;
+}
+
+.ssb-setup-description {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: 1.5;
+	margin-top: 4px;
+}
+
+.ssb-setup-steps {
+	display: grid;
+	gap: 6px;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	margin-top: 16px;
+}
+
+.ssb-setup-step {
+	align-items: center;
+	border-top: 1px solid var(--ssb-border);
+	color: var(--text-muted);
+	display: flex;
+	font-size: var(--font-ui-small);
+	gap: 8px;
+	line-height: 1.4;
+	padding: 10px 4px 0;
+}
+
+.ssb-setup-step-icon {
+	display: flex;
+	flex: 0 0 auto;
+}
+
+.ssb-setup-step.is-complete {
+	color: var(--text-success, var(--text-normal));
+}
+
+.ssb-setup-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 14px;
+}
+
+.ssb-setup-button,
+.ssb-attention-repair {
+	align-items: center;
+	display: inline-flex;
+	font-size: var(--font-ui-small);
+	gap: 7px;
+	justify-content: center;
+}
+
+.ssb-attention {
+	background: var(--ssb-soft);
+}
+
+.ssb-attention-body {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px 14px;
+	justify-content: space-between;
+}
+
+.ssb-attention-read {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 14px;
+	min-width: 0;
+}
+
+.ssb-attention-pill {
+	align-items: center;
+	background: var(--background-primary);
+	border: 1px solid var(--ssb-border);
+	border-radius: var(--ssb-control-radius);
+	display: inline-flex;
+	font-size: var(--font-ui-small);
+	gap: 8px;
+	padding: 5px 10px;
+}
+
+.ssb-attention-dot {
+	border-radius: 50%;
+	flex: 0 0 auto;
+	height: 8px;
+	width: 8px;
+}
+
+.ssb-attention-pill.is-unknown .ssb-attention-dot { background: var(--text-muted); }
+.ssb-attention-pill.is-passed .ssb-attention-dot { background: var(--text-success, var(--text-normal)); }
+.ssb-attention-pill.is-warning .ssb-attention-dot { background: var(--text-warning, var(--text-normal)); }
+.ssb-attention-pill.is-failed .ssb-attention-dot { background: var(--text-error, var(--text-normal)); }
+
+.ssb-attention-stats {
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.ssb-attention-message {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: 1.5;
+}
+
+.ssb-attention-body.is-passed .ssb-attention-message {
+	color: var(--text-success, var(--text-normal));
+}
+
+.ssb-attention-body.is-warning .ssb-attention-message {
+	color: var(--text-warning, var(--text-normal));
+}
+
+.ssb-attention-body.is-failed .ssb-attention-message {
+	color: var(--text-error, var(--text-normal));
+}
+
+.ssb-attention-metrics {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.ssb-attention-metric {
+	align-items: center;
+	background: var(--background-primary);
+	border: 1px solid var(--ssb-border);
+	border-radius: var(--ssb-control-radius);
+	display: inline-flex;
+	font-size: var(--font-ui-smaller);
+	gap: 5px;
+	padding: 5px 8px;
+}
+
+.ssb-attention-metric-icon {
+	color: var(--text-muted);
+	display: flex;
+}
+
+.ssb-attention-metric-value {
+	color: var(--text-normal);
+	font-family: var(--font-monospace);
+	font-variant-numeric: tabular-nums;
+	font-weight: var(--font-semibold);
+}
+
+.ssb-attention-metric-label,
+.ssb-attention-automation {
+	color: var(--text-muted);
+}
+
+.ssb-attention-actions {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.ssb-attention-repair {
+	border: 1px solid var(--interactive-accent);
+	color: var(--text-normal);
+	padding: 6px 10px;
+}
+
+.ssb-attention-repair-icon,
+.ssb-attention-automation-icon {
+	display: flex;
+}
+
+.ssb-attention-automation {
+	align-items: center;
+	display: inline-flex;
+	font-size: var(--font-ui-smaller);
+	gap: 6px;
+}
+
+.ssb-attention-meta {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	margin-top: 12px;
+}
+
+/* Diagnostic evidence ------------------------------------------------------ */
+
+.ssb-evidence {
+	border: 1px solid var(--ssb-border);
+	border-radius: var(--ssb-radius);
+	margin-bottom: 24px;
+}
+
+.ssb-evidence > summary {
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+	padding: 10px 14px;
+}
+
+.ssb-evidence[open] > summary {
+	border-bottom: 1px solid var(--ssb-border);
+}
+
+.ssb-evidence .skill-switchboard-check {
+	border: 0;
+	border-radius: 0;
+	margin-bottom: 0;
+}
+
+/* Adapter status ---------------------------------------------------------- */
+
+.skill-switchboard-check {
+	background: var(--ssb-soft);
+	border: 1px solid var(--ssb-border);
+	border-radius: var(--ssb-radius);
+	margin-bottom: 24px;
+	padding: 12px 16px;
+}
+
+.skill-switchboard-status {
+	align-items: center;
+	display: flex;
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-medium);
+	gap: var(--size-2-2);
+	line-height: 1.5;
+}
+
+.skill-switchboard-status.is-passed {
+	color: var(--ssb-success);
+}
+
+.skill-switchboard-status.is-failed {
+	color: var(--ssb-error);
+}
+
+.skill-switchboard-status.is-running {
+	color: var(--text-accent);
+}
+
+.skill-switchboard-status.is-warning {
+	color: var(--text-warning);
+}
+
+.skill-switchboard-status.is-unknown,
+.skill-switchboard-evidence-note {
+	color: var(--text-muted);
+}
+
+.skill-switchboard-evidence-note {
+	font-size: var(--font-ui-smaller);
+	line-height: 1.6;
+	margin: 10px 0;
+}
+
+.skill-switchboard-resource-details {
+	border-top: 1px solid var(--ssb-border);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.6;
+	padding: 10px 0;
+	overflow-wrap: anywhere;
+}
+
+.skill-switchboard-resource-details strong {
+	display: block;
+	margin-top: 6px;
+}
+
+.skill-switchboard-install-plan h3 {
+	font-size: var(--font-ui-small);
+	margin: 0;
+}
+
+.skill-switchboard-plan-item {
+	border-top: 1px solid var(--ssb-border);
+	padding: 8px 0;
+}
+
+.skill-switchboard-plan-item:first-of-type {
+	border-top: 0;
+}
+
+.skill-switchboard-status + .skill-switchboard-status {
+	margin-top: 8px;
+}
+
+.skill-switchboard-status span,
+.ssb-deck-target-status {
+	text-decoration: none;
+}
+
+.skill-switchboard-status-icon {
+	display: flex;
+}
+
+.skill-switchboard-status-icon svg {
+	height: var(--icon-s);
+	width: var(--icon-s);
+}
+
+.skill-switchboard-errors {
+	background: var(--background-modifier-error);
+	border-radius: var(--ssb-radius);
+	color: var(--text-error);
+	margin-bottom: var(--size-4-3);
+	padding: var(--size-4-2) var(--size-4-3);
+}
+
+/* Search ------------------------------------------------------------------ */
+
+.skill-switchboard-library-header {
+	align-items: center;
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	margin: 20px 0 10px;
+}
+
+.skill-switchboard-library-header h2 {
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	margin: 0;
+}
+
+.skill-switchboard-library-note {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.skill-switchboard-search {
+	align-items: center;
+	background: var(--ssb-surface);
+	border: 1px solid var(--ssb-border);
+	border-radius: var(--ssb-control-radius);
+	display: flex;
+	gap: var(--size-2-2);
+	margin-bottom: 12px;
+	padding: 0 12px;
+	transition: border-color var(--ssb-motion) var(--ssb-ease);
+	scroll-margin-top: 130px;
+}
+
+.skill-switchboard-search:focus-within {
+	border-color: var(--interactive-accent);
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+.skill-switchboard-search-icon {
+	color: var(--text-muted);
+	display: flex;
+	flex-shrink: 0;
+}
+
+.skill-switchboard-search-icon svg {
+	height: var(--icon-s);
+	width: var(--icon-s);
+}
+
+.skill-switchboard-view input.skill-switchboard-search-input {
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+	color: var(--text-normal);
+	flex: 1;
+	font-size: var(--font-ui-small);
+	min-width: 0;
+	outline: none;
+	padding: 9px 0;
+	height: 36px;
+}
+
+.skill-switchboard-search-count {
+	color: var(--text-muted);
+	flex-shrink: 0;
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+}
+
+/* The clear button only earns space once something is typed. */
+.skill-switchboard-search-clear {
+	display: none;
+	flex-shrink: 0;
+	font-size: var(--font-ui-smaller);
+	padding: 0 var(--size-2-2);
+}
+
+.skill-switchboard-search.is-filtering .skill-switchboard-search-clear {
+	display: block;
+}
+
+.skill-switchboard-no-results {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	padding: var(--size-4-5) var(--size-4-3);
+	text-align: center;
+}
+
+.skill-switchboard-no-results-query {
+	color: var(--text-normal);
+	font-weight: var(--font-medium);
+	margin: var(--size-2-2) 0 var(--size-4-2);
+	word-break: break-all;
+}
+
+.skill-switchboard-no-results button {
+	font-size: var(--font-ui-smaller);
+}
+
+/* Skill list -------------------------------------------------------------- */
+
+.skill-switchboard-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	border: 1px solid var(--ssb-border);
+	border-radius: var(--ssb-radius);
+	overflow: hidden;
+	scroll-margin-top: 110px;
+}
+
+.skill-switchboard-group-heading {
+	align-items: baseline;
+	color: var(--text-muted);
+	display: flex;
+	font-size: var(--font-ui-small);
+	gap: var(--size-2-2);
+	background: var(--ssb-soft);
+	padding: 12px 16px;
+}
+
+.skill-switchboard-card {
+	background: var(--ssb-surface);
+	border: none;
+	border-bottom: 1px solid var(--ssb-border);
+	transition: background var(--ssb-motion) var(--ssb-ease);
+}
+
+.skill-switchboard-card:last-child {
+	border-bottom: 0;
+}
+
+.skill-switchboard-card.is-actionable {
+	cursor: pointer;
+}
+
+.skill-switchboard-card.is-actionable:hover {
+	background: var(--ssb-soft);
+}
+
+.skill-switchboard-card-action {
+	appearance: none;
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	box-sizing: border-box;
+	color: inherit;
+	cursor: pointer;
+	display: block;
+	font: inherit;
+	height: auto;
+	max-height: none;
+	min-height: 0;
+	padding: 16px 16px var(--size-2-2);
+	text-align: left;
+	white-space: normal;
+	width: 100%;
+}
+
+.skill-switchboard-card-action:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: -3px;
+}
+
+.skill-switchboard-card-heading {
+	align-items: baseline;
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+}
+
+.skill-switchboard-card-heading strong {
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+}
+
+.skill-switchboard-badge {
+	background: var(--ssb-soft);
+	border: 1px solid var(--ssb-border);
+	border-radius: 4px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	font-variant-numeric: tabular-nums;
+	padding: 0 var(--size-2-2);
+}
+
+.skill-switchboard-description {
+	color: var(--text-muted);
+	display: block;
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+	margin-top: var(--size-2-1);
+	overflow-wrap: anywhere;
+}
+
+/* Collapsible details ----------------------------------------------------- */
+
+.skill-switchboard-details {
+	padding: 0 16px 16px;
+}
+
+.skill-switchboard-details > summary {
+	align-items: center;
+	border-radius: var(--ssb-control-radius);
+	color: var(--text-muted);
+	cursor: pointer;
+	display: flex;
+	font-size: var(--font-ui-smaller);
+	gap: var(--size-2-2);
+	list-style: none;
+	padding: var(--size-2-1) 0;
+}
+
+.skill-switchboard-details > summary::-webkit-details-marker {
+	display: none;
+}
+
+.skill-switchboard-details > summary::before {
+	color: var(--text-faint);
+	content: '›';
+	display: inline-block;
+	transition: transform var(--ssb-motion) var(--ssb-ease);
+	width: 1em;
+}
+
+.skill-switchboard-details[open] > summary::before {
+	transform: rotate(90deg);
+}
+
+.skill-switchboard-details > summary:hover {
+	color: var(--text-normal);
+}
+
+.skill-switchboard-card-meta {
+	padding-left: 1.5em;
+}
+
+.skill-switchboard-check-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.skill-switchboard-output-body {
+	padding-left: 1.5em;
+}
+
+.skill-switchboard-output-body .skill-switchboard-copy-button {
+	margin-bottom: var(--size-2-2);
+}
+
+.skill-switchboard-check-output {
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--ssb-control-radius);
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	margin: 0;
+	max-height: 320px;
+	overflow: auto;
+	padding: var(--size-4-2);
+	user-select: text;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.skill-switchboard-copy-button {
+	flex-shrink: 0;
+	font-size: var(--font-ui-smaller);
+}
+
+/* Footer ------------------------------------------------------------------ */
+
+.skill-switchboard-muted,
+.skill-switchboard-muted,
+.skill-switchboard-path,
+.skill-switchboard-hash {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.skill-switchboard-path,
+.skill-switchboard-hash {
+	font-family: var(--font-monospace);
+	line-height: 1.6;
+	word-break: break-all;
+}
+
+.skill-switchboard-path {
+	margin-top: var(--size-2-1);
+}
+
+/* Dynamic settings must fit Obsidian's separate settings window as well as a wide tab. */
+:is(.skill-switchboard-settings, .skill-switchboard-settings-section) .setting-item {
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+}
+
+:is(.skill-switchboard-settings, .skill-switchboard-settings-section) .setting-item-info {
+	flex: 1 1 160px;
+	min-width: 0;
+	margin: 0;
+}
+
+:is(.skill-switchboard-settings, .skill-switchboard-settings-section) .setting-item-control {
+	flex: 1 1 360px;
+	min-width: 0;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+}
+
+:is(.skill-switchboard-settings, .skill-switchboard-settings-section) .setting-item-control :is(input, select) {
+	min-width: 0;
+	max-width: 100%;
+}
+
+.skill-switchboard-empty {
+	color: var(--text-muted);
+	padding: var(--size-4-6) var(--size-4-4);
+	text-align: center;
+}
+
+.skill-switchboard-empty h3 {
+	color: var(--text-normal);
+	margin-bottom: var(--size-2-2);
+}
+
+/* Notices ----------------------------------------------------------------- */
+
+.skill-switchboard-notice-copy {
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+	margin-left: var(--size-4-2);
+}
+
+.skill-switchboard-clipboard-textarea {
+	left: -10000px;
+	opacity: 0;
+	position: fixed;
+	top: 0;
+}
+
+/* Distribution deck: quiet line-work, driven by real check events. --------- */
+
+.ssb-deck {
+	background: var(--ssb-surface);
+	border: 1px solid var(--ssb-border);
+	border-radius: var(--ssb-radius);
+	margin: 0 0 20px;
+	padding: 20px;
+	width: 100%;
+}
+
+.ssb-deck-header {
+	align-items: start;
+	display: flex;
+	justify-content: space-between;
+	gap: var(--size-4-2);
+}
+
+.ssb-deck-title {
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	line-height: 1.5;
+}
+
+.ssb-deck-subtitle,
+.ssb-deck-source-path,
+.ssb-deck-footer {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+}
+
+.skill-switchboard-view button.ssb-deck-source-path {
+	background: transparent;
+	border: none;
+	border-radius: var(--ssb-control-radius);
+	box-shadow: none;
+	color: var(--text-muted);
+	display: block;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	height: auto;
+	line-height: 1.5;
+	margin-top: 12px;
+	overflow: hidden;
+	padding: 0;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	width: 100%;
+}
+
+.skill-switchboard-view .ssb-deck-hide {
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	border: 1px solid var(--ssb-border);
+	border-radius: var(--ssb-control-radius);
+	height: 32px;
+	width: 32px;
+	padding: 8px;
+}
+
+.ssb-deck-hide svg {
+	height: 14px;
+	width: 14px;
+}
+
+.ssb-deck-body {
+	align-items: center;
+	display: grid;
+	gap: 12px;
+	grid-template-columns: minmax(0, 1fr);
+	margin-top: 12px;
+}
+
+.ssb-deck-stage,
+.ssb-deck-side {
+	min-width: 0;
+}
+
+.ssb-deck-svg {
+	display: block;
+	margin: 0 auto;
+	max-width: 460px;
+	overflow: visible;
+	width: 100%;
+}
+
+.ssb-deck-svg path {
+	stroke-linecap: round;
+	stroke-linejoin: round;
+	vector-effect: non-scaling-stroke;
+}
+
+.ssb-deck-grid {
+	fill: none;
+	opacity: 0.28;
+	stroke: var(--background-modifier-border);
+	stroke-width: 0.7;
+}
+
+.ssb-deck-route {
+	color: var(--text-faint);
+	fill: none;
+	opacity: 0.45;
+	stroke: currentColor;
+	stroke-dasharray: 3 6;
+	stroke-width: 1;
+	transition: opacity var(--ssb-motion) var(--ssb-ease), color var(--ssb-motion) var(--ssb-ease);
+}
+
+.ssb-deck-node,
+.ssb-deck-source {
+	color: var(--ssb-ink);
+	outline: none;
+}
+
+.ssb-deck-source {
+	color: var(--text-normal);
+}
+
+.ssb-deck-footprint {
+	fill: none;
+	opacity: 0.25;
+	stroke: currentColor;
+	stroke-width: 0.8;
+}
+
+.ssb-deck-tile {
+	transform: translateY(0);
+	transition: transform var(--ssb-motion) var(--ssb-ease);
+}
+
+.ssb-deck-plate-top,
+.ssb-deck-plate-side {
+	fill: var(--background-primary);
+	stroke: currentColor;
+	stroke-width: 1;
+}
+
+.ssb-deck-plate-side {
+	stroke-opacity: 0.5;
+}
+
+.ssb-deck-crease {
+	fill: none;
+	stroke: currentColor;
+	stroke-opacity: 0.35;
+	stroke-width: 0.7;
+}
+
+.ssb-deck-mark,
+.ssb-deck-source-mark {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.2;
+}
+
+.ssb-deck-node-label {
+	fill: var(--text-muted);
+	font-family: var(--font-interface);
+	font-size: 12px;
+	letter-spacing: 0;
+}
+
+.ssb-deck-node.is-highlighted .ssb-deck-tile,
+.ssb-deck-source.is-highlighted .ssb-deck-tile {
+	transform: translateY(-6px);
+}
+
+.ssb-deck-node.is-highlighted .ssb-deck-footprint,
+.ssb-deck-source.is-highlighted .ssb-deck-plate-top {
+	opacity: 1;
+	stroke: var(--text-accent);
+	stroke-width: 1.6;
+}
+
+.ssb-deck-route.is-highlighted {
+	opacity: 1;
+	stroke-dasharray: none;
+}
+
+.ssb-deck .is-clean {
+	color: var(--ssb-success);
+}
+
+.ssb-deck-route.is-clean {
+	opacity: 0.65;
+	stroke-dasharray: none;
+}
+
+.skill-switchboard-repair-plan {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-height: 40vh;
+	overflow: auto;
+}
+
+.ssb-deck .is-drift,
+.ssb-deck .is-blocked {
+	color: var(--ssb-warning);
+}
+
+.ssb-deck .is-unavailable,
+.ssb-deck .is-repair-failed {
+	color: var(--ssb-error);
+}
+
+.ssb-deck .is-checking,
+.ssb-deck .is-repairing {
+	color: var(--text-accent);
+}
+
+.ssb-deck-route.is-checking,
+.ssb-deck-route.is-repairing {
+	animation: ssb-deck-trace 650ms ease-out both;
+	opacity: 0.9;
+	stroke-dasharray: 6 5;
+}
+
+@keyframes ssb-deck-trace {
+	from { stroke-dashoffset: 24; }
+	to { stroke-dashoffset: 0; }
+}
+
+.ssb-deck-readout {
+	border-bottom: 1px solid var(--ssb-border);
+	min-height: 78px;
+	padding: 0 0 12px;
+}
+
+.ssb-deck-readout-title {
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	line-height: 1.5;
+}
+
+.ssb-deck-readout-detail {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	line-height: 1.5;
+	word-break: break-word;
+	margin-top: 4px;
+}
+
+.ssb-deck-targets {
+	display: grid;
+	gap: 0 16px;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	list-style: none;
+	margin: 8px 0 0;
+	padding: 0;
+}
+
+.ssb-deck-targets[hidden] {
+	display: none;
+}
+
+.ssb-deck-target {
+	min-width: 0;
+	padding: 0;
+}
+
+.skill-switchboard-view button.ssb-deck-target-button {
+	align-items: center;
+	background: transparent;
+	border: none;
+	border-radius: var(--ssb-control-radius);
+	box-shadow: none;
+	color: inherit;
+	display: flex;
+	font-size: var(--font-ui-smaller);
+	gap: 8px;
+	height: auto;
+	min-width: 0;
+	padding: 8px 0;
+	line-height: 1.4;
+	text-align: left;
+	width: 100%;
+}
+
+.ssb-deck-dot {
+	background: currentColor;
+	border-radius: 50%;
+	flex-shrink: 0;
+	height: 5px;
+	width: 5px;
+}
+
+.ssb-deck-target-name {
+	color: var(--text-muted);
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ssb-deck-target.is-highlighted .ssb-deck-target-name {
+	color: var(--text-normal);
+}
+
+.ssb-deck-target-status {
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	font-size: var(--font-ui-smaller);
+}
+
+.ssb-deck-footer {
+	border-top: 1px solid var(--ssb-border);
+	font-size: var(--font-ui-smaller);
+	margin-top: 12px;
+	padding-top: 12px;
+}
+
+@container (min-width: 680px) {
+	.ssb-deck-body {
+		grid-template-columns: minmax(0, 1.4fr) minmax(220px, 1fr);
+		gap: 24px;
+	}
+
+	.ssb-deck-side {
+		border-left: 1px solid var(--ssb-border);
+		padding-left: 24px;
+	}
+
+	.ssb-deck-targets {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@container (max-width: 520px) {
+	.skill-switchboard-header {
+		align-items: start;
+		gap: 12px;
+		position: static;
+	}
+
+	.skill-switchboard-heading,
+	.skill-switchboard-actions {
+		width: 100%;
+	}
+
+	.skill-switchboard-actions {
+		justify-content: space-between;
+	}
+
+	.ssb-deck {
+		padding: 16px;
+	}
+
+	.skill-switchboard-summary {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.skill-switchboard-view button.skill-switchboard-stat {
+		padding: 10px 12px;
+	}
+
+	.skill-switchboard-view button.skill-switchboard-stat:first-child {
+		grid-column: 1 / -1;
+		border-right: 0;
+		border-bottom: 1px solid var(--ssb-border);
+	}
+
+	.ssb-setup-steps {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.ssb-setup-step {
+		border-top: 0;
+		padding: 0;
+	}
+}
+
+@container (max-width: 340px) {
+	.ssb-deck-targets {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.skill-switchboard-view {
+		--ssb-motion: 0ms;
+	}
+
+	.skill-switchboard-view *,
+	.skill-switchboard-view *::before,
+	.skill-switchboard-view *::after {
+		transition: none;
+	}
+
+	.ssb-deck .ssb-deck-route,
+	.ssb-deck .ssb-deck-tile {
+		animation: none;
+		transition: none;
+	}
+
+	.ssb-deck .ssb-deck-tile,
+	.ssb-deck .ssb-deck-node.is-highlighted .ssb-deck-tile,
+	.ssb-deck .ssb-deck-source.is-highlighted .ssb-deck-tile {
+		transform: none;
+	}
+}

@@ -1,0 +1,94 @@
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+import { isAbsolutePath } from '../utils/paths';
+
+export const EXCLUDED_SKILL_DIRS = new Set([
+	'.git',
+	'.github',
+	'.hub',
+	'.archive',
+	'.curator_backups',
+	'.locks',
+	'.venv',
+	'venv',
+	'node_modules',
+	'site-packages',
+	'__pycache__',
+]);
+
+export const CODEX_STALE_PATTERN = '\\[file\\]\\(</abs/path/file\\.md:42>\\)';
+
+export interface InstalledSkillEntry {
+	name: string;
+	path: string;
+}
+
+export async function readText(filePath: string): Promise<string> {
+	return (await fs.readFile(filePath)).toString('utf8').replace(/\r\n?/g, '\n');
+}
+
+export async function pathExists(filePath: string): Promise<boolean> {
+	try {
+		await fs.access(filePath);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+export async function existingRealPath(filePath: string): Promise<string> {
+	const candidate = isAbsolutePath(filePath) ? filePath : path.resolve(filePath);
+	let current = candidate;
+	const suffix: string[] = [];
+	while (true) {
+		try {
+			const real = await fs.realpath(current);
+			return suffix.length === 0 ? real : path.resolve(real, ...suffix.reverse());
+		} catch {
+			const parent = path.dirname(current);
+			if (parent === current) return candidate;
+			suffix.push(path.basename(current));
+			current = parent;
+		}
+	}
+}
+
+export async function walkFiles(root: string, options: {
+	excludeDirectories?: Set<string>;
+	include?: (filePath: string) => boolean;
+} = {}): Promise<string[]> {
+	if (!(await pathExists(root))) return [];
+	const files: string[] = [];
+	const pending = [isAbsolutePath(root) ? root : path.resolve(root)];
+	while (pending.length > 0) {
+		const current = pending.pop();
+		if (!current) continue;
+		const entries = await fs.readdir(current, { withFileTypes: true });
+		for (const entry of entries) {
+			if (entry.isDirectory()) {
+				if (!(options.excludeDirectories ?? EXCLUDED_SKILL_DIRS).has(entry.name)) {
+					pending.push(path.join(current, entry.name));
+				}
+				continue;
+			}
+			if (!entry.isFile() && !entry.isSymbolicLink()) continue;
+			const filePath = path.join(current, entry.name);
+			if (!options.include || options.include(filePath)) files.push(filePath);
+		}
+	}
+	return files.sort((left, right) => left.localeCompare(right));
+}
+
+export async function installedSkillEntries(root: string): Promise<InstalledSkillEntry[]> {
+	const files = await walkFiles(root);
+	const entries: InstalledSkillEntry[] = [];
+	for (const filePath of files) {
+		if (path.basename(filePath) !== 'SKILL.md') continue;
+		const text = await readText(filePath);
+		const match = text.match(/^name:\s*(.+?)\s*$/m);
+		if (!match?.[1]) continue;
+		const name = match[1].trim().replace(/^"|"$/g, '');
+		entries.push({ name, path: filePath });
+	}
+	return entries;
+}
