@@ -51,7 +51,16 @@ jobs:
               run: |
                   tag="${GITHUB_REF#refs/tags/}"
 
-                  gh release create "$tag" \
-                    --title="$tag" \
-                    --generate-notes \
-                    main.js manifest.json ${{ steps.styles.outputs.exists == 'true' && 'styles.css' || '' }}
+                  # 重推同一 tag 时 release 可能已存在(此前 0.8.0 双 CI 撞
+                  # "a release with the same tag name already exists" 双红):
+                  # 已存在则只补资产并刷新 notes,不存在才新建
+                  if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+                      gh release upload "$tag" --clobber \
+                        main.js manifest.json ${{ steps.styles.outputs.exists == 'true' && 'styles.css' || '' }}
+                      gh release edit "$tag" --generate-notes
+                  else
+                      gh release create "$tag" \
+                        --title="$tag" \
+                        --generate-notes \
+                        main.js manifest.json ${{ steps.styles.outputs.exists == 'true' && 'styles.css' || '' }}
+                  fi
