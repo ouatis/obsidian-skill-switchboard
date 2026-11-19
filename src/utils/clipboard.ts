@@ -26,7 +26,7 @@ function writeWithTextarea(text: string): boolean {
 		attr: { readonly: '' },
 	});
 	textarea.value = text;
-	document.body.appendChild(textarea);
+	activeDocument.body.appendChild(textarea);
 	textarea.select();
 	let copied = false;
 	try {
@@ -34,7 +34,7 @@ function writeWithTextarea(text: string): boolean {
 	} catch {
 		copied = false;
 	}
-	document.body.removeChild(textarea);
+	activeDocument.body.removeChild(textarea);
 	return copied;
 }
 
@@ -43,7 +43,7 @@ function writeWithTextarea(text: string): boolean {
  * path that still works when `navigator.clipboard` is unavailable inside Obsidian's
  * renderer. `eslint.config.mts` exempts this file for that reason.
  */
-const runCopyCommand: () => boolean =
-	typeof document.execCommand === 'function'
-		? () => document.execCommand('copy')
-		: () => false;
+const runCopyCommand: () => boolean = () =>
+	typeof activeDocument.execCommand === 'function'
+		? activeDocument.execCommand('copy')
+		: false;

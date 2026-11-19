@@ -40,12 +40,12 @@
 		"@types/node": "^22.15.17",
 		"esbuild": "^0.28.2",
 		"eslint": "^9.39.4",
-		"eslint-plugin-obsidianmd": "^0.5.1",
+		"eslint-plugin-obsidianmd": "^0.6.0",
 		"globals": "^17.14.0",
 		"jiti": "^2.6.1",
 		"obsidian": "^1.14.4",
 		"typescript": "^5.8.3",
-		"typescript-eslint": "^8.72.1"
+		"typescript-eslint": "^8.72.2"
 	},
 	"overrides": {
 		"moment": "^2.31.0",

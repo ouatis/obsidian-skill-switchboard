@@ -20,15 +20,16 @@ const strings = {
 
 try {
 	const bundle = path.join(tempRoot, 'adapter-run.cjs');
-	await esbuild.build({
+	const built = await esbuild.build({
 		entryPoints: [path.join(repo, 'src', 'sync', 'adapter-run.ts')],
 		bundle: true,
 		platform: 'node',
 		format: 'cjs',
-		outfile: bundle,
+		write: false,
 		external: ['node:*'],
 		logLevel: 'silent',
 	});
+	await fs.writeFile(bundle, built.outputFiles[0].contents);
 	const run = await import(pathToFileURL(bundle).href);
 
 	const target = (over = {}) => ({
