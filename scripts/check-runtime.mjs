@@ -65,15 +65,16 @@ try {
 		['source.cjs', 'src/sync/source.ts'],
 		['package-paths.cjs', 'src/sync/package-paths.ts'],
 	]) {
-		await esbuild.build({
+		const built = await esbuild.build({
 			entryPoints: [path.join(repo, entry)],
 			bundle: true,
 			platform: 'node',
 			format: 'cjs',
-			outfile: path.join(tempRoot, name),
+			write: false,
 			external: ['node:*'],
 			logLevel: 'silent',
 		});
+		await fs.writeFile(path.join(tempRoot, name), built.outputFiles[0].contents);
 	}
 
 	const load = (name) => import(pathToFileURL(path.join(tempRoot, name)).href);
