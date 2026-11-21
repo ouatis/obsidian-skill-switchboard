@@ -44,10 +44,10 @@ try {
 	await write(path.join(claude, 'Existing', 'SKILL.md'), 'AGENT EXISTING\n');
 	await write(path.join(claude, 'legacy-card', 'SKILL.md'), 'AGENT LEGACY\n');
 	await write(path.join(claude, 'con', 'SKILL.md'), 'RESERVED NAME\n');
-	await write(path.join(claude, 'sym-skill', 'SKILL.md'), 'MAIN\n');
-	const secretTarget = path.join(temporary, 'secret.txt');
-	await write(secretTarget, 'secret\n');
 	if (process.platform !== 'win32') {
+		await write(path.join(claude, 'sym-skill', 'SKILL.md'), 'MAIN\n');
+		const secretTarget = path.join(temporary, 'secret.txt');
+		await write(secretTarget, 'secret\n');
 		await fs.symlink(secretTarget, path.join(claude, 'sym-skill', 'leak.txt'));
 	}
 

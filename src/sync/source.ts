@@ -96,11 +96,13 @@ export async function discoverVaultSkillsRoot(vaultPath: string): Promise<string
 	async function visit(directory: string, depth: number): Promise<void> {
 		if (depth > MAX_DISCOVERY_DEPTH) return;
 		if (++visited > MAX_DISCOVERY_DIRECTORIES) throw new Error('Skills auto-discovery reached its safety limit. Set the source folder manually.');
-		const entries = await fs.readdir(directory, { withFileTypes: true }).catch((error: unknown) => {
-			if (isNodeError(error, 'ENOENT') || isNodeError(error, 'EACCES')) return null;
+		let entries;
+		try {
+			entries = await fs.readdir(directory, { withFileTypes: true });
+		} catch (error) {
+			if (isNodeError(error, 'ENOENT') || isNodeError(error, 'EACCES')) return;
 			throw error;
-		});
-		if (!entries) return;
+		}
 		const subdirectories: string[] = [];
 		for (const entry of entries) {
 			if (entry.isFile() && entry.name === 'SKILL.md') skillFiles.push(path.join(directory, entry.name));

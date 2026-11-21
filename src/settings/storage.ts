@@ -10,8 +10,8 @@ type ConnectionSettings = Pick<SkillSwitchboardSettings, typeof CONNECTION_KEYS[
 type SharedSettings = Pick<SkillSwitchboardSettings, typeof PREFERENCE_KEYS[number]> & { settingsStorageVersion: 2 };
 
 const queueKey = Symbol.for('ouatis.skill-switchboard.machine-settings-writes');
-// Filesystem operations share a process-level queue across plugin reloads.
-const shared = process as typeof process & { [key: symbol]: unknown };
+// Filesystem operations share a window/realm-level queue across plugin reloads.
+const shared = (typeof window !== 'undefined' ? window : Object) as unknown as { [key: symbol]: unknown };
 const writes = (shared[queueKey] as Map<string, Promise<void>> | undefined) ?? new Map<string, Promise<void>>();
 shared[queueKey] = writes;
 

@@ -74,7 +74,7 @@ export async function cardFiles(entry: string, root: string): Promise<SourceFile
 		const bytes = await fs.readFile(real);
 		seen.set(real, { path: real === entry ? 'SKILL.md' : path.relative(root, real).replaceAll(path.sep, '/'), source: real, sha256: digest(bytes), executable: Boolean(stat.mode & 0o111) });
 		if (!real.endsWith('.md')) continue;
-		const text = bytes.toString('utf8');
+		const text: string = bytes.toString('utf8');
 		if (real === entry) {
 			const metadata = scalarFrontmatter(text);
 			if (metadata.package_path) {
@@ -92,7 +92,7 @@ export async function cardFiles(entry: string, root: string): Promise<SourceFile
 		const literals = [...text.matchAll(/(?:^|[^\w./\\~:-])((?:references|scripts|assets)\/[A-Za-z0-9._/-]+\.[A-Za-z0-9]+)/g)].map((match) => match[1]!);
 		for (const link of [...links, ...literals]) {
 			if (/^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(link)) continue;
-			const relative = decodeURIComponent(link.split('#')[0]!);
+			const relative = decodeURIComponent(link.split('#')[0] ?? '');
 			if (!relative) continue;
 			const candidate = relative.startsWith('references/') ? path.resolve(root, relative) : path.resolve(path.dirname(real), relative);
 			pending.push(candidate);
