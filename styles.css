@@ -1238,3 +1238,78 @@
 		transform: none;
 	}
 }
+
+/* Drift diff preview ------------------------------------------------------ */
+
+.skill-switchboard-diff-details {
+	margin-top: 8px;
+}
+
+.skill-switchboard-diff-body {
+	margin-top: 6px;
+	padding-left: 1.5em;
+}
+
+.skill-switchboard-diff-files {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	margin-bottom: 8px;
+}
+
+.skill-switchboard-diff-file {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	overflow-wrap: anywhere;
+}
+
+.skill-switchboard-diff-file.is-added {
+	color: var(--ssb-success);
+}
+
+.skill-switchboard-diff-file.is-removed {
+	color: var(--ssb-error);
+}
+
+.skill-switchboard-diff-file.is-modified {
+	color: var(--ssb-warning);
+}
+
+.skill-switchboard-diff-heading {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	margin: 6px 0 4px;
+}
+
+.skill-switchboard-diff-preview {
+	background: var(--background-primary);
+	border: 1px solid var(--ssb-border);
+	border-radius: var(--ssb-control-radius);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	max-height: 280px;
+	overflow: auto;
+	padding: 6px 0;
+	user-select: text;
+}
+
+.skill-switchboard-diff-line {
+	padding: 1px 10px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.skill-switchboard-diff-line.is-context {
+	color: var(--text-muted);
+}
+
+.skill-switchboard-diff-line.is-add {
+	background: color-mix(in srgb, var(--ssb-match) 12%, transparent);
+	color: var(--ssb-success);
+}
+
+.skill-switchboard-diff-line.is-remove {
+	background: color-mix(in srgb, var(--text-error) 12%, transparent);
+	color: var(--ssb-error);
+}
+

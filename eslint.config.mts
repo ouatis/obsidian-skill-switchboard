@@ -16,6 +16,7 @@ export default defineConfig(
 		'scripts/test-packages.mjs',
 		'scripts/test-install-boundaries.mjs',
 		'scripts/test-install-plan.mjs',
+		'scripts/test-drift-diff.mjs',
 		'scripts/test-automatic.mjs',
 		'scripts/test-package-ui-live.mjs',
 		'scripts/test-scanner.mjs',

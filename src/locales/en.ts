@@ -27,6 +27,14 @@ export const EN: Strings = {
 	installPlanNoWrites: 'No skill copies will be written for this target.',
 	installPlanCounts: (counts) => [counts.install && `${counts.install} to install`, counts.update && `${counts.update} to overwrite`, counts.blocked && `${counts.blocked} blocked`, counts.current && `${counts.current} match source`].filter(Boolean).join(' · ') || '0 copies',
 	installAction: (action) => ({ install: 'Install missing copies', update: 'Overwrite from source', blocked: 'Packaging or installation blocked', current: 'Matches source' })[action],
+	driftDiffSummary: (counts) => {
+		const parts = [counts.modified && `${counts.modified} updated`, counts.added && `${counts.added} added`, counts.removed && `${counts.removed} removed`].filter(Boolean);
+		return parts.length ? `Preview changes · ${parts.join(', ')}` : 'Preview changes';
+	},
+	diffFileStatus: (kind) => ({ added: 'Add', removed: 'Remove', modified: 'Update' })[kind],
+	diffSkillHeading: 'SKILL.md changes (installed → source)',
+	diffTruncated: 'Preview truncated; showing the first 80 diff lines.',
+	diffOmitted: (reason) => reason === 'binary' ? 'Binary file; line preview omitted.' : 'File is too large for inline line preview.',
 	attentionTitle: 'Needs attention',
 	attentionNeedsCheck: 'There is no reliable target check yet. Check skills before deciding whether to repair.',
 	attentionSourceBlocked: 'The canonical source or supporting resources are unavailable; affected skills stay unchanged.',

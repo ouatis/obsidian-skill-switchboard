@@ -27,6 +27,15 @@ export function repairPlanDetails(checks: TargetCheck[], strings: Strings): stri
 					lines.push(`${strings.installAction(action)} · ${item.name}`);
 					if (action === 'blocked') lines.push(item.detail);
 					if (item.path) lines.push(item.path);
+					if (action === 'update' && item.diff) {
+						const entries = [
+							...item.diff.modified.map((file) => `~ ${file}`),
+							...item.diff.added.map((file) => `+ ${file}`),
+							...item.diff.removed.map((file) => `- ${file}`),
+						];
+						for (const entry of entries.slice(0, 8)) lines.push(`  ${entry}`);
+						if (entries.length > 8) lines.push(`  ${strings.moreLines(entries.length - 8)}`);
+					}
 				}
 			}
 		}

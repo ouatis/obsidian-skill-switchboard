@@ -1,6 +1,41 @@
 import type { Strings } from '../i18n';
 import type { TargetCheck } from '../sync/adapter-run';
+import type { SkillDriftDiff } from '../sync/drift-diff';
 import { planInstalls } from '../sync/install-plan';
+
+function renderDriftDiff(container: HTMLElement, skillName: string, diff: SkillDriftDiff, strings: Strings): void {
+	const counts = { added: diff.added.length, removed: diff.removed.length, modified: diff.modified.length };
+	if (!counts.added && !counts.removed && !counts.modified) return;
+	const details = container.createEl('details', { cls: 'skill-switchboard-details skill-switchboard-diff-details' });
+	details.setAttribute('data-drift-diff', skillName);
+	details.createEl('summary', { text: strings.driftDiffSummary(counts) });
+	const body = details.createDiv('skill-switchboard-diff-body');
+	const files = body.createDiv('skill-switchboard-diff-files');
+	for (const filePath of diff.modified) {
+		files.createDiv({ text: `~ ${filePath} (${strings.diffFileStatus('modified')})`, cls: 'skill-switchboard-diff-file is-modified' });
+	}
+	for (const filePath of diff.added) {
+		files.createDiv({ text: `+ ${filePath} (${strings.diffFileStatus('added')})`, cls: 'skill-switchboard-diff-file is-added' });
+	}
+	for (const filePath of diff.removed) {
+		files.createDiv({ text: `- ${filePath} (${strings.diffFileStatus('removed')})`, cls: 'skill-switchboard-diff-file is-removed' });
+	}
+	if (diff.skillMdDiff) {
+		body.createDiv({ text: strings.diffSkillHeading, cls: 'skill-switchboard-diff-heading' });
+		if (diff.skillMdDiff.omittedReason) {
+			body.createDiv({ text: strings.diffOmitted(diff.skillMdDiff.omittedReason), cls: 'skill-switchboard-evidence-note' });
+		} else if (diff.skillMdDiff.lines.length > 0) {
+			const preview = body.createDiv('skill-switchboard-diff-preview');
+			for (const line of diff.skillMdDiff.lines) {
+				const prefix = line.kind === 'add' ? '+ ' : line.kind === 'remove' ? '- ' : '  ';
+				preview.createDiv({ text: `${prefix}${line.text}`, cls: `skill-switchboard-diff-line is-${line.kind}` });
+			}
+			if (diff.skillMdDiff.truncated) {
+				body.createDiv({ text: strings.diffTruncated, cls: 'skill-switchboard-evidence-note' });
+			}
+		}
+	}
+}
 
 /** Problems open first; healthy copies stay available without dominating the panel. */
 export function renderInstallPlans(container: HTMLElement, checks: TargetCheck[], strings: Strings): void {
@@ -27,6 +62,7 @@ export function renderInstallPlans(container: HTMLElement, checks: TargetCheck[]
 				row.createEl('strong', { text: `${item.name} · ${strings.installState(item.state)}` });
 				if (action === 'blocked') row.createDiv({ text: item.detail, cls: 'skill-switchboard-evidence-note' });
 				if (item.path) row.createDiv({ text: item.path, cls: 'skill-switchboard-path' });
+				if (action === 'update' && item.diff) renderDriftDiff(row, item.name, item.diff, strings);
 			}
 		}
 	}

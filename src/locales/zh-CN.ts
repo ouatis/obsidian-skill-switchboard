@@ -27,6 +27,14 @@ export const ZH_CN: Strings = {
 	installPlanNoWrites: '此目标本次不会写入任何技能副本。',
 	installPlanCounts: (counts) => [counts.install && `${counts.install} 待安装`, counts.update && `${counts.update} 待覆盖`, counts.blocked && `${counts.blocked} 受阻`, counts.current && `${counts.current} 与源一致`].filter(Boolean).join(' · ') || '0 个副本',
 	installAction: (action) => ({ install: '安装缺失副本', update: '按权威源覆盖', blocked: '打包或安装受阻', current: '与源一致' })[action],
+	driftDiffSummary: (counts) => {
+		const parts = [counts.modified && `${counts.modified} 项修改`, counts.added && `${counts.added} 项新增`, counts.removed && `${counts.removed} 项移除`].filter(Boolean);
+		return parts.length ? `预览差异 · ${parts.join('，')}` : '预览差异';
+	},
+	diffFileStatus: (kind) => ({ added: '新增', removed: '移除', modified: '修改' })[kind],
+	diffSkillHeading: 'SKILL.md 行级差异（当前副本 → 权威源）',
+	diffTruncated: '差异预览已截断，仅显示前 80 行变化。',
+	diffOmitted: (reason) => reason === 'binary' ? '检测到二进制内容，已跳过行级预览。' : '文件较大，已跳过内联行级预览。',
 	attentionTitle: '需要注意',
 	attentionNeedsCheck: '还没有可靠的目标检查结果。先检查技能，再决定是否修复。',
 	attentionSourceBlocked: '权威源或配套资源不可用，受影响的技能保持不变。',

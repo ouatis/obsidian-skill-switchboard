@@ -15,6 +15,11 @@ export interface Strings {
 	installPlanNoWrites: string;
 	installPlanCounts: (counts: InstallCounts) => string;
 	installAction: (action: InstallAction) => string;
+	driftDiffSummary: (counts: { added: number; removed: number; modified: number }) => string;
+	diffFileStatus: (kind: 'added' | 'removed' | 'modified') => string;
+	diffSkillHeading: string;
+	diffTruncated: string;
+	diffOmitted: (reason: 'too-large' | 'binary') => string;
 	attentionTitle: string;
 	attentionNeedsCheck: string;
 	attentionSourceBlocked: string;

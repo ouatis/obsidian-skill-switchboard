@@ -98,9 +98,11 @@ rules below apply to automatic runs too.
 
 The **Distribution plan** shows four states per agent: **Not installed**,
 **Replace from source**, **Matches source**, and **Blocked**. Blockers expand first
-and show their reasons without requiring the raw log. Counts describe agent copies,
-not unique source skills. One **Repair all** confirmation lists every install and
-overwrite, with names and paths, plus the copies that would be retired.
+and show their reasons without requiring the raw log. Differing copies also
+include an expandable preview of changed files and `SKILL.md` line diffs before
+repair. Counts describe agent copies, not unique source skills. One **Repair all**
+confirmation lists every install and overwrite, with names and paths, plus the
+copies that would be retired.
 
 - A same-name target package is a disposable output of the selected source. Local
   edits and older installations are overwritten, not merged or kept as conflicts.

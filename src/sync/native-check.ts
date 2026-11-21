@@ -10,10 +10,11 @@ import { existingRealPath } from './filesystem';
 import { resolveConfiguredPath } from '../utils/paths';
 import { blockedResourceSkills } from './resources';
 import { findOrphans, type OrphanCandidate, type OrphanScan } from './install-ledger';
+import type { SkillDriftDiff } from './drift-diff';
 
 export { inspectManifest } from './manifest';
 export type NativeCheckKind = 'clean' | 'drift' | 'blocked' | 'error';
-export interface SkillInstallCheck { name: string; path: string; state: InstallState['kind']; detail: string; fingerprint: string }
+export interface SkillInstallCheck { name: string; path: string; state: InstallState['kind']; detail: string; fingerprint: string; diff?: SkillDriftDiff }
 export interface NativeCheckResult extends AdapterCheckResult {
 	kind: NativeCheckKind;
 	problems: string[];
@@ -106,7 +107,7 @@ export async function orphanScan(
 export async function checkRuntimeNative(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot: SyncManifestSnapshot, options: NativeCheckOptions = {}): Promise<NativeCheckResult> {
 	try {
 		const plans = await prepareRuntime(vaultPath, runtime, targetPath, snapshot);
-		const installs = plans.map(({ name, bundle, state }) => ({ name, path: bundle?.directory ?? '', state: state.kind, detail: state.detail, fingerprint: state.fingerprint }));
+		const installs = plans.map(({ name, bundle, state }) => ({ name, path: bundle?.directory ?? '', state: state.kind, detail: state.detail, fingerprint: state.fingerprint, ...(state.diff ? { diff: state.diff } : {}) }));
 		const blockedSkills = installs.filter((item) => item.state === 'blocked').map((item) => item.name);
 		const drift = installs.some((item) => item.state === 'missing' || item.state === 'update');
 		const problems = installs.filter((item) => item.state !== 'current').map((item) => `${item.state}: ${item.name} — ${item.detail}`);

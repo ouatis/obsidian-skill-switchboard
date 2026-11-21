@@ -56,12 +56,22 @@ try {
 		assert.deepEqual(plan.counts, { install: 1, update: 3, blocked: 1, current: 1 });
 		assert.equal(plan.writes, 4);
 		assert.equal(checks[0].repairable, true);
+		const byName = new Map(checks[0].result.native.installs.map((item) => [item.name, item]));
+		for (const name of ['update-copy', 'local-edit', 'foreign-copy']) {
+			assert.ok(byName.get(name)?.diff, `${name} carries drift diff`);
+		}
+		for (const name of ['missing-copy', 'keep-current', 'broken']) {
+			assert.equal(byName.get(name)?.diff, undefined, `${name} has no drift diff`);
+		}
+		assert.ok(byName.get('local-edit').diff.skillMdDiff.lines.some((line) => line.kind === 'remove' && line.text === 'LOCAL USER EDIT'));
+		assert.ok(byName.get('update-copy').diff.skillMdDiff.lines.some((line) => line.kind === 'add' && line.text === 'New canonical rule.'));
 	});
 	await test('bilingual confirmation names the retirement and never claims no backup', () => {
 		for (const locale of ['en', 'zh-CN']) {
 			const strings = e.getStrings(locale), details = e.repairPlanDetails(checks, strings);
 			assert(details.includes(strings.installPlanCounts({ install: 1, update: 3, blocked: 1, current: 1 })));
 			for (const [action, name] of [['install', 'missing-copy'], ['update', 'update-copy'], ['update', 'local-edit'], ['update', 'foreign-copy'], ['blocked', 'broken']]) assert(details.includes(`${strings.installAction(action)} \u00b7 ${name}`));
+			assert(details.includes('~ SKILL.md'), `confirm plan lists changed SKILL.md file (${locale})`);
 			assert(details.includes('references'));
 			// A repair now snapshots before it overwrites, and it can retire a copy whose
 			// source is gone, so the old "no history backup" sentence was simply untrue.
@@ -78,6 +88,11 @@ try {
 			const all = descendants(host), groups = all.filter((node) => node.attributes.has('data-install-group'));
 			assert.deepEqual(groups.map((node) => node.attributes.get('data-install-group')), ['blocked', 'install', 'update', 'current']);
 			assert.deepEqual(groups.map((node) => node.open), [true, false, false, false]);
+			const diffs = all.filter((node) => node.attributes.has('data-drift-diff'));
+			assert.deepEqual(diffs.map((node) => node.attributes.get('data-drift-diff')), ['update-copy', 'local-edit', 'foreign-copy']);
+			assert.deepEqual(diffs.map((node) => node.open), [false, false, false], 'diff disclosures start collapsed');
+			assert(all.some((node) => node.text.includes('- LOCAL USER EDIT')), 'diff preview includes removed local edit line');
+			assert(all.some((node) => node.text.includes('+ New canonical rule.')), 'diff preview includes added canonical line');
 			assert(all.some((node) => node.text.includes('missing.md')), 'blocker details are visible without raw logs');
 			assert(all.some((node) => node.text === strings.installPlanDescription));
 		}
