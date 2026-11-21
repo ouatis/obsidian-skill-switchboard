@@ -241,6 +241,21 @@ export interface Strings {
 	addDetectedTargets: string;
 	detectedTargetsAdded: (count: number) => string;
 	newTarget: string;
+	importLocalSkills: string;
+	importLocalSkillsButton: string;
+	importLocalSkillsDescription: string;
+	importSkillsTitle: string;
+	importSkillsConfirmMessage: (destination: string) => string;
+	importSkillsManifestNote: string;
+	importFileCount: (count: number) => string;
+	importSkillsSkippedSummary: (count: number) => string;
+	importSkipReason: (status: string, reason?: string) => string;
+	importSkillsConfirm: (count: number) => string;
+	importSkillsEmpty: string;
+	importSkillsNoneReady: (skipped: number) => string;
+	importSkillsDone: (imported: number, skipped: number) => string;
+	importSkillsPartial: (imported: number, failed: number) => string;
+	importSkillsFailed: string;
 }
 
 export function getStrings(language: Language): Strings {

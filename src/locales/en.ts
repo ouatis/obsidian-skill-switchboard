@@ -239,4 +239,23 @@ export const EN: Strings = {
 	addDetectedTargets: 'Add targets',
 	detectedTargetsAdded: (count) => `Added ${count} runtime target${count === 1 ? '' : 's'}. No files were written and distribution was not started.`,
 	newTarget: 'New target',
+	importLocalSkills: 'Import skills from local agents',
+	importLocalSkillsButton: 'Import local skills',
+	importLocalSkillsDescription: 'Copy existing standard SKILL.md folders from local agent directories into your canonical source once. Existing skills in the source are skipped; daily distribution stays one-way.',
+	importSkillsTitle: 'Import local skills',
+	importSkillsConfirmMessage: (destination) => `Copy the selected skills into ${destination}? Existing skills in the source are never overwritten, and agent folders are left unchanged. Distribution remains one-way from the source.`,
+	importSkillsManifestNote: 'This source uses a hand-written skills-manifest.json. Add imported skills to the manifest if you want them distributed.',
+	importFileCount: (count) => `${count} file${count === 1 ? '' : 's'}`,
+	importSkillsSkippedSummary: (count) => `Skipped (${count})`,
+	importSkipReason: (status, reason) => status === 'conflict'
+		? 'Already in source · skipped'
+		: status === 'duplicate'
+			? 'Duplicate across agent folders · skipped'
+			: reason || 'Invalid skill package',
+	importSkillsConfirm: (count) => `Import ${count} skill${count === 1 ? '' : 's'}`,
+	importSkillsEmpty: 'No standard SKILL.md folders were found in configured or standard local agent directories.',
+	importSkillsNoneReady: (skipped) => `Found ${skipped} local skill${skipped === 1 ? '' : 's'}, but none can be imported (already in source or invalid).`,
+	importSkillsDone: (imported, skipped) => `Imported ${imported} skill${imported === 1 ? '' : 's'} into the source${skipped ? ` (${skipped} skipped)` : ''}.`,
+	importSkillsPartial: (imported, failed) => `Imported ${imported} skill${imported === 1 ? '' : 's'}; ${failed} failed.`,
+	importSkillsFailed: 'Could not import local skills',
 };

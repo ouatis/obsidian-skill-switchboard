@@ -13,6 +13,8 @@ import { checkState, runRecord, writePluginStatus } from './status';
 import { getStrings } from './i18n';
 import { registerCommands } from './commands';
 import { confirmDetectedTargets, confirmRepair } from './ui/confirm-modal';
+import { chooseSkillsToImport } from './ui/import-modal';
+import { importSkillPackages, scanImportableSkills, type ImportSourceFolder } from './sync/import-skills';
 import { orphanConfirmCount, repairPlanDetails } from './ui/repair-plan';
 import type { AdapterCheckResult } from './sync/result';
 import { createSyncProvider, ManifestCheckResult, SyncProvider, type SyncManifestSnapshot } from './sync-provider';
@@ -365,6 +367,61 @@ export default class SkillSwitchboardPlugin extends Plugin {
 		} catch (error) {
 			this.settings.targets = this.settings.targets.filter((target) => !target.id.startsWith(`detected-${idPrefix}-`));
 			new Notice(`${strings.detectRuntimeTargetsFailed}: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+
+	async importLocalSkills(): Promise<void> {
+		const strings = getStrings(this.settings.language);
+		const vaultPath = this.getVaultBasePath();
+		if (!vaultPath) {
+			new Notice(desktopPathFailure().output);
+			return;
+		}
+		try {
+			const destination = resolveSyncSource(vaultPath, this.settings);
+			const discovered = await discoverRuntimeTargets().catch((): DiscoveredRuntimeTarget[] => []);
+			const folders: ImportSourceFolder[] = [
+				...this.settings.targets
+					.filter((target) => target.enabled && target.path.trim())
+					.map((target) => ({
+						label: target.label.trim() || (target.runtime ? strings.runtimeLabel(target.runtime) : target.path),
+						path: resolveConfiguredPath(target.path, vaultPath),
+						runtime: target.runtime,
+					})),
+				...discovered.map((item) => ({
+					label: item.label,
+					path: resolveConfiguredPath(item.path, vaultPath),
+					runtime: item.runtime,
+				})),
+			];
+			const scan = await scanImportableSkills(vaultPath, destination.sharedRoot, folders, {
+				manifestPath: destination.manifestPath,
+			});
+			if (scan.candidates.length === 0) {
+				new Notice(strings.importSkillsEmpty);
+				return;
+			}
+			if (!scan.candidates.some((item) => item.status === 'ready')) {
+				new Notice(strings.importSkillsNoneReady(scan.candidates.length));
+				return;
+			}
+			const chosen = await chooseSkillsToImport(this.app, strings, scan);
+			if (!chosen || chosen.length === 0) return;
+
+			const result = await importSkillPackages(vaultPath, destination.sharedRoot, chosen, {
+				confineToVault: destination.confineToVault,
+			});
+			if (result.imported.length > 0) {
+				this.invalidateChecks();
+				await this.refreshIndex(false);
+			}
+			new Notice(
+				result.failed.length > 0
+					? strings.importSkillsPartial(result.imported.length, result.failed.length)
+					: strings.importSkillsDone(result.imported.length, result.skipped.length),
+			);
+		} catch (error) {
+			new Notice(`${strings.importSkillsFailed}: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 

@@ -90,6 +90,17 @@ export function renderSyncSourceSection(plugin: SkillSwitchboardPlugin, containe
 	new Setting(containerEl).setName(strings.syncManifest).setDesc(strings.syncManifestDescription)
 		.addText((text) => text.setValue(plugin.settings.syncManifestPath).setPlaceholder(strings.syncManifestAuto)
 			.onChange(async (value) => { plugin.settings.syncManifestPath = value; await plugin.saveSettings(); }));
+	new Setting(containerEl)
+		.setName(strings.importLocalSkills)
+		.setDesc(strings.importLocalSkillsDescription)
+		.addButton((button) => button.setButtonText(strings.importLocalSkillsButton).onClick(async () => {
+			button.setDisabled(true);
+			try {
+				await plugin.importLocalSkills();
+			} finally {
+				button.setDisabled(false);
+			}
+		}));
 }
 
 export function renderExternalPackagesSection(plugin: SkillSwitchboardPlugin, containerEl: HTMLElement, strings: Strings): void {

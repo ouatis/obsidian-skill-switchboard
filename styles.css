@@ -1313,3 +1313,48 @@
 	color: var(--ssb-error);
 }
 
+/* One-time import modal --------------------------------------------------- */
+
+.skill-switchboard-import-list {
+	border: 1px solid var(--ssb-border);
+	border-radius: var(--ssb-control-radius);
+	margin: 12px 0;
+	max-height: 40vh;
+	overflow: auto;
+}
+
+.skill-switchboard-import-row {
+	align-items: flex-start;
+	border-top: 1px solid var(--ssb-border);
+	cursor: pointer;
+	display: flex;
+	gap: 10px;
+	padding: 10px 12px;
+}
+
+.skill-switchboard-import-row:first-child {
+	border-top: 0;
+}
+
+.skill-switchboard-import-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.skill-switchboard-import-row input[type='checkbox'] {
+	flex: 0 0 auto;
+	margin-top: 2px;
+}
+
+.skill-switchboard-import-info {
+	flex: 1;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.skill-switchboard-import-meta {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	margin-top: 2px;
+}
+
+

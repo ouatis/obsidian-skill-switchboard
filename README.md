@@ -49,7 +49,10 @@ place them in `<vault>/.obsidian/plugins/skill-switchboard/`, then enable the pl
 1. Keep skills in a visible vault folder, normally `skills/`. Each standard skill
    is a directory with a `SKILL.md` containing `name` and `description`, plus its
    required references, scripts and assets. Standard directories are discovered
-   without a hand-written manifest.
+   without a hand-written manifest. If your skills already live in local agent
+   folders, run **Import skills from local agents** (or **Import local skills**
+   in settings or the empty library view) to copy selected skills into the
+   source once without overwriting existing files.
 2. Sync the source with your existing vault sync arrangement. Select it under
    **Distribution source** on each computer.
 3. Add the local agents you use under **Runtime targets**. Paths such as

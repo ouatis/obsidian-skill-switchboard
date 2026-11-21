@@ -76,11 +76,18 @@ export class SkillSwitchboardView extends ItemView {
 			scannedAt: this.plugin.index.scannedAt,
 			checkedAt: this.plugin.targetCheckedAt,
 		});
-		renderSetupGuide(contentEl, strings, {
-			sourceReady: Boolean(selectedRoot?.enabled && selectedRoot.path.trim()),
-			targetsReady: enabledTargets > 0,
-			indexReady: this.plugin.index.scannedAt > 0,
-		}, () => this.openSettings(), () => void this.plugin.refreshIndex(true));
+		renderSetupGuide(
+			contentEl,
+			strings,
+			{
+				sourceReady: Boolean(selectedRoot?.enabled && selectedRoot.path.trim()),
+				targetsReady: enabledTargets > 0,
+				indexReady: this.plugin.index.scannedAt > 0,
+			},
+			() => this.openSettings(),
+			() => void this.plugin.refreshIndex(true),
+			() => void this.plugin.importLocalSkills(),
+		);
 
 		if (this.plugin.settings.showDistributionBoard) {
 			if (this.distributionBoard) contentEl.appendChild(this.distributionBoard.element);
@@ -103,6 +110,12 @@ export class SkillSwitchboardView extends ItemView {
 			const empty = contentEl.createDiv('skill-switchboard-empty');
 			empty.createEl('h3', { text: strings.noSkillsTitle });
 			empty.createEl('p', { text: strings.noSkillsDescription });
+			const importButton = empty.createEl('button', {
+				text: strings.importLocalSkillsButton,
+				cls: 'skill-switchboard-button',
+			});
+			importButton.setAttribute('type', 'button');
+			importButton.addEventListener('click', () => void this.plugin.importLocalSkills());
 		} else {
 			const library = contentEl.createDiv('skill-switchboard-library-header');
 			library.createEl('h2', { text: strings.skillLibrary });

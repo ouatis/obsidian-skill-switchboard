@@ -59,6 +59,10 @@ try {
 	assert.equal(getStrings('zh-CN').runtimeLabel('claude-code'), 'Claude Code');
 	assert.equal(getStrings('zh-CN').runtimeLabel('custom'), '自定义（标准 SKILL.md 目录）');
 	for (const locale of ['en', 'zh-CN']) {
+		assert.ok(getStrings(locale).importLocalSkills);
+		assert.ok(getStrings(locale).importSkillsConfirm(2));
+	}
+	for (const locale of ['en', 'zh-CN']) {
 		assert.ok(getStrings(locale).viewDescription);
 		assert.ok(getStrings(locale).skillLibrary);
 	}

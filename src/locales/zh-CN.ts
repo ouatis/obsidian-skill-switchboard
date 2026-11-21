@@ -239,4 +239,23 @@ export const ZH_CN: Strings = {
 	addDetectedTargets: '添加目标',
 	detectedTargetsAdded: (count) => `已添加 ${count} 个运行时目标。没有写入文件，也没有启动分发。`,
 	newTarget: '新目标',
+	importLocalSkills: '从本机 Agent 导入技能',
+	importLocalSkillsButton: '导入本机技能',
+	importLocalSkillsDescription: '将本机 Agent 目录中已有的标准 SKILL.md 技能一次性复制到权威源。来源中已有的同名技能会跳过不覆盖，日常分发仍保持单向。',
+	importSkillsTitle: '导入本机技能',
+	importSkillsConfirmMessage: (destination) => `将所选技能一次性复制到 ${destination}？来源中已有的同名技能不会被覆盖，Agent 目录保持不变；日常分发仍严格保持从源单向复制。`,
+	importSkillsManifestNote: '当前来源使用手写 skills-manifest.json；导入后如需参与分发，请将其加入清单。',
+	importFileCount: (count) => `${count} 个文件`,
+	importSkillsSkippedSummary: (count) => `已跳过（${count} 项）`,
+	importSkipReason: (status, reason) => status === 'conflict'
+		? '来源中已存在 · 已跳过'
+		: status === 'duplicate'
+			? '其他 Agent 目录已包含同名技能 · 已跳过'
+			: reason || '技能包无效',
+	importSkillsConfirm: (count) => `导入 ${count} 项技能`,
+	importSkillsEmpty: '在已配置或常见的本机 Agent 目录中未发现标准 SKILL.md 技能。',
+	importSkillsNoneReady: (skipped) => `发现 ${skipped} 项本机技能，但均无法导入（来源已存在或包无效）。`,
+	importSkillsDone: (imported, skipped) => `已导入 ${imported} 项技能到权威源${skipped ? `（跳过 ${skipped} 项）` : ''}。`,
+	importSkillsPartial: (imported, failed) => `已导入 ${imported} 项技能，另有 ${failed} 项失败。`,
+	importSkillsFailed: '导入本机技能失败',
 };

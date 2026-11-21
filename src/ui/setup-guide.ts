@@ -14,6 +14,7 @@ export function renderSetupGuide(
 	state: SetupGuideState,
 	onSettings: () => void,
 	onRefresh: () => void,
+	onImport?: () => void,
 ): boolean {
 	if (state.sourceReady && state.targetsReady && state.indexReady) return false;
 	const section = container.createDiv('ssb-setup-guide');
@@ -36,6 +37,11 @@ export function renderSetupGuide(
 		const refresh = actions.createEl('button', { text: strings.setupRefresh, cls: 'ssb-setup-button' });
 		refresh.setAttribute('type', 'button');
 		refresh.addEventListener('click', onRefresh);
+	}
+	if (onImport && !state.indexReady) {
+		const importButton = actions.createEl('button', { text: strings.importLocalSkillsButton, cls: 'ssb-setup-button' });
+		importButton.setAttribute('type', 'button');
+		importButton.addEventListener('click', onImport);
 	}
 	return true;
 }

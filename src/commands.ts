@@ -39,6 +39,12 @@ export function registerCommands(plugin: SkillSwitchboardPlugin): void {
 		name: strings.retireOrphanCopies,
 		callback: () => void plugin.retireOrphanCopies(),
 	});
+
+	plugin.addCommand({
+		id: 'import-local-skills',
+		name: strings.importLocalSkills,
+		callback: () => void plugin.importLocalSkills(),
+	});
 }
 
 async function copyLatestCheckOutput(plugin: SkillSwitchboardPlugin): Promise<void> {
