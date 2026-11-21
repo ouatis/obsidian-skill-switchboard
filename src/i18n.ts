@@ -1,10 +1,12 @@
 import { EN } from './locales/en';
 import { ZH_CN } from './locales/zh-CN';
 import type { InstallAction, InstallCounts } from './sync/install-plan';
+import type { RuntimeName } from './types';
 
 export type Language = 'en' | 'zh-CN';
 
 export interface Strings {
+	runtimeLabel: (runtime: RuntimeName) => string;
 	completeCopy: string;
 	installState: (state: string) => string;
 	foundUnmanaged: string;

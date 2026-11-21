@@ -2,7 +2,18 @@ export type RootKind = 'vault' | 'external';
 
 export type SyncMode = 'copy' | 'symlink' | 'wrapper';
 
-export const RUNTIME_NAMES = ['codex', 'hermes', 'workbuddy', 'opencode', 'antigravity', 'dsh'] as const;
+export const RUNTIME_NAMES = [
+	'codex',
+	'hermes',
+	'workbuddy',
+	'opencode',
+	'antigravity',
+	'dsh',
+	'claude-code',
+	'cursor',
+	'gemini-cli',
+	'custom',
+] as const;
 
 export type RuntimeName = typeof RUNTIME_NAMES[number];
 

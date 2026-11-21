@@ -139,6 +139,11 @@ export function adapterFor(skill: ManifestSkill, runtime: RuntimeName): AdapterM
 		}
 		return {};
 	}
+	if (runtime === 'custom') {
+		const value = skill.adapters.custom;
+		if (value === false || value === null) return null;
+		return isRecord(value) ? value : {};
+	}
 	const value = skill.adapters[runtime];
 	return value === true ? {} : isRecord(value) ? value : null;
 }

@@ -52,6 +52,12 @@ try {
 	assert.equal(getStrings('en').viewTitle, 'Skill Switchboard');
 	assert.equal(getStrings('en').externalRoot, 'External');
 	assert.equal(getStrings('zh-CN').externalRoot, '外部目录');
+	assert.equal(getStrings('en').runtimeLabel('claude-code'), 'Claude Code');
+	assert.equal(getStrings('en').runtimeLabel('cursor'), 'Cursor');
+	assert.equal(getStrings('en').runtimeLabel('gemini-cli'), 'Gemini CLI');
+	assert.equal(getStrings('en').runtimeLabel('custom'), 'Custom (standard SKILL.md)');
+	assert.equal(getStrings('zh-CN').runtimeLabel('claude-code'), 'Claude Code');
+	assert.equal(getStrings('zh-CN').runtimeLabel('custom'), '自定义（标准 SKILL.md 目录）');
 	for (const locale of ['en', 'zh-CN']) {
 		assert.ok(getStrings(locale).viewDescription);
 		assert.ok(getStrings(locale).skillLibrary);

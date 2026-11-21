@@ -25,6 +25,9 @@ const STANDARD_LOCATIONS: RuntimeTargetLocation[] = [
 	{ runtime: 'antigravity', label: 'Antigravity', relativePath: '.gemini/antigravity/skills' },
 	{ runtime: 'antigravity', label: 'Antigravity CLI', relativePath: '.gemini/antigravity-cli/skills' },
 	{ runtime: 'dsh', label: 'DSH', relativePath: '.dsh/skills' },
+	{ runtime: 'claude-code', label: 'Claude Code', relativePath: '.claude/skills' },
+	{ runtime: 'cursor', label: 'Cursor', relativePath: '.cursor/skills' },
+	{ runtime: 'gemini-cli', label: 'Gemini CLI', relativePath: '.gemini/skills' },
 ];
 
 /** Probe only known directory paths. This never reads skill contents or creates files. */

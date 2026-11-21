@@ -66,9 +66,11 @@ that asks the model to read the real instructions elsewhere. Required files are
 copied with the package. Runtime-specific metadata is added where needed; existing
 `agents/openai.yaml` in a standard source package is preserved.
 
-Codex, Hermes, WorkBuddy, OpenCode, Antigravity and current DSH directory packages
-are supported. Copying files does not install runtimes, dependencies or commands,
-change an agent's permissions, or prove that a running session loaded a skill.
+Claude Code, Codex, Cursor, Gemini CLI, Hermes, WorkBuddy, OpenCode,
+Antigravity, current DSH directory packages, and custom standard `SKILL.md`
+directories are supported. Copying files does not install runtimes,
+dependencies or commands, change an agent's permissions, or prove that a
+running session loaded a skill.
 
 ## The source is authoritative
 

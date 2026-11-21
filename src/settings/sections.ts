@@ -145,7 +145,7 @@ export function renderTargetsSection(
 		setting.setDesc(strings.completeCopy);
 		setting.addDropdown((dropdown) => {
 			dropdown.addOption('', strings.chooseAgent);
-			for (const runtime of RUNTIME_NAMES) dropdown.addOption(runtime, runtime);
+			for (const runtime of RUNTIME_NAMES) dropdown.addOption(runtime, strings.runtimeLabel(runtime));
 			dropdown.setValue(target.runtime ?? '').onChange(async (value) => {
 				target.runtime = value ? value as RuntimeTarget['runtime'] : undefined;
 				await plugin.saveSettings();

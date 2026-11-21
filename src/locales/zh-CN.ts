@@ -1,6 +1,18 @@
 import type { Strings } from '../i18n';
 
 export const ZH_CN: Strings = {
+	runtimeLabel: (runtime) => ({
+		codex: 'Codex',
+		hermes: 'Hermes',
+		workbuddy: 'WorkBuddy',
+		opencode: 'OpenCode',
+		antigravity: 'Antigravity',
+		dsh: 'DSH',
+		'claude-code': 'Claude Code',
+		cursor: 'Cursor',
+		'gemini-cli': 'Gemini CLI',
+		custom: '自定义（标准 SKILL.md 目录）',
+	})[runtime],
 	autoDistribute: '自动分发',
 	autoDistributeDescription: '仅本机。Obsidian 运行时，来源稳定后自动更新已授权的 Agent 副本。成功保持安静，持续失败仅提醒一次；开启后仍会执行后台检查。',
 	autoDistributeConfirm: '允许今后将这个来源自动分发到本机下列 Agent 目录吗？本地修改会被按源覆盖；被替换的目录会先快照（保留最近 5 次）；必需资源和路径检查仍然生效。更换来源或 Agent 目标后需要重新授权。',
@@ -202,7 +214,7 @@ export const ZH_CN: Strings = {
 	addSkillRoot: '添加技能来源',
 	newRoot: '新来源',
 	runtimeTargets: '运行时目标',
-	runtimeTargetsDescription: '目标路径和启用的 Agent 仅对这台机器生效。用 ~ 表示当前用户主目录，例如 ~/.codex/skills。修复仅限已启用的 Agent 目标。',
+	runtimeTargetsDescription: '目标路径和启用的 Agent 仅对这台机器生效。用 ~ 表示当前用户主目录，例如 ~/.claude/skills 或 ~/.codex/skills；~/.agents/skills 等目录可选择「自定义（标准 SKILL.md 目录）」。修复仅限已启用的 Agent 目标。',
 	unnamedTarget: '未命名目标',
 	targetPath: '目标路径',
 	copy: '复制',

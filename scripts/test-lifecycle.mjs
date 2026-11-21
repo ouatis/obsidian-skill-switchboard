@@ -34,16 +34,17 @@ try{
     const Plugin=imported.default.default??imported.default;
     const recoveredRoot={id:'recovered',kind:'external',label:'Recovered',path:'~/skills',enabled:true};
     const recoveredTarget={id:'recovered-target',runtime:'codex',mode:'wrapper',enabled:true,path:'~/.codex/skills',label:'Codex'};
+    const newRuntimeTargets=['claude-code','cursor','gemini-cli','custom'].map(runtime=>({id:`target-${runtime}`,runtime,mode:'copy',enabled:true,path:`~/.${runtime}/skills`,label:runtime}));
     const recoveredHarness={id:'recovered-harness',label:'Harness',command:'agent run',enabled:true};
     const settingsFixture=new Plugin({saved:{
         roots:[null,{id:42,label:'invalid',path:'bad',kind:'vault',enabled:true},recoveredRoot,recoveredRoot],
-        targets:[{id:'invalid',label:'Invalid',path:'bad',mode:'wrapper',runtime:'unknown',enabled:true},recoveredTarget,recoveredTarget],
+        targets:[{id:'invalid',label:'Invalid',path:'bad',mode:'wrapper',runtime:'unknown',enabled:true},recoveredTarget,recoveredTarget,...newRuntimeTargets],
         harnesses:[{id:'invalid',label:'Invalid',command:'run',enabled:'yes'},recoveredHarness],
         language:'fr',viewLocation:'popup',autoScan:'false',autoCheck:0,showDistributionBoard:'false',scanDelayMs:'fast',syncRootId:42,syncManifestPath:[],
     }});
     await settingsFixture.loadSettings();
     assert.deepEqual(settingsFixture.settings.roots,[recoveredRoot],'malformed and duplicate roots are removed while valid paths survive');
-    assert.deepEqual(settingsFixture.settings.targets,[{...recoveredTarget,mode:'copy'}],'targets with unknown runtimes are rejected before use');
+    assert.deepEqual(settingsFixture.settings.targets,[{...recoveredTarget,mode:'copy'},...newRuntimeTargets],'targets with unknown runtimes are rejected before use while new standard runtimes persist');
     assert.equal(settingsFixture.settings.harnesses,undefined,'retired harness records never reach active settings');
     assert.equal(settingsFixture.settings.language,'en');assert.equal(settingsFixture.settings.autoScan,false);assert.equal(settingsFixture.settings.autoCheck,true);
     assert.equal(settingsFixture.settings.viewLocation,'center','an invalid opening location recovers to the centered default');

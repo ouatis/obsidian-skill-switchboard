@@ -37,7 +37,7 @@ _在 Obsidian 维护技能，向本机 Agent 分发完整副本。_
 
 安装后的 `SKILL.md` 直接包含技能正文，不再是让模型转读另一份规则的薄入口。必要文件随包复制；保留各 Agent 必需的格式适配。标准技能包已有的 `agents/openai.yaml` 保持原样。
 
-支持 Codex、Hermes、WorkBuddy、OpenCode、Antigravity，以及当前支持目录技能包的 DSH。复制文件不会安装 Agent、依赖或命令，不会改变其权限，也不能证明某个正在运行的会话已加载技能。
+支持 Claude Code、Codex、Cursor、Gemini CLI、Hermes、WorkBuddy、OpenCode、Antigravity、当前支持目录技能包的 DSH，以及自定义标准 `SKILL.md` 目录。复制文件不会安装 Agent、依赖或命令，不会改变其权限，也不能证明某个正在运行的会话已加载技能。
 
 ## 权威源说了算
 

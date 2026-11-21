@@ -1,6 +1,18 @@
 import type { Strings } from '../i18n';
 
 export const EN: Strings = {
+	runtimeLabel: (runtime) => ({
+		codex: 'Codex',
+		hermes: 'Hermes',
+		workbuddy: 'WorkBuddy',
+		opencode: 'OpenCode',
+		antigravity: 'Antigravity',
+		dsh: 'DSH',
+		'claude-code': 'Claude Code',
+		cursor: 'Cursor',
+		'gemini-cli': 'Gemini CLI',
+		custom: 'Custom (standard SKILL.md)',
+	})[runtime],
 	autoDistribute: 'Automatic distribution',
 	autoDistributeDescription: 'This computer only. After the source settles, update authorized Agent copies while Obsidian is running. Success stays quiet; persistent failures notify once. Background checks remain active when enabled.',
 	autoDistributeConfirm: 'Allow future automatic overwrites from this source to these Agent folders on this computer? Local edits are replaced; the replaced tree is snapshotted before the write. Required-resource and path checks still apply. A change to the source selection or Agent destinations requires new authorization.',
@@ -202,7 +214,7 @@ export const EN: Strings = {
 	addSkillRoot: 'Add skill root',
 	newRoot: 'New root',
 	runtimeTargets: 'Runtime targets',
-	runtimeTargetsDescription: 'Target paths and enabled agents apply only to this computer. Use ~ for your home directory, for example ~/.codex/skills. Repair is limited to enabled agent targets.',
+	runtimeTargetsDescription: 'Target paths and enabled agents apply only to this computer. Use ~ for your home directory, for example ~/.claude/skills or ~/.codex/skills, or select Custom (standard SKILL.md) for directories such as ~/.agents/skills. Repair is limited to enabled agent targets.',
 	unnamedTarget: 'Unnamed target',
 	targetPath: 'Target path',
 	copy: 'Copy',

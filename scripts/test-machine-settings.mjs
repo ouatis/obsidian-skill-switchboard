@@ -13,7 +13,11 @@ try {
 	const storage = await import(pathToFileURL(bundle).href);
 	const legacy = {
 		roots: [{ id: 'source', path: '/device-a/skills', enabled: true, kind: 'external', label: 'Source' }],
-		targets: [{ id: 'target', path: '/device-a/agent', enabled: true, mode: 'wrapper', runtime: 'codex', label: 'Agent' }],
+		targets: [
+			{ id: 'target', path: '/device-a/agent', enabled: true, mode: 'wrapper', runtime: 'codex', label: 'Agent' },
+			{ id: 'claude', path: '/device-a/claude', enabled: true, mode: 'copy', runtime: 'claude-code', label: 'Claude Code' },
+			{ id: 'custom', path: '/device-a/agents', enabled: true, mode: 'copy', runtime: 'custom', label: 'Shared Agents' },
+		],
 		harnesses: [{ id: 'harness', command: '/device-a/run {prompt}', enabled: true, label: 'Harness' }],
 		syncRootId: 'source', syncManifestPath: '/device-a/manifest.json',
 		language: 'zh-CN', autoScan: false, autoCheck: true, showDistributionBoard: true, scanDelayMs: 500,

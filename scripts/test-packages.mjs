@@ -32,7 +32,7 @@ try {
 	assert.equal(inspected.snapshot.skillCount, 1, 'standard directories work without a hand-written manifest');
 	assert.equal(inspected.snapshot.skills[0].files.length, 4);
 	const targets = {};
-	for (const runtime of ['codex', 'hermes', 'workbuddy', 'opencode', 'antigravity', 'dsh']) {
+	for (const runtime of ['codex', 'hermes', 'workbuddy', 'opencode', 'antigravity', 'dsh', 'claude-code', 'cursor', 'gemini-cli', 'custom']) {
 		const target = targets[runtime] = path.join(temporary, runtime);
 		assert.equal((await check(runtime, target, inspected.snapshot)).installs[0].state, 'missing');
 		const result = await repair(runtime, target, inspected.snapshot);
@@ -40,6 +40,8 @@ try {
 		const directory = path.join(target, ...(runtime === 'hermes' ? ['shared'] : []), 'drawing');
 		assert.equal(await fs.readFile(path.join(directory, 'SKILL.md'), 'utf8'), main, 'native document contains full instructions, byte for byte');
 		assert.deepEqual(await fs.readFile(path.join(directory, 'assets/image.bin')), Buffer.from([0, 1, 2, 255]));
+		const hasOpenaiYaml = await fs.access(path.join(directory, 'agents/openai.yaml')).then(() => true, () => false);
+		assert.equal(hasOpenaiYaml, runtime === 'codex', `${runtime} openai.yaml metadata presence`);
 		assert.equal((await check(runtime, target, inspected.snapshot)).kind, 'clean');
 		assert.equal((await repair(runtime, target, inspected.snapshot)).writtenFiles, 0, 'idempotent repair');
 	}
@@ -144,21 +146,44 @@ try {
 	// Legacy cards remain usable, but install their whole body and reference closure.
 	const cards = path.join(vault, 'cards');
 	await write(path.join(cards, 'review.md'), '---\nstatus: active\n---\n# Review\n\nREAL REVIEW RULES. Read [support](references/a.md).\n');
+	await write(path.join(cards, 'excluded-custom.md'), '---\nstatus: active\n---\n# Excluded\n\nExcluded from custom.\n');
+	await write(path.join(cards, 'null-custom.md'), '---\nstatus: active\n---\n# Null Custom\n\nNull-excluded from custom.\n');
 	await write(path.join(cards, 'references/a.md'), '# A\nRead [B](b.md).\n');
 	await write(path.join(cards, 'references/b.md'), '# B\n');
-	const manifest = { schema_version: 1, total_skills: 1, skills: [{ name: 'review', shared_file: 'review.md', adapters: { codex: true, dsh: true, antigravity: false } }] };
+	const manifest = {
+		schema_version: 1,
+		total_skills: 3,
+		skills: [
+			{ name: 'review', shared_file: 'review.md', adapters: { codex: true, dsh: true, antigravity: false } },
+			{ name: 'excluded-custom', shared_file: 'excluded-custom.md', adapters: { codex: true, custom: false } },
+			{ name: 'null-custom', shared_file: 'null-custom.md', adapters: { codex: true, custom: null } },
+		],
+	};
 	await write(location.manifestPath, JSON.stringify(manifest));
 	const cardSnapshot = await modules.manifest.inspectManifest(vault, { ...location, sharedRoot: cards });
 	assert.equal(cardSnapshot.status, 'passed', cardSnapshot.output);
 	assert.equal(modules.manifest.adapterFor(cardSnapshot.snapshot.skills[0], 'antigravity'), null);
+	assert.deepEqual(modules.manifest.adapterFor(cardSnapshot.snapshot.skills[0], 'custom'), {}, 'custom distributes hand-written manifest skills by default');
+	assert.equal(modules.manifest.adapterFor(cardSnapshot.snapshot.skills[1], 'custom'), null, 'custom: false disables the custom adapter');
+	assert.equal(modules.manifest.adapterFor(cardSnapshot.snapshot.skills[2], 'custom'), null, 'custom: null disables the custom adapter');
+	assert.equal(modules.manifest.adapterFor(cardSnapshot.snapshot.skills[0], 'claude-code'), null, 'explicit opt-in required for claude-code in hand-written manifest');
 	const cardTarget = path.join(temporary, 'cards-codex');
 	assert.equal((await repair('codex', cardTarget, cardSnapshot.snapshot)).status, 'passed');
 	const cardText = await fs.readFile(path.join(cardTarget, 'review/SKILL.md'), 'utf8');
 	assert(cardText.includes('REAL REVIEW RULES.'));
 	assert(!cardText.includes('Canonical shared rules live at:'));
 	assert.equal(await fs.readFile(path.join(cardTarget, 'review/references/b.md'), 'utf8'), '# B\n');
+	const cardCustomTarget = path.join(temporary, 'cards-custom');
+	assert.equal((await repair('custom', cardCustomTarget, cardSnapshot.snapshot)).status, 'passed');
+	assert(await fs.readFile(path.join(cardCustomTarget, 'review/SKILL.md'), 'utf8').then((text) => text.includes('REAL REVIEW RULES.')));
+	assert.equal(await fs.access(path.join(cardCustomTarget, 'excluded-custom')).then(() => true, () => false), false);
+	assert.equal(await fs.access(path.join(cardCustomTarget, 'null-custom')).then(() => true, () => false), false);
+	assert.equal((await check('custom', cardCustomTarget, cardSnapshot.snapshot)).kind, 'clean');
+	const cardClaude = await check('claude-code', path.join(temporary, 'cards-claude'), cardSnapshot.snapshot);
+	assert.equal(cardClaude.status, 'failed');
+	assert.match(cardClaude.problems[0], /No skills enable the claude-code adapter/);
 	assert.equal((await modules.manifest.inspectManifest(vault, { ...location, manifestPath: path.join(vault, 'missing.json'), manifestRequired: true })).status, 'failed');
-	console.log('Complete package distribution passed: 6 runtimes, optional manifest, full text/resources/binaries, one-way copies, source authority, no backups or receipts, update/removals, rollback, races, legacy migration, and path guards.');
+	console.log('Complete package distribution passed: 10 runtimes, optional manifest, full text/resources/binaries, one-way copies, source authority, no backups or receipts, update/removals, rollback, races, legacy migration, and path guards.');
 } finally {
 	// The only recursive cleanup target is the exact directory created by mkdtemp above.
 	assert(path.resolve(temporary).startsWith(path.resolve(os.tmpdir()) + path.sep));
