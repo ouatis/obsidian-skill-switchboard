@@ -258,4 +258,18 @@ export const EN: Strings = {
 	importSkillsDone: (imported, skipped) => `Imported ${imported} skill${imported === 1 ? '' : 's'} into the source${skipped ? ` (${skipped} skipped)` : ''}.`,
 	importSkillsPartial: (imported, failed) => `Imported ${imported} skill${imported === 1 ? '' : 's'}; ${failed} failed.`,
 	importSkillsFailed: 'Could not import local skills',
+	targetFilterButton: 'Filter skills',
+	targetFilterTitle: (target) => `Filter skills · ${target}`,
+	targetFilterDescription: 'Choose which skills distribute to this target on this computer. Useful for project-level folders outside the vault without maintaining a hand-written manifest.',
+	targetFilterModeLabel: 'Distribution scope',
+	targetFilterModeAll: 'All enabled skills',
+	targetFilterModeInclude: 'Only selected skills',
+	targetFilterModeExclude: 'All except excluded skills',
+	targetFilterExtraLabel: 'Additional skill names',
+	targetFilterExtraPlaceholder: 'Comma-separated names, e.g. review, deploy',
+	targetFilterSave: 'Save filter',
+	targetFilterSummary: (included, excluded) => [
+		included && `only ${included} skill${included === 1 ? '' : 's'}`,
+		excluded && `excluding ${excluded} skill${excluded === 1 ? '' : 's'}`,
+	].filter(Boolean).join(', '),
 };

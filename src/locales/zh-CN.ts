@@ -258,4 +258,18 @@ export const ZH_CN: Strings = {
 	importSkillsDone: (imported, skipped) => `已导入 ${imported} 项技能到权威源${skipped ? `（跳过 ${skipped} 项）` : ''}。`,
 	importSkillsPartial: (imported, failed) => `已导入 ${imported} 项技能，另有 ${failed} 项失败。`,
 	importSkillsFailed: '导入本机技能失败',
+	targetFilterButton: '筛选技能',
+	targetFilterTitle: (target) => `筛选技能 · ${target}`,
+	targetFilterDescription: '选择在本机分发到此目标的技能子集。适用于库外项目级目录，无需手写清单。',
+	targetFilterModeLabel: '分发范围',
+	targetFilterModeAll: '全部已启用技能',
+	targetFilterModeInclude: '仅分发所选技能',
+	targetFilterModeExclude: '排除指定技能',
+	targetFilterExtraLabel: '补充技能名称',
+	targetFilterExtraPlaceholder: '逗号分隔名称，如 review, deploy',
+	targetFilterSave: '保存筛选',
+	targetFilterSummary: (included, excluded) => [
+		included && `仅分发 ${included} 项`,
+		excluded && `排除 ${excluded} 项`,
+	].filter(Boolean).join('，'),
 };

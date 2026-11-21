@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs';
-import type { RuntimeName } from '../types';
+import type { RuntimeName, SkillFilter } from '../types';
 import type { AdapterCheckResult } from './result';
 import type { SyncManifestSnapshot } from './manifest';
 import { forgetInstall } from './install-ledger';
@@ -29,6 +29,7 @@ export interface NativeRepairResult extends AdapterCheckResult {
 }
 export interface NativeRepairOptions extends InstallOptions {
 	opencodeCommandsDir?: string;
+	skillFilter?: SkillFilter;
 	/** Remove installed copies whose source skill is no longer in the manifest. */
 	sweepOrphans?: boolean;
 	/**
@@ -53,7 +54,7 @@ export async function repairRuntimeNative(vaultPath: string, runtime: RuntimeNam
 	try {
 		// A retirement still prepares the runtime, because that is what proves the
 		// target is reachable and what the orphan scan reads the source through.
-		const plans = await prepareRuntime(vaultPath, runtime, targetPath, snapshot);
+		const plans = await prepareRuntime(vaultPath, runtime, targetPath, snapshot, options.skillFilter);
 		const targetLabel = resolveConfiguredPath(targetPath, vaultPath);
 		for (const plan of options.retireOnly ? [] : plans) {
 			if (options.isCurrent?.() === false) { problems.push('Repair was cancelled; remaining packages were not changed.'); break; }
@@ -115,7 +116,7 @@ export async function sweepRuntimeOrphans(vaultPath: string, runtime: RuntimeNam
 	const store = options.ledgerDirectory;
 	if (!store) return { retired, kept, problems };
 
-	const scan = await orphanScan(vaultPath, runtime, targetPath, snapshot, store);
+	const scan = await orphanScan(vaultPath, runtime, targetPath, snapshot, store, options.skillFilter);
 	for (const candidate of [...scan.sweepable, ...scan.kept]) {
 		if (candidate.reason !== null) {
 			kept.push(`${candidate.path} (${candidate.reason})`);

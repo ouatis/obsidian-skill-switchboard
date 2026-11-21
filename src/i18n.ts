@@ -256,6 +256,17 @@ export interface Strings {
 	importSkillsDone: (imported: number, skipped: number) => string;
 	importSkillsPartial: (imported: number, failed: number) => string;
 	importSkillsFailed: string;
+	targetFilterButton: string;
+	targetFilterTitle: (target: string) => string;
+	targetFilterDescription: string;
+	targetFilterModeLabel: string;
+	targetFilterModeAll: string;
+	targetFilterModeInclude: string;
+	targetFilterModeExclude: string;
+	targetFilterExtraLabel: string;
+	targetFilterExtraPlaceholder: string;
+	targetFilterSave: string;
+	targetFilterSummary: (included: number, excluded: number) => string;
 }
 
 export function getStrings(language: Language): Strings {

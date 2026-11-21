@@ -1,7 +1,9 @@
 import { Notice, Setting } from 'obsidian';
 import { latestSnapshotSummary, restoreLatestSnapshot } from '../ui/snapshots';
+import { editTargetSkillFilter } from '../ui/target-filter-modal';
 import type SkillSwitchboardPlugin from '../main';
 import type { Strings } from '../i18n';
+import { targetSkillFilter } from '../sync/skill-filter';
 import { RUNTIME_NAMES, type RuntimeTarget, type SkillRoot } from '../types';
 
 function newId(prefix: string): string {
@@ -153,7 +155,10 @@ export function renderTargetsSection(
 				await plugin.saveSettings();
 			}),
 		);
-		setting.setDesc(strings.completeCopy);
+		const filter = targetSkillFilter(target);
+		setting.setDesc(filter
+			? `${strings.completeCopy} · ${strings.targetFilterSummary(filter.includeSkills?.length ?? 0, filter.excludeSkills?.length ?? 0)}`
+			: strings.completeCopy);
 		setting.addDropdown((dropdown) => {
 			dropdown.addOption('', strings.chooseAgent);
 			for (const runtime of RUNTIME_NAMES) dropdown.addOption(runtime, strings.runtimeLabel(runtime));
@@ -166,6 +171,19 @@ export function renderTargetsSection(
 			toggle.setValue(target.enabled).setTooltip(strings.enabled).onChange(async (value) => {
 				target.enabled = value;
 				await plugin.saveSettings();
+			}),
+		);
+		setting.addButton((button) =>
+			button.setButtonText(strings.targetFilterButton).onClick(async () => {
+				const indexedNames = [...new Set(plugin.index.skills.map((skill) => skill.name))];
+				const result = await editTargetSkillFilter(plugin.app, strings, target, indexedNames);
+				if (!result) return;
+				if (result.includeSkills?.length) target.includeSkills = result.includeSkills;
+				else delete target.includeSkills;
+				if (result.excludeSkills?.length) target.excludeSkills = result.excludeSkills;
+				else delete target.excludeSkills;
+				await plugin.saveSettings();
+				refreshTab();
 			}),
 		);
 		setting.addButton((button) =>

@@ -61,6 +61,9 @@ try {
 	for (const locale of ['en', 'zh-CN']) {
 		assert.ok(getStrings(locale).importLocalSkills);
 		assert.ok(getStrings(locale).importSkillsConfirm(2));
+		assert.ok(getStrings(locale).targetFilterButton);
+		assert.ok(getStrings(locale).targetFilterSummary(2, 0));
+		assert.ok(getStrings(locale).targetFilterSave);
 	}
 	for (const locale of ['en', 'zh-CN']) {
 		assert.ok(getStrings(locale).viewDescription);

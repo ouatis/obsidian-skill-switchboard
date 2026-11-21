@@ -1,6 +1,6 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import type { RuntimeName } from '../types';
+import type { RuntimeName, SkillFilter } from '../types';
 import type { AdapterCheckResult } from './result';
 import { adapterFor, type SyncManifestSnapshot } from './manifest';
 import { skillBundle, type SkillBundle } from './skill-bundle';
@@ -11,6 +11,7 @@ import { resolveConfiguredPath } from '../utils/paths';
 import { blockedResourceSkills } from './resources';
 import { findOrphans, type OrphanCandidate, type OrphanScan } from './install-ledger';
 import type { SkillDriftDiff } from './drift-diff';
+import { matchesSkillFilter } from './skill-filter';
 
 export { inspectManifest } from './manifest';
 export type NativeCheckKind = 'clean' | 'drift' | 'blocked' | 'error';
@@ -31,17 +32,22 @@ export interface NativeCheckOptions {
 	opencodeCommandsDir?: string;
 	/** Where install evidence is kept; without it no orphan can be identified. */
 	ledgerDirectory?: string;
+	skillFilter?: SkillFilter;
 }
 export interface PreparedSkill { name: string; bundle?: SkillBundle; state: InstallState }
 
-export async function prepareRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot: SyncManifestSnapshot): Promise<PreparedSkill[]> {
+export async function prepareRuntime(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot: SyncManifestSnapshot, skillFilter?: SkillFilter): Promise<PreparedSkill[]> {
 	// The configured path is what the user wrote; the resolved one is what the
 	// filesystem needs. Both are needed: the resolved path is where files go,
 	// the configured one is what a path reported back to them must look like.
 	const configured = resolveConfiguredPath(targetPath, vaultPath);
 	const target = await safeInstallPath(configured, snapshot.vaultPath, snapshot.sharedRoot);
-	const candidates = snapshot.skills.filter((skill) => adapterFor(skill, runtime) !== null);
-	if (!candidates.length) throw new Error(`No skills enable the ${runtime} adapter in the configured source.`);
+	const runtimeCandidates = snapshot.skills.filter((skill) => adapterFor(skill, runtime) !== null);
+	if (!runtimeCandidates.length) throw new Error(`No skills enable the ${runtime} adapter in the configured source.`);
+	const candidates = skillFilter
+		? runtimeCandidates.filter((skill) => matchesSkillFilter(skill.name, skillFilter))
+		: runtimeCandidates;
+	if (!candidates.length) throw new Error(`No skills match the configured skill filter for ${runtime}.`);
 	const blocked = new Set(blockedResourceSkills(snapshot.resources, candidates));
 	const plans: PreparedSkill[] = [];
 	for (const source of candidates) {
@@ -93,10 +99,11 @@ export async function orphanScan(
 	targetPath: string,
 	snapshot: SyncManifestSnapshot,
 	ledgerDirectory?: string,
+	skillFilter?: SkillFilter,
 ): Promise<OrphanScan> {
 	const configured = resolveConfiguredPath(targetPath, vaultPath);
 	const target = await safeInstallPath(configured, snapshot.vaultPath, snapshot.sharedRoot);
-	const plans = await prepareRuntime(vaultPath, runtime, targetPath, snapshot);
+	const plans = await prepareRuntime(vaultPath, runtime, targetPath, snapshot, skillFilter);
 	// Only what the source still installs counts as managed. A plan without a
 	// bundle is blocked, so its directory is not an install the user asked for.
 	const managed = new Set(plans.flatMap((plan) => plan.bundle ? [plan.bundle.directory] : []));
@@ -106,7 +113,7 @@ export async function orphanScan(
 
 export async function checkRuntimeNative(vaultPath: string, runtime: RuntimeName, targetPath: string, snapshot: SyncManifestSnapshot, options: NativeCheckOptions = {}): Promise<NativeCheckResult> {
 	try {
-		const plans = await prepareRuntime(vaultPath, runtime, targetPath, snapshot);
+		const plans = await prepareRuntime(vaultPath, runtime, targetPath, snapshot, options.skillFilter);
 		const installs = plans.map(({ name, bundle, state }) => ({ name, path: bundle?.directory ?? '', state: state.kind, detail: state.detail, fingerprint: state.fingerprint, ...(state.diff ? { diff: state.diff } : {}) }));
 		const blockedSkills = installs.filter((item) => item.state === 'blocked').map((item) => item.name);
 		const drift = installs.some((item) => item.state === 'missing' || item.state === 'update');

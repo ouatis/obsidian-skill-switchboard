@@ -15,8 +15,8 @@ try {
 		roots: [{ id: 'source', path: '/device-a/skills', enabled: true, kind: 'external', label: 'Source' }],
 		targets: [
 			{ id: 'target', path: '/device-a/agent', enabled: true, mode: 'wrapper', runtime: 'codex', label: 'Agent' },
-			{ id: 'claude', path: '/device-a/claude', enabled: true, mode: 'copy', runtime: 'claude-code', label: 'Claude Code' },
-			{ id: 'custom', path: '/device-a/agents', enabled: true, mode: 'copy', runtime: 'custom', label: 'Shared Agents' },
+			{ id: 'claude', path: '/device-a/claude', enabled: true, mode: 'copy', runtime: 'claude-code', label: 'Claude Code', includeSkills: ['alpha'] },
+			{ id: 'custom', path: '/device-a/agents', enabled: true, mode: 'copy', runtime: 'custom', label: 'Shared Agents', excludeSkills: ['beta'] },
 		],
 		harnesses: [{ id: 'harness', command: '/device-a/run {prompt}', enabled: true, label: 'Harness' }],
 		syncRootId: 'source', syncManifestPath: '/device-a/manifest.json',

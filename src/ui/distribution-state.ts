@@ -1,5 +1,6 @@
 import type { RuntimeTarget } from '../types';
 import { getRepairTargets, type TargetActivity, type TargetCheck } from '../sync/adapter-run';
+import { sameSkillFilter } from '../sync/skill-filter';
 
 export type DistributionState = 'unknown' | 'checking' | 'repairing' | 'clean' | 'drift' | 'blocked' | 'unavailable' | 'repair-failed';
 
@@ -22,7 +23,9 @@ export function distributionNodes(input: DistributionInput): DistributionNode[] 
 	return getRepairTargets(input.targets).map((target) => {
 		// An old result must not follow a target to a different path or runtime.
 		const check = input.checks.find((item) => item.target.id === target.id
-			&& item.target.path === target.path && item.target.runtime === target.runtime);
+			&& item.target.path === target.path
+			&& item.target.runtime === target.runtime
+			&& sameSkillFilter(item.target, target));
 		let state: DistributionState = 'unknown';
 		if (input.activity?.targetId === target.id) state = input.activity.phase;
 		else if (check?.repairFailed) state = 'repair-failed';

@@ -3,6 +3,7 @@ import type { SettingDefinitionItem } from 'obsidian';
 import type SkillSwitchboardPlugin from './main';
 import { getStrings, Language } from './i18n';
 import { RUNTIME_NAMES, RuntimeTarget, SkillRoot } from './types';
+import { parseSkillFilterList } from './sync/skill-filter';
 import {
 	renderExternalPackagesSection,
 	renderRootsSection,
@@ -104,7 +105,10 @@ function normalizeTarget(value: unknown): RuntimeTarget | null {
 	if (typeof value.id !== 'string' || !value.id.trim() || typeof value.label !== 'string' || typeof value.path !== 'string') return null;
 	if ((value.mode !== 'copy' && value.mode !== 'symlink' && value.mode !== 'wrapper') || typeof value.enabled !== 'boolean') return null;
 	if (value.runtime !== undefined && (typeof value.runtime !== 'string' || !RUNTIME_NAME_SET.has(value.runtime))) return null;
-	return {
+	const includeSkills = parseSkillFilterList(value.includeSkills);
+	const excludeSkills = parseSkillFilterList(value.excludeSkills);
+	if (!includeSkills.valid || !excludeSkills.valid) return null;
+	const target: RuntimeTarget = {
 		...value,
 		id: value.id,
 		label: value.label,
@@ -114,6 +118,11 @@ function normalizeTarget(value: unknown): RuntimeTarget | null {
 		enabled: value.enabled,
 		...(typeof value.runtime === 'string' ? { runtime: value.runtime as RuntimeTarget['runtime'] } : {}),
 	};
+	delete target.includeSkills;
+	delete target.excludeSkills;
+	if (includeSkills.value) target.includeSkills = includeSkills.value;
+	if (excludeSkills.value) target.excludeSkills = excludeSkills.value;
+	return target;
 }
 
 export interface SettingsNormalization {

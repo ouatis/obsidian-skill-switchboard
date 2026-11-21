@@ -25,7 +25,12 @@ export interface SkillRoot {
 	enabled: boolean;
 }
 
-export interface RuntimeTarget {
+export interface SkillFilter {
+	includeSkills?: string[];
+	excludeSkills?: string[];
+}
+
+export interface RuntimeTarget extends SkillFilter {
 	id: string;
 	label: string;
 	path: string;

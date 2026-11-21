@@ -8,6 +8,7 @@ import { adapterFor, isInside, pathsOverlap, sameSourceSnapshot } from './manife
 import { existingRealPath } from './filesystem';
 import { resolveConfiguredPath } from '../utils/paths';
 import { planInstalls } from './install-plan';
+import { matchesSkillFilter, targetSkillFilter } from './skill-filter';
 
 /** A runtime target that is eligible for drift repair. */
 export type RepairTarget = RuntimeTarget & { runtime: RuntimeName };
@@ -90,8 +91,12 @@ export async function checkAllTargets(
 
 function resourcesForTargets(manifest: ManifestCheckResult, targets: RuntimeTarget[]): ResourceCheck | undefined {
 	if (!manifest.resources || !manifest.snapshot?.skills) return manifest.resources;
-	const runtimes = getRepairTargets(targets).map((target) => target.runtime);
-	const names = new Set(manifest.snapshot.skills.filter((skill) => runtimes.some((runtime) => adapterFor(skill, runtime) !== null)).map((skill) => skill.name));
+	const activeTargets = getRepairTargets(targets);
+	const names = new Set(
+		manifest.snapshot.skills
+			.filter((skill) => activeTargets.some((target) => adapterFor(skill, target.runtime) !== null && matchesSkillFilter(skill.name, target)))
+			.map((skill) => skill.name),
+	);
 	const packages = manifest.resources.packages.filter((item) => names.has(item.skill));
 	return { ...manifest.resources, packages, status: packages.some((item) => item.status === 'failed') ? 'failed' : packages.some((item) => item.status === 'warning') ? 'warning' : 'passed' };
 }
@@ -164,7 +169,8 @@ export async function collectTargetChecks(
 			});
 			continue;
 		}
-		const result = await context.provider.checkRuntime(vaultPath, target.runtime, target.path, snapshot, { ledgerDirectory: context.ledgerDirectory });
+		const filter = targetSkillFilter(target);
+		const result = await context.provider.checkRuntime(vaultPath, target.runtime, target.path, snapshot, { ledgerDirectory: context.ledgerDirectory, ...(filter ? { skillFilter: filter } : {}) });
 		const plan = result.native?.installs ? planInstalls(result.native.installs) : null;
 		record({
 			target,
@@ -247,10 +253,12 @@ export async function retireOrphanCopies(
 			lines.push(`[${label}] RETIRE SKIPPED\n${strings.orphanLedgerUnavailable}`);
 			continue;
 		}
+		const filter = targetSkillFilter(check.target);
 		const repair = await context.provider.repairRuntime(vaultPath, check.target.runtime, check.target.path, snapshot, {
 			isCurrent: context.isCurrent,
 			snapshotDirectory: context.snapshotDirectory,
 			ledgerDirectory: context.ledgerDirectory,
+			...(filter ? { skillFilter: filter } : {}),
 			retireOnly: true,
 		});
 		const retired = (repair.native?.retiredSkills ?? []).length;
@@ -395,10 +403,12 @@ export async function repairDriftedTargets(
 		}
 		const label = displayTargetName(check.target);
 		context.onTargetActivity?.({ targetId: check.target.id, phase: 'repairing' });
+		const filter = targetSkillFilter(check.target);
 		const repair = await context.provider.repairRuntime(vaultPath, runtime, check.target.path, snapshot, {
 			isCurrent: context.isCurrent,
 			snapshotDirectory: context.snapshotDirectory,
 			ledgerDirectory: context.ledgerDirectory,
+			...(filter ? { skillFilter: filter } : {}),
 			retireOnly,
 			// A sweep removes directories, so it needs both the install evidence and
 			// an explicit opt-in from the caller.
@@ -415,7 +425,7 @@ export async function repairDriftedTargets(
 		}
 
 		context.onTargetActivity?.({ targetId: check.target.id, phase: 'checking' });
-		const followUp = await context.provider.checkRuntime(vaultPath, runtime, check.target.path, undefined, { ledgerDirectory: context.ledgerDirectory });
+		const followUp = await context.provider.checkRuntime(vaultPath, runtime, check.target.path, undefined, { ledgerDirectory: context.ledgerDirectory, ...(filter ? { skillFilter: filter } : {}) });
 		detail.followUp = followUp;
 		context.onTargetCheck?.({ ...check, result: followUp, repairFailed: false });
 		if (followUp.status === 'passed' && repair.status === 'passed') {

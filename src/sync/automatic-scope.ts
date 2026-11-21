@@ -1,11 +1,22 @@
 import { createHash } from 'node:crypto';
 import type { SkillSwitchboardSettings } from '../settings';
+import type { SkillFilter } from '../types';
 import { existingRealPath } from './filesystem';
 import { resolveSyncSourceForVault } from './source';
 import { getRepairTargets } from './adapter-run';
+import { targetSkillFilter } from './skill-filter';
 import { isInside, pathsOverlap, resolveConfiguredPath } from '../utils/paths';
 
 export interface AutomaticScope { key: string; details: string }
+
+function describeFilter(filter?: SkillFilter): string {
+	if (!filter) return '';
+	const parts = [
+		filter.includeSkills?.length ? `only: ${filter.includeSkills.join(', ')}` : '',
+		filter.excludeSkills?.length ? `excluding: ${filter.excludeSkills.join(', ')}` : '',
+	].filter(Boolean);
+	return parts.length ? ` [${parts.join('; ')}]` : '';
+}
 
 /** Content may change under a grant; source selection and write destinations may not. */
 export function automaticWiringKey(settings: SkillSwitchboardSettings): string {
@@ -13,7 +24,11 @@ export function automaticWiringKey(settings: SkillSwitchboardSettings): string {
 		?? (!settings.syncRootId ? settings.roots.find((item) => item.enabled && item.path.trim()) : undefined);
 	return JSON.stringify({ root: root && { id: root.id, path: root.path, kind: root.kind, enabled: root.enabled },
 		manifest: settings.syncManifestPath, targets: getRepairTargets(settings.targets)
-			.map(({ id, runtime, path }) => ({ id, runtime, path })).sort((a, b) => a.id.localeCompare(b.id)) });
+			.map((target) => {
+				const filter = targetSkillFilter(target);
+				return { id: target.id, runtime: target.runtime, path: target.path, ...(filter ? { filter } : {}) };
+			})
+			.sort((a, b) => a.id.localeCompare(b.id)) });
 }
 
 export async function resolveAutomaticScope(vaultPath: string, settings: SkillSwitchboardSettings): Promise<AutomaticScope> {
@@ -23,13 +38,20 @@ export async function resolveAutomaticScope(vaultPath: string, settings: SkillSw
 	if (!configured.length) throw new Error('Configure at least one Agent target before authorizing automatic distribution.');
 	const [vault, source, manifest] = await Promise.all([existingRealPath(vaultPath), existingRealPath(location.sharedRoot), existingRealPath(location.manifestPath)]);
 	if (location.confineToVault && (!isInside(vault, source) || !isInside(vault, manifest))) throw new Error('Vault source or manifest resolves outside the vault.');
-	const targets = await Promise.all(configured.map(async (target) => ({ id: target.id, runtime: target.runtime,
-		path: await existingRealPath(resolveConfiguredPath(target.path, vaultPath)) })));
+	const targets = await Promise.all(configured.map(async (target) => {
+		const filter = targetSkillFilter(target);
+		return {
+			id: target.id,
+			runtime: target.runtime,
+			path: await existingRealPath(resolveConfiguredPath(target.path, vaultPath)),
+			...(filter ? { filter } : {}),
+		};
+	}));
 	for (const [index, target] of targets.entries()) {
 		if (isInside(vault, target.path) || pathsOverlap(source, target.path)) throw new Error('Automatic targets must stay outside the vault and source.');
 		if (targets.slice(0, index).some((other) => pathsOverlap(other.path, target.path))) throw new Error('Automatic Agent targets must not overlap each other.');
 	}
 	if (automaticWiringKey(settings) !== wiring) throw new Error('Connection settings changed while checking authorization.');
 	return { key: createHash('sha256').update(JSON.stringify({ wiring, vault, source, manifest, targets })).digest('hex'),
-		details: [`Source: ${source}`, `Manifest: ${manifest}`, ...targets.map((target) => `${target.runtime}: ${target.path}`)].join('\n') };
+		details: [`Source: ${source}`, `Manifest: ${manifest}`, ...targets.map((target) => `${target.runtime}: ${target.path}${describeFilter(target.filter)}`)].join('\n') };
 }

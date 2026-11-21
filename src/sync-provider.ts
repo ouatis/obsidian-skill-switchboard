@@ -1,5 +1,5 @@
 import type { AdapterCheckResult } from './sync/result';
-import type { RuntimeName } from './types';
+import type { RuntimeName, SkillFilter } from './types';
 import { inspectManifest, sameSourceSnapshot, type ManifestCheckResult, type SyncManifestSnapshot } from './sync/manifest';
 import type { ManifestLocation } from './sync/source';
 import { checkRuntimeNative, type NativeCheckResult } from './sync/native-check';
@@ -18,6 +18,7 @@ export interface RepairControl {
 	snapshotDirectory?: string;
 	/** Where install evidence is kept, so a sweep can tell a managed copy from a foreign one. */
 	ledgerDirectory?: string;
+	skillFilter?: SkillFilter;
 	/** Remove copies whose source skill left the manifest. */
 	sweepOrphans?: boolean;
 	/**
@@ -52,7 +53,7 @@ export class NativeSyncProvider implements SyncProvider {
 		const manifest = snapshot ? null : await this.inspectManifest(vaultPath);
 		const selected = snapshot ?? manifest?.snapshot;
 		if (!selected) return manifest as ManifestCheckResult;
-		const native = await checkRuntimeNative(vaultPath, runtime, targetPath, selected, { ledgerDirectory: control?.ledgerDirectory });
+		const native = await checkRuntimeNative(vaultPath, runtime, targetPath, selected, { ledgerDirectory: control?.ledgerDirectory, skillFilter: control?.skillFilter });
 		return {
 			...native,
 			native,

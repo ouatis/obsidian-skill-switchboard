@@ -35,16 +35,17 @@ try{
     const recoveredRoot={id:'recovered',kind:'external',label:'Recovered',path:'~/skills',enabled:true};
     const recoveredTarget={id:'recovered-target',runtime:'codex',mode:'wrapper',enabled:true,path:'~/.codex/skills',label:'Codex'};
     const newRuntimeTargets=['claude-code','cursor','gemini-cli','custom'].map(runtime=>({id:`target-${runtime}`,runtime,mode:'copy',enabled:true,path:`~/.${runtime}/skills`,label:runtime}));
+    const filteredTarget={id:'filtered-target',runtime:'claude-code',mode:'copy',enabled:true,path:'~/project/.claude/skills',label:'Project',includeSkills:['  beta ','alpha','beta',''],excludeSkills:[]};
     const recoveredHarness={id:'recovered-harness',label:'Harness',command:'agent run',enabled:true};
     const settingsFixture=new Plugin({saved:{
         roots:[null,{id:42,label:'invalid',path:'bad',kind:'vault',enabled:true},recoveredRoot,recoveredRoot],
-        targets:[{id:'invalid',label:'Invalid',path:'bad',mode:'wrapper',runtime:'unknown',enabled:true},recoveredTarget,recoveredTarget,...newRuntimeTargets],
+        targets:[{id:'invalid',label:'Invalid',path:'bad',mode:'wrapper',runtime:'unknown',enabled:true},{id:'bad-filter-type',label:'BadFilter1',path:'~/a',mode:'copy',runtime:'codex',enabled:true,includeSkills:'not-an-array'},{id:'bad-filter-elem',label:'BadFilter2',path:'~/b',mode:'copy',runtime:'codex',enabled:true,excludeSkills:[123]},recoveredTarget,recoveredTarget,...newRuntimeTargets,filteredTarget],
         harnesses:[{id:'invalid',label:'Invalid',command:'run',enabled:'yes'},recoveredHarness],
         language:'fr',viewLocation:'popup',autoScan:'false',autoCheck:0,showDistributionBoard:'false',scanDelayMs:'fast',syncRootId:42,syncManifestPath:[],
     }});
     await settingsFixture.loadSettings();
     assert.deepEqual(settingsFixture.settings.roots,[recoveredRoot],'malformed and duplicate roots are removed while valid paths survive');
-    assert.deepEqual(settingsFixture.settings.targets,[{...recoveredTarget,mode:'copy'},...newRuntimeTargets],'targets with unknown runtimes are rejected before use while new standard runtimes persist');
+    assert.deepEqual(settingsFixture.settings.targets,[{...recoveredTarget,mode:'copy'},...newRuntimeTargets,{id:'filtered-target',runtime:'claude-code',mode:'copy',enabled:true,path:'~/project/.claude/skills',label:'Project',includeSkills:['alpha','beta']}],'targets with unknown runtimes or malformed skill filters are rejected while valid normalized filters persist');
     assert.equal(settingsFixture.settings.harnesses,undefined,'retired harness records never reach active settings');
     assert.equal(settingsFixture.settings.language,'en');assert.equal(settingsFixture.settings.autoScan,false);assert.equal(settingsFixture.settings.autoCheck,true);
     assert.equal(settingsFixture.settings.viewLocation,'center','an invalid opening location recovers to the centered default');

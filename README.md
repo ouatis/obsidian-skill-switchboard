@@ -56,8 +56,11 @@ place them in `<vault>/.obsidian/plugins/skill-switchboard/`, then enable the pl
 2. Sync the source with your existing vault sync arrangement. Select it under
    **Distribution source** on each computer.
 3. Add the local agents you use under **Runtime targets**. Paths such as
-   `~/.codex/skills` resolve on this computer. Targets must stay outside the vault
-   and must not overlap the source.
+   `~/.codex/skills` or off-vault project folders like `~/code/my-app/.claude/skills`
+   resolve on this computer. Targets must stay outside the vault and must not
+   overlap the source. Use **Filter skills** on any target to include or exclude
+   specific skills per destination in machine-local wiring without maintaining a
+   hand-written manifest.
 4. Run **Check skills**, then **Repair all**. Missing packages are installed and
    differing copies are replaced from the source after one confirmation. Checks
    are read-only. Background writes require the separate local opt-in below.
